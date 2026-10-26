@@ -81,7 +81,7 @@ class HardwareInventory:
     Attributes:
         uses: Node platforms in node order, then each link's source end and
             target end in link order (the order of every sum over them).
-        unknown: ``(owner, end, name)`` for each reference to a component the
+        unknown: ``(entity, end, name)`` for each reference to a component the
             library lacks: a node name with end None, or a link key with its
             end.
     """

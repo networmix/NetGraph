@@ -263,7 +263,7 @@ One of: [BuildGraphResultJSON](#buildgraphresultjson) or [NetworkStatsResultJSON
 | Field | Type | Description |
 | --- | --- | --- |
 | `base_id` | string | The declared demand's identifier, before expansion. |
-| `declared_units` | integer | The declared demand's units after one quantization of its scaled total. |
+| `declared_units` | integer | The declared demand's units: its scaled total, converted to units once. |
 | `resolved_units` | integer | Units split among eligible leaves, after excluding self and same-label group pairs. |
 | `discarded_units` | integer | Units of its discarded leaves. |
 | `discards` | list of [DiscardedShareJSON](#discardedsharejson) | Empty-selection shares, or the whole declaration when all pairs are excluded, with their reasons. |
@@ -274,7 +274,7 @@ One of: [BuildGraphResultJSON](#buildgraphresultjson) or [NetworkStatsResultJSON
 | --- | --- | --- |
 | `id` | string | The case identifier: baseline, or failure-NNNNNN in draw order. |
 | `kind` | `"baseline"` \| `"failure"` | baseline or failure. |
-| `pattern` | [FailurePatternJSON](#failurepatternjson) | The canonical failure: excluded nodes and links. |
+| `pattern` | [FailurePatternJSON](#failurepatternjson) | The failure pattern: the failed nodes and links. |
 | `occurrences` | integer | How many draws produced this pattern. |
 | `trace` | [FailureTraceJSON](#failuretracejson) | The first draw's trace of this pattern. Absent when failure traces are not requested, or no draw produced the pattern. |
 
@@ -371,7 +371,7 @@ One of: [BuildGraphResultJSON](#buildgraphresultjson) or [NetworkStatsResultJSON
 | `kind` | `"capacity"` \| `"demand"` \| `"offer"` \| `"design"` \| `"min_unreserved"` | What the input is: a capacity, demand, offer, design or minimum unreserved bandwidth. |
 | `binary64_value` | number | The physical input as given. |
 | `binary64_hex` | string | The physical input in hexadecimal. |
-| `units` | integer | Its quantized value (integer units of q). |
+| `units` | integer | Its value in units (integer units of q). |
 | `error` | [FractionJSON](#fractionjson) | The signed rounding error, units times q minus the input (physical, a fraction): positive when rounded up. |
 | `relative_error` | [FractionJSON](#fractionjson) or null | The signed relative error, the error divided by the input. Null when the input is zero. |
 
@@ -508,11 +508,11 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | --- | --- | --- |
 | `request_kind` | `"finite"` \| `"unlimited"` | Whether the request is finite or unlimited. |
 | `requested_units` | integer or null | The request (integer units of q). Null when the request is unlimited. |
-| `offered_units` | integer or null | LOSSY: the units sent into the network. Null when admission is LOSSLESS. |
+| `offered_units` | integer or null | Lossy: the units sent into the network. Null when admission is lossless. |
 | `delivered_units` | integer | The units delivered to the destinations. |
-| `unadmitted_units` | integer or null | LOSSLESS: the request minus the delivery; LOSSY: 0. Null when the request is unlimited. |
-| `source_drop_units` | integer | LOSSY: units lost at sources without a usable route; 0 when LOSSLESS. |
-| `edge_drop_units` | integer | LOSSY: units dropped on physical links and TE ingress pool attachments, in all; 0 when LOSSLESS. |
+| `unadmitted_units` | integer or null | Lossless: the request minus the delivery; lossy: 0. Null when the request is unlimited. |
+| `source_drop_units` | integer | Lossy: units lost at sources without a usable route; 0 when lossless. |
+| `edge_drop_units` | integer | Lossy: units dropped on physical links and TE ingress pool attachments, in all; 0 when lossless. |
 | `termination` | `"complete"` \| `"no_route"` \| `"exhausted"` \| `"no_active_weight"` | The native call's outcome. Values: complete (the offer is 0, admitted in full when lossless, or forwarded in full when lossy, its losses included); no_route (a positive offer and no source with a route); no_active_weight (the program has routes, but none of positive weight can send anything); exhausted (lossless and less than the offer admitted, or an unlimited offer). |
 | `total_cost` | integer or null | The controllers only (CentralizedTE without tunnels, ShortestPaths with optimized allocation): the exact sum over links of cost times carried units. Null when the model is another one (T1, T2, pinned, other ShortestPaths). |
 | `call_delivered_units` | integer | The units this call delivered. Absent when details are not requested. |
@@ -520,14 +520,14 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | `delivery_delta_units` | integer | The delivery after the call minus before it. Absent when details are not requested. |
 | `call_edge_drops` | list of [EdgeAmountJSON](#edgeamountjson) | This call's drops on physical links. Absent when details are not requested. |
 | `call_source_drop_units` | integer | This call's offered units lost at sources without a usable route. Absent when details are not requested. |
-| `admitted_units` | integer | LOSSLESS: the units carried; LOSSY: the units offered. Absent when details are not requested. |
+| `admitted_units` | integer | Lossless: the units carried; lossy: the units offered. Absent when details are not requested. |
 | `edge_drops` | list of [EdgeAmountJSON](#edgeamountjson) | Drops on physical links, by directed link. Absent when details are not requested. |
 | `by_source` | list of [SourceFlowJSON](#sourceflowjson) | One row per source, in source order (zero rows included). Absent when details are not requested. |
 | `by_tunnel` | list of [TunnelFlowJSON](#tunnelflowjson) | One row per tunnel of the program, in entry order. Absent when details are not requested. |
 | `plan` | [TunnelPlanJSON](#tunnelplanjson) or null | T1 and T2: the tunnel plan after the call. Null when the model is not T1 or T2. Absent when details are not requested, and in a tunnel-count row's result (the row records the plan). |
 | `edge_flows` | list of [EdgeAmountJSON](#edgeamountjson) | The units each directed physical link carries. Absent when it was not requested. |
 | `residual` | list of [EdgeAmountJSON](#edgeamountjson) | Each directed physical link's residual capacity (integer units of q): after this row, or, in simultaneous placement, the one final residual every row shares. Absent when it was not requested. |
-| `edge_reservations` | list of [EdgeAmountJSON](#edgeamountjson) | Each directed physical link's strict tunnel holds (integer units of q). Absent when it was not requested. |
+| `edge_reservations` | list of [EdgeAmountJSON](#edgeamountjson) | Each directed physical link's tunnel holds (integer units of q). Absent when it was not requested. |
 | `saturated_boundary_edges` | list of [DirectedLinkJSON](#directedlinkjson) | The saturated links at the sources' reachable boundary. Absent when it was not requested. |
 | `min_cut` | list of [DirectedLinkJSON](#directedlinkjson) or null | The minimum cut closest to the sources, where one is defined (unrestricted optimized CentralizedTE at its maximum). Null when no cut is defined. Absent when it was not requested. |
 | `synthetic_ingress` | [SyntheticProjectionJSON](#syntheticprojectionjson) | Amounts on the private pool attachments (the synthetic ingress edges). Absent when the row has no TE ingress pool, or no native output is requested and details record no attachment drops. |
@@ -699,9 +699,9 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | --- | --- | --- |
 | `reference_request_units` | integer | The scaled declared requests over the rows (integer units of q). |
 | `delivered_units` | integer | Units delivered over the rows. |
-| `unadmitted_units` | integer | LOSSLESS units not admitted over the rows. |
-| `source_drop_units` | integer | LOSSY units lost at sources over the rows. |
-| `edge_drop_units` | integer | LOSSY units dropped on physical links and TE ingress pool attachments over the rows. |
+| `unadmitted_units` | integer | Lossless units not admitted over the rows. |
+| `source_drop_units` | integer | Lossy units lost at sources over the rows. |
+| `edge_drop_units` | integer | Lossy units dropped on physical links and TE ingress pool attachments over the rows. |
 | `reference_shortfall_units` | integer | The reference request minus the delivery (integer units of q). |
 | `delivery_ratio` | [FractionJSON](#fractionjson) | Delivered over the reference request (a fraction; 1 for no request). |
 | `feasible` | boolean | Whether every row delivered its whole reference request, without loss. |
@@ -734,7 +734,7 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | `location` | [ReportLocationJSON](#reportlocationjson) | Where the miss was observed: step, case and probe. |
 | `constraints` | list of [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#splitconstraintjson) or [UnverifiedConstraintJSON](#unverifiedconstraintjson) | The constraints the chosen q does not meet there. |
 | `inexact_inputs` | integer | Inputs not exact at q there. |
-| `zeroed_inputs` | integer | Positive inputs that quantize to zero there. |
+| `zeroed_inputs` | integer | Positive inputs that round to zero units there. |
 | `examples` | list of [InputQuantizationJSON](#inputquantizationjson) | Example inputs that miss. |
 
 ## PreparationScopeJSON
@@ -804,7 +804,7 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | `core_version` | string | The netgraph-core version. |
 | `core_extension_sha256` | string | The SHA-256 of the loaded native extension. |
 | `python_version` | string | The Python version. |
-| `seed` | integer or null | The scenario's master seed. Null when the scenario sets no seed. |
+| `seed` | integer or null | The scenario seed. Null when the scenario sets no seed. |
 
 ## SamplingMetadataJSON
 
@@ -877,11 +877,11 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | Field | Type | Description |
 | --- | --- | --- |
 | `source` | [SourceJSON](#sourcejson) | The source: a node name, or the pool head of a TE ingress pool. |
-| `offered_units` | integer or null | LOSSY: the units this source sent. Null when admission is LOSSLESS. |
-| `admitted_units` | integer | LOSSLESS: the units it delivers; LOSSY: offered. |
+| `offered_units` | integer or null | Lossy: the units this source sent. Null when admission is lossless. |
+| `admitted_units` | integer | Lossless: the units it delivers; lossy: offered. |
 | `delivered_units` | integer | The units this source delivers. |
-| `source_drop_units` | integer | LOSSY: units lost at sources without a usable route; 0 when LOSSLESS. |
-| `total_edge_drop_units` | integer | LOSSY: this source's units dropped on physical links and TE ingress pool attachments; 0 when LOSSLESS. |
+| `source_drop_units` | integer | Lossy: units lost at sources without a usable route; 0 when lossless. |
+| `total_edge_drop_units` | integer | Lossy: this source's units dropped on physical links and TE ingress pool attachments; 0 when lossless. |
 
 ## SourceJSON
 
@@ -892,7 +892,7 @@ One of: string or [PoolHeadJSON](#poolheadjson).
 | Field | Type | Description |
 | --- | --- | --- |
 | `source` | string | The source node. |
-| `nominal_physical` | [FractionJSON](#fractionjson) | Its nominal physical demand toward the destination (a fraction). |
+| `nominal_physical` | [FractionJSON](#fractionjson) | Its share of declared physical volumes toward the destination (a fraction, before alpha). |
 | `weight` | integer | Its integer source weight. |
 
 ## SplitConstraintJSON
@@ -926,7 +926,7 @@ One of: [CapacityQueryJSON](#capacityqueryjson) or [PlacementQueryJSON](#placeme
 | `name` | string | The workflow step's name. |
 | `step_type` | string | The step's class name. |
 | `execution_order` | integer | The step's position in the run (0 first). |
-| `scenario_seed` | integer or null | The scenario's master seed. Null when the scenario sets no seed. |
+| `scenario_seed` | integer or null | The scenario seed. Null when the scenario sets no seed. |
 | `step_seed` | integer or null | The step's effective seed. Null when the step has no effective seed. |
 | `seed_source` | `"explicit-step"` \| `"scenario-derived"` \| `"none"` | Where the step's seed comes from. |
 | `result` | [AnalysisJSON](#analysisjson) or [DomainResultJSON](#domainresultjson) or [JSONValue](#jsonvalue) | The step's exported result. Null when a custom step returns no result, or its registered exporter writes null. |
@@ -954,7 +954,7 @@ One of: [CapacityQueryJSON](#capacityqueryjson) or [PlacementQueryJSON](#placeme
 | `edge_drops` | list of [SyntheticAmountJSON](#syntheticamountjson) | Drops on pool attachments. Absent when details are not requested. |
 | `edge_flows` | list of [SyntheticAmountJSON](#syntheticamountjson) | The units each pool attachment carries. Absent when it was not requested. |
 | `residual` | list of [SyntheticAmountJSON](#syntheticamountjson) | Each pool attachment's residual capacity (integer units of q): after this row, or, in simultaneous placement, the one final residual every row shares. Absent when it was not requested. |
-| `edge_reservations` | list of [SyntheticAmountJSON](#syntheticamountjson) | Each pool attachment's strict holds (integer units of q). Absent when it was not requested. |
+| `edge_reservations` | list of [SyntheticAmountJSON](#syntheticamountjson) | Each pool attachment's holds (integer units of q). Absent when it was not requested. |
 | `saturated_boundary_edges` | list of [SyntheticIngressJSON](#syntheticingressjson) | The saturated pool attachments at the boundary. Absent when it was not requested. |
 | `min_cut` | list of [SyntheticIngressJSON](#syntheticingressjson) or null | The pool attachments in the minimum cut. Null when no cut is defined. Absent when it was not requested. |
 
@@ -964,7 +964,7 @@ One of: [CapacityQueryJSON](#capacityqueryjson) or [PlacementQueryJSON](#placeme
 | --- | --- | --- |
 | `destination` | string | The destination of the table. |
 | `programmed` | list of [ProgrammedRouterJSON](#programmedrouterjson) | The routers the controller programs, with their member weights. |
-| `source_weights` | list of [SourceWeightJSON](#sourceweightjson) or null | all_routers: each source's nominal demand and weight. Null when the scope is not all_routers. |
+| `source_weights` | list of [SourceWeightJSON](#sourceweightjson) or null | all_routers: each source's share of declared physical volumes and its weight. Null when the scope is not all_routers. |
 
 ## TunnelCountAnalysisJSON
 
@@ -1019,9 +1019,9 @@ One of: [CapacityQueryJSON](#capacityqueryjson) or [PlacementQueryJSON](#placeme
 | `entry_id` | integer | The tunnel's entry identifier in the program. |
 | `head` | [SourceJSON](#sourcejson) | The tunnel head: a node name, or the pool head of a TE ingress pool. |
 | `status` | `"up"` \| `"insufficient_bandwidth"` \| `"cost_ceiling_exceeded"` \| `"failed"` \| `"blackholed"` | The tunnel's status in this forwarding. Values: up (set up and available for forwarding; it may carry zero units); insufficient_bandwidth (down: no path had enough unreserved bandwidth); cost_ceiling_exceeded (down: the cheapest path with enough bandwidth costs more than the cost ceiling); failed (repair state: a failure touches the tunnel, so its route is removed); blackholed (stale state: the tunnel stays up but its path reaches a failed node or link, where its traffic is dropped). |
-| `assigned_units` | integer | The tunnel's share of the injections (LOSSY: sent to it; LOSSLESS: carried). |
+| `assigned_units` | integer | The units assigned to the tunnel (lossy: sent to it; lossless: carried). |
 | `delivered_units` | integer | The units this tunnel delivers. |
-| `total_edge_drop_units` | integer | LOSSY: this tunnel's units dropped on physical links and TE ingress pool attachments; 0 when LOSSLESS. |
+| `total_edge_drop_units` | integer | Lossy: this tunnel's units dropped on physical links and TE ingress pool attachments; 0 when lossless. |
 
 ## TunnelPlanJSON
 
@@ -1031,7 +1031,7 @@ One of: [CapacityQueryJSON](#capacityqueryjson) or [PlacementQueryJSON](#placeme
 | `design_kind` | `"finite"` \| `"unlimited"` | Whether the design volume is finite or unlimited. |
 | `design_demand_units` | integer or null | The design volume D (integer units of q). Null when the design is unlimited. |
 | `design_by_head` | list of [HeadDesignJSON](#headdesignjson) | Each head's share of the design volume. |
-| `total_reserved_bandwidth_units` | integer | The strict holds of the up tunnels (integer units of q). |
+| `total_reserved_bandwidth_units` | integer | The holds of the up tunnels (integer units of q). |
 | `heads_with_capacity` | list of [SourceJSON](#sourcejson) or null | T2: the live heads, those that reach a destination over links with at least one free unit (this policy's own traffic released). Null when the plan is T1's. |
 | `insufficient_resolution` | boolean or null | T2: live heads exist but no whole unit per tunnel fits. Null when the plan is T1's. |
 | `max_fractional_bandwidth_per_tunnel` | [FractionJSON](#fractionjson) or null | T2: the exact fluid optimum per tunnel (a fraction). Null when the plan is T1's. |
@@ -1056,7 +1056,7 @@ One of: [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#sp
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `q` | number | The bandwidth quantum: one unit is q physical units. |
+| `q` | number | The bandwidth unit: one unit is q in physical terms. |
 | `exponent` | integer | q as a power of two: q = 2^exponent. |
 | `mode` | `"auto"` \| `"manual"` | auto (chosen by the recipe) or manual (declared). |
 | `precision` | number | The relative precision target. |
@@ -1065,16 +1065,16 @@ One of: [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#sp
 | `display_convention` | `"units_authoritative_binary64_display"` | Units are authoritative; physical values are binary64 displays. |
 | `scope` | [PreparationScopeJSON](#preparationscopejson) | What the preparation covered. |
 | `binding_constraints` | list of [UnitConstraintJSON](#unitconstraintjson) | The constraints that limited q. |
-| `input_count` | integer | Physical inputs quantized. |
+| `input_count` | integer | Physical inputs converted to units. |
 | `inexact_inputs` | integer | Inputs not exact at q. |
-| `zeroed_inputs` | integer | Positive inputs that quantize to zero. |
+| `zeroed_inputs` | integer | Positive inputs that round to zero units. |
 | `inexact_examples` | list of [InputQuantizationJSON](#inputquantizationjson) | Example inexact inputs. |
 | `zeroed_examples` | list of [InputQuantizationJSON](#inputquantizationjson) | Example zeroed inputs. |
 | `max_absolute_input_error` | [FractionJSON](#fractionjson) | The largest absolute input error (physical, a fraction). |
 | `max_relative_input_error` | [FractionJSON](#fractionjson) | The largest absolute relative input error (a fraction). |
 | `augmented_capacity_sum_units` | integer | The graph's capacity sum with pool attachments (integer units of q). |
 | `augmented_cost_sum` | integer | The graph's cost sum with pool attachments. |
-| `nominal_split_count` | integer | Splits of the nominal (no-failure) demands. |
+| `nominal_split_count` | integer | Splits of the demands at alpha 1 without failures. |
 | `nominal_splits` | list of [SplitConstraintJSON](#splitconstraintjson) | Those splits with their bounds on q. |
 | `misses` | list of [PrecisionMissJSON](#precisionmissjson) | Precision misses observed in analyses. |
 | `weight_approximations` | list of [WeightApproximationJSON](#weightapproximationjson) | Controller weights apportioned because they reached 2^62. |

@@ -1,6 +1,6 @@
 # Schemas
 
-Packaged JSON Schemas describe scenario inputs and exported results. They drive validation, IDE completion, and tests.
+Packaged JSON Schemas describe scenario inputs and exported results. They drive validation and IDE completion.
 
 ## Where the schemas are
 

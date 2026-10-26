@@ -29,8 +29,8 @@ from ngraph.utils.values import (
 )
 
 PhysicalAmount = float
-"""A physical amount, such as a capacity or a volume, in the scenario's own bandwidth
-unit.
+"""A physical amount, such as a capacity or a volume, in whatever unit the scenario
+uses (for example Gbit/s), never in units of ``q``.
 """
 
 

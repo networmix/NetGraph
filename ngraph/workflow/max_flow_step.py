@@ -32,7 +32,7 @@ from ngraph.workflow.base import (
 
 @dataclass
 class MaxFlow(WorkflowStep):
-    """Evaluate independent endpoint capacities with explicit native routing."""
+    """Workflow step: the capacity between two node sets, under one model."""
 
     _immutable = True
     __copy__ = __deepcopy__ = shared_copy

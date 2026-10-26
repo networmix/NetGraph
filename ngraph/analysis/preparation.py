@@ -122,8 +122,8 @@ class StepNeeds:
 class PreparedScenario:
     """One graph, unit and demand binding over a read-only view of a scenario.
 
-    ``units_report`` is the nominal preparation's report; each analysis
-    returns its own precision misses beside it.
+    ``units_report`` is the preparation's report; each analysis returns its
+    own precision misses beside it.
     """
 
     scenario: Scenario

@@ -1,6 +1,6 @@
 # Workflow Steps
 
-`Scenario.from_yaml(text)` parses an ordered workflow. Python callers execute `run(prepare(scenario))`; the returned `RunResult.steps` tuple contains each step's name, type, execution order, seed provenance, normalized question and typed result. Duplicate names refuse before execution.
+`Scenario.from_yaml(text)` parses an ordered workflow. Python callers execute `run(prepare(scenario))`; the returned `RunResult.steps` tuple holds each step's name, type, execution order, where its seed came from, normalized question and typed result. Duplicate names refuse before execution.
 
 An unnamed YAML step receives `<type>_<declaration index>`. A step seed is explicit or derived from the scenario seed and effective step name ([Seeds](dsl.md#seeds)). Results are returned only after the complete workflow succeeds; `ngraph run --keys` exports selected steps after the whole workflow runs ([Filtering Results by Step Names](cli.md#filtering-results-by-step-names)). The domain steps are separate from the analyses: `BuildGraph` provides physical NetworkX node-link data, `NetworkStats` describes topology, and `CostPower` (with the `NetworkExplorer`) presents hardware metrics. Built-in steps are immutable records ([Records and editing](api.md#records-and-editing)); custom steps and result exporters: [Custom steps and exporters](api.md#custom-steps-and-exporters).
 
@@ -15,7 +15,7 @@ An unnamed YAML step receives `<type>_<declaration index>`. A step seed is expli
 | `seed` | every step | derived | The step's seed ([Seeds](dsl.md#seeds)) |
 | `outputs` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis, MaximumSupportedDemand | all off | Optional outputs ([Output selection](#output-selection)) |
 
-Capacity and traffic-matrix placement resolve `workers: auto` to the CPU count; explicit positive worker counts override it, and results are the same for any number of workers. MaximumSupportedDemand (MSD) searches for the largest tested feasible demand multiplier and runs serially ([Maximum supported demand](../concepts.md#maximum-supported-demand)).
+Capacity and traffic-matrix placement resolve `workers: auto` to the CPU count; explicit positive worker counts override it, and results are the same for any number of workers. MaximumSupportedDemand (MSD) searches for the largest tested feasible alpha and runs serially ([Maximum supported demand](../concepts.md#maximum-supported-demand)).
 
 ## BuildGraph
 
@@ -43,7 +43,7 @@ Returns physical node/link counts and capacity, cost and degree statistics. The 
 
 ## CostPower
 
-Aggregation stops at the deepest node name. Greater requested levels reuse its immutable rows without further computation or storage per level; exporting those repeated rows takes work proportional to the output size.
+Each level groups the nodes by the first parts of their `/`-separated names. A level deeper than the deepest node name repeats the rows of that deepest level.
 
 ```yaml
 workflow:
@@ -53,7 +53,7 @@ workflow:
     aggregation_level: 2
 ```
 
-Returns hardware rows grouped by hierarchy level, with platform and link-end optics capex/power. The aggregation level is a nonnegative integer. Hardware validation remains available through the explorer and `inspect`. Both read one hardware inventory: an optic counts only where its endpoint node has hardware, `include_disabled: false` keeps enabled nodes and links whose two end nodes are enabled, and invalid hardware (see the DSL `components` section) is refused in either view.
+Returns hardware rows grouped by hierarchy level, with platform and link-end optics capex/power. The aggregation level is a nonnegative integer. The network explorer and `inspect` validate hardware too, and all of them read one hardware inventory: an optic counts only where its endpoint node has hardware, `include_disabled: false` keeps enabled nodes and links whose two end nodes are enabled, and invalid hardware (see the DSL `components` section) is refused in either view.
 
 ## MaxFlow
 
@@ -83,7 +83,7 @@ workflow:
 | `preset` or `model` | `TE_MAXFLOW_UNLIM` | The model to ask ([Presets](dsl.md#presets); [Routing models and admission](../concepts.md#routing-models-and-admission)); the two are exclusive |
 | `offer`, `design_demand` | none | Physical inputs whose applicability follows the declared model |
 
-The default question is unrestricted optimized lossless capacity. Choose `SHORTEST_PATHS_ECMP`, `SHORTEST_PATHS_WCMP`, `SHORTEST_PATHS_MAXFLOW` or an explicit `model` for another question. The analysis labels the question it actually asked, with its offer source:
+The default question is unrestricted optimized lossless capacity. Choose `SHORTEST_PATHS_ECMP`, `SHORTEST_PATHS_WCMP`, `SHORTEST_PATHS_MAXFLOW` or an explicit `model` for another question. The result names the question asked (`question`) and where its offer came from (`offer_source`):
 
 | `question` | When | What it asks |
 |------------|------|--------------|
@@ -91,9 +91,9 @@ The default question is unrestricted optimized lossless capacity. Choose `SHORTE
 | `fixed_offer_delivery` | an `offer` is given, or a lossy tunnelled `centralized_te` model has a `design_demand` | What the model delivers of that offer (`offer_source` `explicit` or `design`) |
 | `first_hop_experiment` | lossy shortest-path routing and no `offer` | What arrives of an offer the Core derives from the sources' first hops |
 
-`combine` asks one resolved source-set/destination-set question. `pairwise` evaluates each selector-group pair independently. A singleton self pair returns a separate zero-valued row; other overlapping groups refuse.
+In `pairwise` mode a source group and a target group that are the same single node give a zero-valued `self` row; any other overlap of source and target groups is refused.
 
-The result contains ordered cases with `states.converged.rows`. Rows retain native results. Cuts and edge arrays require their native output flags. Cost reports are opt-in: optimized unrestricted capacity has a marginal curve; determined path costs have delivered-unit bins.
+The result holds the cases in order, each with its rows under `states.converged`; each row holds the engine's result. Cuts, edge arrays and cost reports appear only when requested ([Output selection](#output-selection); the kinds of cost report: [Results and their units](../concepts.md#results-and-their-units)).
 
 ## TrafficMatrixPlacement
 
@@ -120,13 +120,13 @@ workflow:
 | `failure_states` | `[converged]` | The failure states each case reports: `converged`, `stale`, `repair` |
 | `interaction` | `ordered` | `ordered` or `simultaneous` placement |
 
-Places the complete demand matrix in priority/declaration order through native policies. The result includes stable row IDs, endpoint labels, exact reference requests and totals, and discarded-share accounting. Failures change eligibility, not the declared volume ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)).
+Places the demand set, by default in priority order, then declaration order. Each row has a stable id, its endpoints, its reference request and the engine's result; each state adds totals, and the result adds each declaration's accounting of declared, resolved and discarded units. A failure changes which nodes and links can be used, never a declared volume ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)).
 
-Each case reports the requested `failure_states`, each on its own ledger: `converged` computes the demands again on the failed network (declared group shares stay fixed caps, and dead caps are listed), `stale` forwards each baseline program unchanged and lossy, and `repair` re-splits the baseline programs over the surviving routes. A state whose bounded forwarding calculation cycles or reaches its round limit reports a forwarding failure with no rows. Group scope refuses `converged` and `repair` under a failure policy when it programs a router inside the IGP domain. The full rules: [Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states).
+Each case reports the requested `failure_states`, each computed separately: `converged` computes the demands again on the failed network (declared group shares stay fixed caps, and dead caps are listed), `stale` forwards each baseline program unchanged and lossy, and `repair` re-splits the baseline programs over the surviving routes. A state whose bounded forwarding calculation cycles or reaches its round limit reports a forwarding failure with no rows. Group scope refuses `converged` and `repair` under a failure policy when it programs a router inside the IGP domain. The full rules: [Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states).
 
 `interaction: simultaneous` forwards every demand at once, sharing losses on common links, as a lossy question on fixed programs; its rows are not comparable with the default `ordered` rows. A simultaneous step that takes its alpha from an MSD step cannot have pool demands. The full rules: [Ordered and simultaneous placement](../concepts.md#ordered-and-simultaneous-placement).
 
-Use either `alpha` or `alpha_from_step`, never both. Omitting both uses 1. An earlier MSD step supplies its actual largest tested feasible factor; missing, forward, wrong-type and no-feasible dependencies refuse. The consuming step records the producer name and effective alpha.
+Use either `alpha` or `alpha_from_step`, never both. Omitting both uses 1. `alpha_from_step` names an earlier MSD step and places at its largest tested feasible alpha. Preparation refuses a name that is not an earlier MSD step; the placement refuses, when it runs, an MSD result with no feasible alpha. The placement records the MSD step's name and the alpha it used (`alpha_source`, `alpha`).
 
 ## MaximumSupportedDemand
 
@@ -150,15 +150,11 @@ workflow:
     alpha_from_step: supported_load
 ```
 
-Searches for the largest tested alpha at which the demand set is placed in full, keeping every probe ([Maximum supported demand](../concepts.md#maximum-supported-demand)). `alpha_start`, `growth_factor`, `alpha_min` and `alpha_max` bound the search, `alpha_tolerance` ends it, and `max_bracket_iters` and `max_bisect_iters` cap its two phases; the example shows the defaults. `alpha_feasible` is null if no probe was feasible. `search_status` distinguishes `feasible`, `none_feasible`, `range`, `stagnation`, `limit` and `trivial`; `stop_reason` records the precise boundary.
+Searches for the largest tested alpha at which the demand set is placed in full, keeping every probe ([Maximum supported demand](../concepts.md#maximum-supported-demand)). `alpha_start`, `growth_factor`, `alpha_min` and `alpha_max` bound the search, `alpha_tolerance` ends it, and `max_bracket_iters` and `max_bisect_iters` cap its two phases; the example shows the defaults. `alpha_feasible` is null if no probe was feasible. `search_status` and `stop_reason` say how and why the search ended (each value: [Maximum supported demand](../concepts.md#maximum-supported-demand)).
 
 When a demand set offers no traffic because all declared volumes are zero or every positive volume is discarded, MSD makes one probe at `alpha_max`. If that probe succeeds, it reports `trivial`, with `proof` and `stop_reason` both `nothing_offered`, and retains discard accounting. If scaling the discarded volume exceeds the native integer-unit range or binary64, the probe is refused and MSD reports `range` with `stop_reason` `offer_range`. A positive demand that merely rounds to zero is still searched as `below_resolution`.
 
-An MSD probe with a positive physical leaf rounded to zero requested units has outcome `below_resolution`. It is never feasible or a certificate endpoint; search moves upward from it. If no verified feasible probe is found at the unit-resolution boundary, MSD returns `none_feasible` with stop reason `unit_resolution`. An `alpha_from_step` placement refuses such a result because it has no tested feasible alpha. Placement's own totals retain their exact integer-unit meaning.
-
-Before a tolerance stop with no verified feasible point and a below-resolution lower end, MSD tests the first multiplier where every positive leaf receives a unit. It finds this multiplier from rounding alone, records an ordinary probe and continues if feasible. Iteration-limit stops retain `bracket_limit` or `bisect_limit`.
-
-YAML has no full-probe-row export input; Python's `MSDQuery.export_probe_rows` is an explicit opt-in.
+An MSD probe is `below_resolution` if any resolved leaf of a positive declaration requests zero units after scaling and expansion, even when the declaration's rounded total is positive. It is never an accepted feasible probe or certificate endpoint; search moves upward from it. Before stopping on tolerance with no feasible probe and a below-resolution lower bracket end, MSD tests the first alpha where every such leaf receives at least one unit, found from rounding alone; an already tested endpoint is reused. It continues if feasible. If no feasible probe is found this way, it reports `none_feasible` with stop reason `unit_resolution`; iteration limits keep `bracket_limit` or `bisect_limit`.
 
 ## TunnelCountAnalysis
 
@@ -214,7 +210,7 @@ The step's offer is a known lossy offer for the TE ingress pools of its set, and
 | --- | --- | --- |
 | `edge_flows` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | the units each directed link carries |
 | `residual` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | each directed link's residual capacity after the row; under simultaneous placement, the one final residual every row shares |
-| `edge_reservations` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | each directed link's strict tunnel holds |
+| `edge_reservations` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | each directed link's tunnel holds |
 | `saturated_boundary_edges` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | the saturated links at the sources' reachable boundary |
 | `min_cut` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | the minimum cut closest to the sources, where defined (unrestricted optimized maximum flow); null otherwise |
 | `cost_distribution` | MaxFlow, TrafficMatrixPlacement | the cost report: delivered units per path cost, or the native marginal cost curve |
@@ -222,8 +218,6 @@ The step's offer is a known lossy offer for the TE ingress pools of its set, and
 
 All are false by default. Every row field is described in the [Results](results.md) reference.
 
-`MaxFlow` and `TrafficMatrixPlacement` accept `outputs.details` (false by default) alongside their native output flags and `cost_distribution`; `TunnelCountAnalysis` accepts the native flags and `details` (its rows have no cost report). It adds per-source, per-tunnel, plan and call details to compact exact JSON rows. Pool metadata stays present in either mode so synthetic-ingress costs remain identifiable. `MaximumSupportedDemand` accepts only `details` in its outputs object, for its best rows; MSD history stays compact whatever `details` says. Omitted outputs, `{}`, or `details: false` select compact output; `details` accepts only a boolean. Python callers can independently request retained historical probe rows with `MSDQuery.export_probe_rows`.
+Each output is selected on its own: `outputs: {details: false, min_cut: true}` gives compact rows with a cut, and `outputs: {details: true}` gives the detail fields without a cost report or cut. Omitted outputs, `{}` and `details: false` give compact rows; `details` accepts only a boolean. A row's `pool` is present either way, so a TE ingress pool's attachment cost stays identifiable. `MaximumSupportedDemand` accepts only `details`, which applies to its best rows; its probe history stays compact. Python spells the detail selector `export_details` (refused in YAML), and only Python can export every probe's rows (`MSDQuery.export_probe_rows`). The selection shapes only the JSON: Python results stay complete.
 
-Details do not enable cost bins, cuts or arrays. For example `outputs: {details: false, min_cut: true}` keeps compact capacity rows with a requested cut; `outputs: {details: true}` emits native details without a cost report or cut. Python query/workflow constructors spell the single detail selector `export_details`; that spelling is refused in YAML. Requesting details performs no extra solve or cost-report preparation, and unrequested detail fields are absent. Python callers retain full native results regardless of export selection.
-
-The results schema checks `details` against the rows: `details: false` forbids the detail fields, and `details: true` requires the whole selected group of them; the nullable `pool` field is present in both modes, and selected per-source, per-tunnel and plan lists keep their applicability. Compact rows keep their exact drop totals. `edge_drop_units` sums native losses on physical links and TE ingress pool attachments.
+The results schema enforces each row's applicable detail fields: they are absent with `details: false` and present with `details: true`. A native result's `plan` is null when no tunnel plan applies; a tunnel-count row keeps `plan` at row level rather than inside `result`. Compact rows keep their drop totals: `edge_drop_units` sums losses on physical links and TE ingress pool attachments.

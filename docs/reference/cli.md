@@ -117,7 +117,7 @@ ngraph run scenarios/nsfnet.yaml --no-results
 
 ### Filtering Results by Step Names
 
-`--keys` selects entries from the ordered `steps` array after the complete workflow executes. It preserves declaration order and actual `execution_order` values, so a filtered export may have gaps. Unknown step names abort before any step executes:
+`--keys` selects entries from the ordered `steps` array after the complete workflow executes. It keeps declaration order and each step's own `execution_order`, so a filtered export may have gaps. Unknown step names abort before any step executes:
 
 ```bash
 # Only include results from the MSD step
@@ -151,7 +151,7 @@ The report lists total elapsed time, time per step, steps taking more than 10% o
 
 ### Output Format
 
-The top-level fields are `metadata`, `units_report` and ordered `steps`. Each step contains its name, type, order, seed provenance, normalized question and typed result. For example, inspect questions and their quantum with:
+The top-level fields are `metadata`, `units_report` and ordered `steps`. Each step contains its name, type, order, seed provenance, normalized question and typed result. For example, list the steps' questions and the bandwidth unit `q` with:
 
 ```bash
 jq '{q: .units_report.q, steps: [.steps[] | {name, execution_order, question}]}' results.json

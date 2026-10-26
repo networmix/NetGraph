@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class PreparedTopology:
-    """One graph with network labels; native edge arrays remain authoritative.
+    """One engine graph with its network labels; per-edge arrays follow ``edge_refs``.
 
     ``pool_heads`` maps each finite TE ingress pool to its synthetic head node;
     ``pool_budgets`` holds a pool's lossy offer budget in units, when it has one.

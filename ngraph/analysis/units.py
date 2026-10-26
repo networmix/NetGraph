@@ -46,7 +46,8 @@ class UnitRangeError(ValueError):
 
 @dataclass(frozen=True)
 class UnitsSettings:
-    """One physical unit and the local relative precision target."""
+    """The bandwidth unit ``q`` (``resolution``: "auto" or a power of two) and the
+    relative precision target."""
 
     resolution: float | Literal["auto"] = "auto"
     precision: float = 0.001

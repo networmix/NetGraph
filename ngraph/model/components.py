@@ -36,7 +36,7 @@ class Component:
         component_type (str): Free-form label (e.g., "chassis", "linecard", "optic").
         description (str): Free-form human-readable description.
         capex (float): Monetary capex of a single instance of this component.
-        power_watts (float): Typical/nominal power usage (watts) for one instance.
+        power_watts (float): Typical power usage (watts) for one instance.
         power_watts_max (float): Maximum/peak power usage (watts) for one instance.
         capacity (float): A generic capacity measure (e.g., platform capacity).
         ports (int): Number of ports if relevant for this component.

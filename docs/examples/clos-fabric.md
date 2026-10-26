@@ -97,8 +97,8 @@ ngraph run clos.yaml --output results/
 ngraph run clos.yaml --keys equal_shortest_capacity --stdout --no-results
 ```
 
-The filtered export retains that step's actual execution order 1 ([Filtering Results by Step Names](../reference/cli.md#filtering-results-by-step-names)); its cases are described in [Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states).
+The filtered export keeps that step's execution order, 1, ([Filtering Results by Step Names](../reference/cli.md#filtering-results-by-step-names)); its cases are described in [Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states).
 
-Change `preset` to `SHORTEST_PATHS_WCMP` for capacity-weighted shortest routing, `SHORTEST_PATHS_MAXFLOW` for an optimized shortest-support question, or `TE_MAXFLOW_UNLIM` for unrestricted optimized capacity. These are distinct models ([Routing models and admission](../concepts.md#routing-models-and-admission)); the symmetric baseline here is bounded by the same inter-site cut.
+Change `preset` to `SHORTEST_PATHS_WCMP` for capacity-weighted shortest routing, `SHORTEST_PATHS_MAXFLOW` for optimized capacity on shortest paths, or `TE_MAXFLOW_UNLIM` for unrestricted optimized capacity. These are distinct models ([Routing models and admission](../concepts.md#routing-models-and-admission)); the symmetric baseline here is bounded by the same inter-site cut.
 
 See [DSL](../reference/dsl.md) for grouped selection, explicit routes and hardware declarations, and [workflow](../reference/workflow.md) for MSD dependencies and optional outputs.

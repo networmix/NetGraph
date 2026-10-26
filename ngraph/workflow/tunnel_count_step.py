@@ -15,7 +15,7 @@ from ngraph.workflow.base import WorkflowStep, register_workflow_step, step_name
 
 @dataclass
 class TunnelCountAnalysis(WorkflowStep):
-    """One native evaluation per demand and tunnel count (or ``up_to`` limit).
+    """Workflow step: one evaluation per demand and tunnel count (or ``up_to`` limit).
 
     Every demand uses the same ``design_demand`` and ``offer``; the set's
     declared volumes are not read by the rows, though they still take part in

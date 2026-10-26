@@ -145,7 +145,7 @@ class WorkflowStep(ABC):
         object.__delattr__(self, name)
 
     def execute(self, context: StepContext) -> StepResult:
-        """Run once, validate/own its boundary, and publish one immutable result."""
+        """Run the step once and publish its question and result as one immutable StepResult."""
         logger.info(
             "Starting workflow step: %s (%s.%s)",
             context.step_name,

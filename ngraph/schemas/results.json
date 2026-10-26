@@ -1087,7 +1087,7 @@
           "type": "string"
         },
         "declared_units": {
-          "description": "The declared demand's units after one quantization of its scaled total.",
+          "description": "The declared demand's units: its scaled total, converted to units once.",
           "type": "integer"
         },
         "resolved_units": {
@@ -1130,7 +1130,7 @@
           ]
         },
         "pattern": {
-          "description": "The canonical failure: excluded nodes and links.",
+          "description": "The failure pattern: the failed nodes and links.",
           "$ref": "#/$defs/FailurePatternJSON"
         },
         "occurrences": {
@@ -1495,7 +1495,7 @@
           "type": "string"
         },
         "units": {
-          "description": "Its quantized value (integer units of q).",
+          "description": "Its value in units (integer units of q).",
           "type": "integer"
         },
         "error": {
@@ -2577,7 +2577,7 @@
           ]
         },
         "offered_units": {
-          "description": "LOSSY: the units sent into the network. Null when admission is LOSSLESS.",
+          "description": "Lossy: the units sent into the network. Null when admission is lossless.",
           "anyOf": [
             {
               "type": "integer"
@@ -2592,7 +2592,7 @@
           "type": "integer"
         },
         "unadmitted_units": {
-          "description": "LOSSLESS: the request minus the delivery; LOSSY: 0. Null when the request is unlimited.",
+          "description": "Lossless: the request minus the delivery; lossy: 0. Null when the request is unlimited.",
           "anyOf": [
             {
               "type": "integer"
@@ -2603,11 +2603,11 @@
           ]
         },
         "source_drop_units": {
-          "description": "LOSSY: units lost at sources without a usable route; 0 when LOSSLESS.",
+          "description": "Lossy: units lost at sources without a usable route; 0 when lossless.",
           "type": "integer"
         },
         "edge_drop_units": {
-          "description": "LOSSY: units dropped on physical links and TE ingress pool attachments, in all; 0 when LOSSLESS.",
+          "description": "Lossy: units dropped on physical links and TE ingress pool attachments, in all; 0 when lossless.",
           "type": "integer"
         },
         "termination": {
@@ -2661,7 +2661,7 @@
           "type": "integer"
         },
         "admitted_units": {
-          "description": "LOSSLESS: the units carried; LOSSY: the units offered. Absent when details are not requested.",
+          "description": "Lossless: the units carried; lossy: the units offered. Absent when details are not requested.",
           "type": "integer"
         },
         "edge_drops": {
@@ -2711,7 +2711,7 @@
           }
         },
         "edge_reservations": {
-          "description": "Each directed physical link's strict tunnel holds (integer units of q). Absent when it was not requested.",
+          "description": "Each directed physical link's tunnel holds (integer units of q). Absent when it was not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/EdgeAmountJSON"
@@ -3970,15 +3970,15 @@
           "type": "integer"
         },
         "unadmitted_units": {
-          "description": "LOSSLESS units not admitted over the rows.",
+          "description": "Lossless units not admitted over the rows.",
           "type": "integer"
         },
         "source_drop_units": {
-          "description": "LOSSY units lost at sources over the rows.",
+          "description": "Lossy units lost at sources over the rows.",
           "type": "integer"
         },
         "edge_drop_units": {
-          "description": "LOSSY units dropped on physical links and TE ingress pool attachments over the rows.",
+          "description": "Lossy units dropped on physical links and TE ingress pool attachments over the rows.",
           "type": "integer"
         },
         "reference_shortfall_units": {
@@ -4095,7 +4095,7 @@
           "type": "integer"
         },
         "zeroed_inputs": {
-          "description": "Positive inputs that quantize to zero there.",
+          "description": "Positive inputs that round to zero units there.",
           "type": "integer"
         },
         "examples": {
@@ -4365,7 +4365,7 @@
           "type": "string"
         },
         "seed": {
-          "description": "The scenario's master seed. Null when the scenario sets no seed.",
+          "description": "The scenario seed. Null when the scenario sets no seed.",
           "anyOf": [
             {
               "type": "integer"
@@ -4845,7 +4845,7 @@
           "$ref": "#/$defs/SourceJSON"
         },
         "offered_units": {
-          "description": "LOSSY: the units this source sent. Null when admission is LOSSLESS.",
+          "description": "Lossy: the units this source sent. Null when admission is lossless.",
           "anyOf": [
             {
               "type": "integer"
@@ -4856,7 +4856,7 @@
           ]
         },
         "admitted_units": {
-          "description": "LOSSLESS: the units it delivers; LOSSY: offered.",
+          "description": "Lossless: the units it delivers; lossy: offered.",
           "type": "integer"
         },
         "delivered_units": {
@@ -4864,11 +4864,11 @@
           "type": "integer"
         },
         "source_drop_units": {
-          "description": "LOSSY: units lost at sources without a usable route; 0 when LOSSLESS.",
+          "description": "Lossy: units lost at sources without a usable route; 0 when lossless.",
           "type": "integer"
         },
         "total_edge_drop_units": {
-          "description": "LOSSY: this source's units dropped on physical links and TE ingress pool attachments; 0 when LOSSLESS.",
+          "description": "Lossy: this source's units dropped on physical links and TE ingress pool attachments; 0 when lossless.",
           "type": "integer"
         }
       },
@@ -4900,7 +4900,7 @@
           "type": "string"
         },
         "nominal_physical": {
-          "description": "Its nominal physical demand toward the destination (a fraction).",
+          "description": "Its share of declared physical volumes toward the destination (a fraction, before alpha).",
           "$ref": "#/$defs/FractionJSON"
         },
         "weight": {
@@ -5067,7 +5067,7 @@
           "type": "integer"
         },
         "scenario_seed": {
-          "description": "The scenario's master seed. Null when the scenario sets no seed.",
+          "description": "The scenario seed. Null when the scenario sets no seed.",
           "anyOf": [
             {
               "type": "integer"
@@ -5534,7 +5534,7 @@
           }
         },
         "edge_reservations": {
-          "description": "Each pool attachment's strict holds (integer units of q). Absent when it was not requested.",
+          "description": "Each pool attachment's holds (integer units of q). Absent when it was not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SyntheticAmountJSON"
@@ -5580,7 +5580,7 @@
           }
         },
         "source_weights": {
-          "description": "all_routers: each source's nominal demand and weight. Null when the scope is not all_routers.",
+          "description": "all_routers: each source's share of declared physical volumes and its weight. Null when the scope is not all_routers.",
           "anyOf": [
             {
               "type": "array",
@@ -5976,7 +5976,7 @@
           ]
         },
         "assigned_units": {
-          "description": "The tunnel's share of the injections (LOSSY: sent to it; LOSSLESS: carried).",
+          "description": "The units assigned to the tunnel (lossy: sent to it; lossless: carried).",
           "type": "integer"
         },
         "delivered_units": {
@@ -5984,7 +5984,7 @@
           "type": "integer"
         },
         "total_edge_drop_units": {
-          "description": "LOSSY: this tunnel's units dropped on physical links and TE ingress pool attachments; 0 when LOSSLESS.",
+          "description": "Lossy: this tunnel's units dropped on physical links and TE ingress pool attachments; 0 when lossless.",
           "type": "integer"
         }
       },
@@ -6031,7 +6031,7 @@
           }
         },
         "total_reserved_bandwidth_units": {
-          "description": "The strict holds of the up tunnels (integer units of q).",
+          "description": "The holds of the up tunnels (integer units of q).",
           "type": "integer"
         },
         "heads_with_capacity": {
@@ -6186,7 +6186,7 @@
       "type": "object",
       "properties": {
         "q": {
-          "description": "The bandwidth quantum: one unit is q physical units.",
+          "description": "The bandwidth unit: one unit is q in physical terms.",
           "type": "number"
         },
         "exponent": {
@@ -6232,7 +6232,7 @@
           }
         },
         "input_count": {
-          "description": "Physical inputs quantized.",
+          "description": "Physical inputs converted to units.",
           "type": "integer"
         },
         "inexact_inputs": {
@@ -6240,7 +6240,7 @@
           "type": "integer"
         },
         "zeroed_inputs": {
-          "description": "Positive inputs that quantize to zero.",
+          "description": "Positive inputs that round to zero units.",
           "type": "integer"
         },
         "inexact_examples": {
@@ -6274,7 +6274,7 @@
           "type": "integer"
         },
         "nominal_split_count": {
-          "description": "Splits of the nominal (no-failure) demands.",
+          "description": "Splits of the demands at alpha 1 without failures.",
           "type": "integer"
         },
         "nominal_splits": {

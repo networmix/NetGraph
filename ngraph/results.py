@@ -219,7 +219,7 @@ class ExpansionAccounting(_ResultRecord):
     base_id: str
     """The declared demand's identifier, before expansion."""
     declared_units: int
-    """The declared demand's units after one quantization of its scaled total."""
+    """The declared demand's units: its scaled total, converted to units once."""
     resolved_units: int
     """Units split among eligible leaves, after excluding self and same-label group pairs."""
     discarded_units: int
@@ -230,8 +230,8 @@ class ExpansionAccounting(_ResultRecord):
 
 @_record
 class ResolvedDemand(_ResultRecord):
-    """One demand bound to the prepared graph: its identity, endpoints, priority,
-    nominal units (its scaled request at alpha 1) and native configuration.
+    """One demand bound to the prepared graph: its identity, endpoints, priority, units
+    at alpha 1 and native configuration.
     """
 
     id: str
@@ -266,12 +266,12 @@ class ProgrammedRouter(_ResultRecord):
 
 @_record
 class SourceWeight(_ResultRecord):
-    """A source's nominal physical demand toward the destination and its weight."""
+    """A source's share of declared physical volumes toward the destination and its weight."""
 
     source: str
     """The source node."""
     nominal_physical: Fraction
-    """Its nominal physical demand toward the destination (a fraction)."""
+    """Its share of declared physical volumes toward the destination (a fraction, before alpha)."""
     weight: int
     """Its integer source weight."""
 
@@ -291,7 +291,7 @@ class TableReport(_ResultRecord):
     source_weights: tuple[SourceWeight, ...] | None = field(
         metadata={"null_when": "the scope is not all_routers"}
     )
-    """all_routers: each source's nominal demand and weight."""
+    """all_routers: each source's share of declared physical volumes and its weight."""
 
 
 def approximations(demands: ResolvedDemandSet) -> tuple[WeightApproximation, ...]:
@@ -332,7 +332,7 @@ class ResolvedDemandSet(_ResultRecord):
 
 @_record
 class FailurePattern(_ResultRecord):
-    """Canonical failure mask used as a scheduling and sampling key."""
+    """The nodes and links one draw fails, each sorted; equal patterns are one case."""
 
     excluded_nodes: tuple[str, ...]
     """Failed nodes, sorted."""
@@ -388,7 +388,7 @@ class FailureTrace(_ResultRecord):
 @_record
 class FailureCase(_ResultRecord):
     """One failure case: the baseline or one distinct failure pattern, how many draws
-    produced it, and the eligibility it applies.
+    produced it, and its eligibility (the engine's mask of what the case can use).
     """
 
     id: str
@@ -444,7 +444,7 @@ class InputQuantization(_ResultRecord):
     binary64_hex: str
     """The physical input in hexadecimal."""
     units: int
-    """Its quantized value (integer units of q)."""
+    """Its value in units (integer units of q)."""
     error: Fraction
     """The signed rounding error, units times q minus the input (physical, a fraction): positive when rounded up."""
     relative_error: Fraction | None = field(metadata={"null_when": "the input is zero"})
@@ -538,7 +538,7 @@ class PrecisionMiss(_ResultRecord):
     inexact_inputs: int
     """Inputs not exact at q there."""
     zeroed_inputs: int
-    """Positive inputs that quantize to zero there."""
+    """Positive inputs that round to zero units there."""
     examples: tuple[InputQuantization, ...]
     """Example inputs that miss."""
 
@@ -569,7 +569,7 @@ class UnitsReport(_ResultRecord):
     """
 
     q: float
-    """The bandwidth quantum: one unit is q physical units."""
+    """The bandwidth unit: one unit is q in physical terms."""
     exponent: int
     """q as a power of two: q = 2^exponent."""
     mode: Literal["auto", "manual"]
@@ -591,11 +591,11 @@ class UnitsReport(_ResultRecord):
     binding_constraints: tuple[UnitConstraint, ...]
     """The constraints that limited q."""
     input_count: int
-    """Physical inputs quantized."""
+    """Physical inputs converted to units."""
     inexact_inputs: int
     """Inputs not exact at q."""
     zeroed_inputs: int
-    """Positive inputs that quantize to zero."""
+    """Positive inputs that round to zero units."""
     inexact_examples: tuple[InputQuantization, ...]
     """Example inexact inputs."""
     zeroed_examples: tuple[InputQuantization, ...]
@@ -609,7 +609,7 @@ class UnitsReport(_ResultRecord):
     augmented_cost_sum: int
     """The graph's cost sum with pool attachments."""
     nominal_split_count: int
-    """Splits of the nominal (no-failure) demands."""
+    """Splits of the demands at alpha 1 without failures."""
     nominal_splits: tuple[SplitConstraint, ...]
     """Those splits with their bounds on q."""
     misses: tuple[PrecisionMiss, ...]
@@ -805,11 +805,11 @@ class PlacementTotals(_ResultRecord):
     delivered_units: int
     """Units delivered over the rows."""
     unadmitted_units: int
-    """LOSSLESS units not admitted over the rows."""
+    """Lossless units not admitted over the rows."""
     source_drop_units: int
-    """LOSSY units lost at sources over the rows."""
+    """Lossy units lost at sources over the rows."""
     edge_drop_units: int
-    """LOSSY units dropped on physical links and TE ingress pool attachments over the rows."""
+    """Lossy units dropped on physical links and TE ingress pool attachments over the rows."""
     reference_shortfall_units: int
     """The reference request minus the delivery (integer units of q)."""
     delivery_ratio: Fraction
@@ -1325,7 +1325,7 @@ class RunMetadata(_ResultRecord):
     python_version: str
     """The Python version."""
     seed: int | None = field(metadata={"null_when": "the scenario sets no seed"})
-    """The scenario's master seed."""
+    """The scenario seed."""
 
 
 @_record

@@ -56,7 +56,7 @@ What the other keys mean:
 - A `preset` names a model: `SHORTEST_PATHS_ECMP` splits whole units equally among equal-cost next hops at each router; `TE_MAXFLOW_UNLIM` asks for the largest flow ([Routing models and admission](../concepts.md#routing-models-and-admission)).
 - `BuildGraph` and `NetworkStats` export the graph and its statistics ([Workflow Steps](../reference/workflow.md)).
 - `outputs` asks for optional results: here the minimum cut and the cost report ([Output selection](../reference/workflow.md#output-selection)).
-- `MaximumSupportedDemand` searches for the largest multiplier alpha of the demand volumes that the network carries in full, to the relative tolerance `alpha_tolerance` ([Maximum supported demand](../concepts.md#maximum-supported-demand); [MaximumSupportedDemand](../reference/workflow.md#maximumsupporteddemand)).
+- `MaximumSupportedDemand` searches for the largest multiplier alpha of the demand volumes that the network carries in full, until the gap between a feasible and an infeasible alpha is at most `alpha_tolerance` ([Maximum supported demand](../concepts.md#maximum-supported-demand); [MaximumSupportedDemand](../reference/workflow.md#maximumsupporteddemand)).
 - `alpha_from_step` places the demands at the multiplier an earlier MSD step found ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters); [TrafficMatrixPlacement](../reference/workflow.md#trafficmatrixplacement)).
 - `failure_policy`, `iterations`, `workers` and `failure_trace` run that placement over 20 failure draws, on every CPU, recording the first draw of each failure pattern ([Keys common to analysis steps](../reference/workflow.md#keys-common-to-analysis-steps)).
 
@@ -82,7 +82,7 @@ jq '.steps[] | select(.name == "under_failures") | .result.cases[].states.conver
 
 The intact chain has physical capacity 10, cut at A→B, and route cost 3. Either single-link failure disconnects A from C. The 20 draws therefore collapse into at most two failure patterns, plus the baseline. `occurrences` sum to 20; the baseline is not an extra trial ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)).
 
-MSD reports its largest tested feasible factor and every probe it made; the placement step records that it used that factor ([Maximum supported demand](../concepts.md#maximum-supported-demand)).
+MSD reports its largest tested feasible alpha and every probe it made; the placement step records that it used that alpha ([Maximum supported demand](../concepts.md#maximum-supported-demand)).
 
 To export one step, add `--keys under_failures`: the whole workflow still runs, and the step keeps its execution order 4 ([Filtering Results by Step Names](../reference/cli.md#filtering-results-by-step-names)).
 

@@ -27,7 +27,7 @@ network:
   links: [{source: A, target: B, capacity: 1e6}]
 ```
 
-Unknown keys refuse at their configuration boundary; arbitrary user metadata belongs under `attrs`. Every load refusal is a `ValueError` naming its field and raw value; a schema error is retained as the cause. An optional field accepts explicit `null` wherever its Python constructor accepts `None`.
+Unknown keys are refused; your own metadata belongs under `attrs`. Every load refusal is a `ValueError` naming its field and raw value; a schema error is retained as the cause. An optional field accepts explicit `null` wherever its Python constructor accepts `None`.
 
 ## Template Syntaxes
 
@@ -347,8 +347,8 @@ vars: {}                 # YAML anchors and variables for reuse
 demands: {}              # Traffic demand definitions
 failures: {}             # Failure simulation policies
 workflow: []             # Analysis execution steps
-seed: 42                 # Master seed for reproducibility (integer)
-units: {resolution: auto, precision: 0.001}  # Bandwidth quantum q and precision target
+seed: 42                 # Scenario seed for reproducibility (integer)
+units: {resolution: auto, precision: 0.001}  # Bandwidth unit q and precision target
 routes: {}               # Named explicit routes
 supports: {}             # Named forwarding supports (DAGs)
 weights: {}              # Named edge weights
@@ -369,8 +369,8 @@ forwarding_groups: {}    # Fixed group shares at programmed routers
 | `demands` | No | Traffic demand patterns for capacity analysis |
 | `failures` | No | Failure policies for simulation |
 | `workflow` | No | Analysis workflow steps to execute |
-| `seed` | No | Master seed (integer) for reproducible random operations |
-| `units` | No | Bandwidth quantum `q` (`resolution`, `auto` by default) and `precision` target ([Units](#units-and-input-validation)) |
+| `seed` | No | Scenario seed (integer) for reproducible random operations |
+| `units` | No | Bandwidth unit `q` (`resolution`, `auto` by default) and `precision` target ([Units](#units-and-input-validation)) |
 | `routes` | No | Named explicit routes for `pinned` models |
 | `supports` | No | Named forwarding supports (DAGs of directed links) |
 | `weights` | No | Named edge-weight tables |
@@ -383,7 +383,7 @@ All sections are optional. A scenario that omits `network` entirely, or sets it 
 
 ### Seeds
 
-A YAML failure policy `name` derives its seed from SHA-256 of the UTF-8 string `<master>:failure_policy:failure_policy:<name>`. Read the first four bytes as a big-endian integer and mask with `0x7fffffff`: master `42` and policy `random_link` yield `2099469712`. An absent workflow step seed uses the same hash/truncation on `<master>:workflow_step:<effective-step-name>`. An explicit step seed wins, and a query seed overrides the policy seed. Failure draw `i` creates `random.Random(base_seed + i)`; an absent base creates an unseeded generator for that draw. Random rules draw one Bernoulli trial per matched entity in sorted identifier order on every supported Python runtime. Without a seed, results vary between runs. Results record the seed source, runtime, generator and draw order.
+A workflow step's failure draws use the step's seed: its own `seed`, or one derived from the scenario seed: the SHA-256 of the UTF-8 string `<seed>:workflow_step:<step-name>`, its first four bytes read as a big-endian integer and masked with `0x7fffffff`. A library `FailureRequest` that names a scenario policy and gives no seed of its own uses the policy's seed, derived the same way from `<seed>:failure_policy:failure_policy:<name>`: scenario seed `42` and policy `random_link` yield `2099469712`. Failure draw `i` creates `random.Random(base_seed + i)`; without a base seed every draw is unseeded and results vary between runs. A random rule fails each matched entity independently with its `probability`: one random number per entity, in sorted identifier order, the same on every supported Python. Results record the seed, where it came from, the runtime, the generator and the draw order.
 
 ## `network` - Topology
 
@@ -1209,8 +1209,6 @@ risk_groups:
   - name: "PowerZone_B"  # Only PowerZone_B is defined
 ```
 
-**Child Key Restrictions:** Nested `children` entries accept only `name`, `attrs`, and `children`. `membership`, `disabled`, and `generate` on a child entry fail schema validation at load time (and the parser raises `ValueError`), since only top-level groups are registered in `network.risk_groups` and these keys would otherwise be silently inert.
-
 **Circular Hierarchy Detection:** Parent-child relationships cannot form cycles:
 
 <!-- example: refusal risk group cycle: GroupA -> GroupB -> GroupA -->
@@ -1354,7 +1352,7 @@ demands:
 | `attrs` | object | Arbitrary metadata |
 | `expand` | object | Variable expansion block |
 
-An absent `id` becomes `<set>|<source declaration ordinal>`. Ordinals count source declarations before expansion. An `expand` leaf appends its stable index; resolved analysis leaves append their own stable expansion ordinal. IDs are unique across all active sets in a run; explicit/generated collisions refuse with both locations. Caller declarations are never rewritten in place.
+A demand without an `id` gets `<set>|<n>`, where `n` counts the set's declarations before expansion; an `expand` leaf adds `|<its index>`, and each row adds `|<its index in the expansion>`. Ids are unique across the run's demand sets: a collision, declared or generated, is refused naming both.
 
 ### Named routes and explicit models
 
@@ -1384,9 +1382,9 @@ demands:
         routing: {type: pinned, routes: [via_b, via_d]}
 ```
 
-Each route specifies its source `head` and exactly one of `nodes`, directed `edges`, or a named DAG `support`. Node paths and edge paths must be nonempty simple contiguous routes with the declared head and selected destination. A node hop chooses the nominal enabled parallel link with minimum `(cost, DirectedLink)`; an explicitly disabled link or a hop with no enabled link refuses. Compiled routes remain fixed under sampled failures.
+Each route specifies its source `head` and exactly one of `nodes`, directed `edges`, or a named DAG `support`. Node paths and edge paths must be nonempty simple contiguous routes with the declared head and selected destination. A node hop takes the cheapest enabled parallel link between its two nodes, ties to the smaller link id; a disabled link in an edge path, or a node hop with no enabled link, is refused. A route is fixed when it is prepared: failures never move it.
 
-Pure path routes use their declared nonnegative integer weights, default 1; weight 0 still receives full structural validation. Eligibility removes every route that touches a failed node or link; the head splits its offer over the surviving routes by their weights. A head with no surviving route loses its traffic. The compiled paths themselves stay fixed. Two demands with the same endpoints/model/priority remain distinct when their IDs are distinct. Combine and pairwise are both supported when the route endpoints match the resolved question.
+Path routes use their declared nonnegative integer weights, default 1; a route of weight 0 is still checked in full. In `converged` and `repair` states, routes touching failed nodes or links are removed and the head splits its offer over the surviving routes by weight. In `stale`, the baseline program is replayed lossy at the baseline admitted total: its split stays fixed, and traffic reaching a failed element is lost there. A head with no surviving route loses its traffic. The compiled paths themselves stay fixed. Two demands with the same endpoints, model and priority stay distinct when their ids differ. Combine and pairwise are both supported when the route endpoints match the resolved question.
 
 `supports` and `weights` are separate named namespaces:
 
@@ -1430,7 +1428,7 @@ model:
 | `centralized_te` | `source_allocation` (`optimized` or `equal`, required), `tunnel_count: {per_head: N}` with optional `up_to: true`, `prefer_headroom` |
 | `pinned` | `routes`, and for a DAG `allocation`, `weight_basis` and `edge_weights` (above) |
 
-`admission` is `lossless` (the default) or `lossy`. `cost_ceiling` is `{type: absolute, value: C}` or `{type: stretch, value: "3/2"}`; stretch values are exact: integers, fraction strings (`"3/2"`) or decimal strings (`"1.16"`), never rounded to a binary64 value, and the ceiling is inclusive. Native model applicability and integer/range restrictions are enforced at preparation. What each model does: [Routing models and admission](../concepts.md#routing-models-and-admission) and [Tunnels and TE ingress pools](../concepts.md#tunnels-and-te-ingress-pools).
+`admission` is `lossless` (the default) or `lossy`. `cost_ceiling` is `{type: absolute, value: C}` or `{type: stretch, value: "3/2"}`; stretch values are exact: integers, fraction strings (`"3/2"`) or decimal strings (`"1.16"`), never rounded to a binary64 value, and the ceiling is inclusive. A key the routing type does not have, or a `per_head` outside 1 to 10000, is refused at load; preparation refuses combinations the engine does not accept, such as `weight_basis` without `allocation: weighted`. What each model does: [Routing models and admission](../concepts.md#routing-models-and-admission) and [Tunnels and TE ingress pools](../concepts.md#tunnels-and-te-ingress-pools).
 
 ### Routing domains and the WCMP controller
 
@@ -1466,8 +1464,8 @@ are exact: an integer, a `"p/q"` or decimal string (YAML floats are refused); a 
 share 0 is refused.
 
 Placement and maximum supported demand (MSD) results report the tables under `controller`; a router not listed there splits by ECMP. These are
-the nominal tables: a failure case forwards on its own tables, which are not exported ([Failures: patterns, cases and
-states](../concepts.md#failures-patterns-cases-and-states)).
+the tables of the network without failures; in a failure case the converged state computes its own tables, which are
+not exported ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)).
 
 #### Weight approximation
 
@@ -1476,7 +1474,7 @@ highest averages, earlier member on ties) and reported in `units_report.weight_a
 relative error: one entry per router (`controller.<set>.<t>.router.<r>`) and, under `all_routers`, one per source
 vector, naming the source with the largest error (`controller.<set>.<t>.source.<s>`). Source weights are the volumes'
 exact binary values reduced to integers, so volumes 1000 and 0.1 (whose binary value has a 2^55 denominator) are
-apportioned and reported, while 1e6 and 1.0 stay exact.
+apportioned and reported, while 1000000 and 1 stay exact.
 
 ### Selector Fields
 
@@ -1494,7 +1492,7 @@ Controls how source and target node sets are paired:
 - `combine`: One source-set/destination-set demand, with one ordered roster of sources ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 - `pairwise`: Create one demand for each distinct selected source/target node pair. Node-to-itself pairs receive no share.
 
-Non-diagonal overlapping resolved endpoint groups refuse in demands, capacity and paths; no target is silently trimmed. Capacity and path queries retain their zero-valued singleton diagonal rows. A declaration whose every pair is a node-to-itself pair or a same-label group pair is reported whole as discarded, with its reason. If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason. A selection that matches no active node keeps its share as an `empty_selection` discard; a group whose nodes are all filtered out is not selected and takes no share ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
+Overlapping source and target groups are refused in demands, capacity and path questions (no target is silently dropped), except a pair that is one and the same node: a demand gives it no share, and capacity and path questions give it a zero-valued `self` row. A declaration whose every pair is a node-to-itself pair or a same-label group pair is reported whole as discarded, with its reason. If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason. A selection that matches no active node keeps its share as an `empty_selection` discard; a group whose nodes are all filtered out is not selected and takes no share ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 
 ### Group Modes (`group_mode`)
 
@@ -1528,7 +1526,7 @@ demands:
 | `pairwise` | `per_group` | Distinct node pairs within each shared label |
 | `pairwise` | `group_pairwise` | Distinct node pairs within each distinct-label group pair |
 
-Each declared physical total is quantized once, then split over its eligible pairs by integer quotient and remainder; declared units equal resolved plus discarded units ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
+Each declared physical total is converted to units once, then split over its eligible pairs by integer quotient and remainder; declared units equal resolved plus discarded units ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 
 ### Presets
 
@@ -1553,7 +1551,7 @@ Named failure policies:
 ```yaml
 failures:
   single_link_failure:
-    modes:                       # Weighted modes; exactly one mode fires per iteration
+    modes:                       # Weighted modes; each draw picks exactly one
       - weight: 1.0
         rules:
           - scope: "link"
@@ -1621,7 +1619,7 @@ failures:
 |-------|------|---------|-------------|
 | `modes` | array | required | List of weighted failure modes |
 | `attrs` | object | `{}` | Policy metadata (e.g., description) |
-| `expand_groups` | boolean | `false` | Also fail every entity sharing a risk group with a failed entity (members of a failed risk group are always excluded regardless; this flag adds shared-group correlation, applied identically whether the failure came from an entity rule or a risk_group rule) |
+| `expand_groups` | boolean | `false` | Also fail every node and link that shares a risk group with a failed one, whether a node, link or risk-group rule failed it (the members of a failed risk group fail with or without this flag) |
 
 A failed risk group always cascades to its child groups recursively.
 
@@ -1663,7 +1661,7 @@ failures:
 
 ### Notes
 
-- Policies are mode-based. Each mode has a non-negative `weight`. One mode is chosen per iteration with probability proportional to weights, then all rules in that mode are applied and their selections are unioned.
+- Each mode has a non-negative `weight`. Each draw picks one mode with probability proportional to the weights, applies all its rules and fails the union of their selections.
 - At least one mode must have `weight > 0`; a policy whose modes all have zero weight is refused where the policy is built, in Python and YAML. Modes with zero weight are never selected.
 - Condition syntax uses the same operators as link/demand selectors. See [Conditions](#conditions) for the full reference.
 
@@ -1691,8 +1689,8 @@ workflow:
 
 - `BuildGraph`: Export graph to JSON (node-link) for external analysis
 - `NetworkStats`: Node, link, capacity and degree statistics
-- `MaxFlow`: Monte Carlo capacity analysis between node groups
-- `TrafficMatrixPlacement`: Monte Carlo demand placement for a named demand set
+- `MaxFlow`: Capacity between node sets, optionally under failure draws
+- `TrafficMatrixPlacement`: Placement of a named demand set, optionally under failure draws
 - `MaximumSupportedDemand`: Search for the largest tested feasible alpha (the demand multiplier) for a named demand set ([Maximum supported demand](../concepts.md#maximum-supported-demand))
 - `CostPower`: Aggregate capex and power by network hierarchy level
 - `TunnelCountAnalysis`: Rows per tunnel count for the tunnelled TE demands of a named demand set

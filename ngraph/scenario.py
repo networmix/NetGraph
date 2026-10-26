@@ -136,7 +136,7 @@ class Scenario:
     def from_yaml(
         cls, yaml_str: str, default_components: ComponentsLibrary | None = None
     ) -> Scenario:
-        """Parse one closed scenario declaration and retain editable domain inputs."""
+        """Parse and validate one scenario document; its network and components stay editable."""
         from ngraph.dsl.blueprints.expand import expand_network_dsl
         from ngraph.dsl.inputs import (
             closed,
@@ -268,7 +268,8 @@ def prepare(
     units: UnitsSettings | None = None,
     demand_sets: Sequence[str] = (),
 ) -> PreparedScenario:
-    """Choose one graph/unit over a read-only view of the scenario.
+    """Build one graph and choose one bandwidth unit ``q`` over a read-only view of
+    the scenario.
 
     The input is not changed. The prepared scenario shares its immutable
     records and keeps read-only copies of the network and component dicts,

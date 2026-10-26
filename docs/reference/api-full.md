@@ -125,7 +125,7 @@ Attributes:
     component_type (str): Free-form label (e.g., "chassis", "linecard", "optic").
     description (str): Free-form human-readable description.
     capex (float): Monetary capex of a single instance of this component.
-    power_watts (float): Typical/nominal power usage (watts) for one instance.
+    power_watts (float): Typical power usage (watts) for one instance.
     power_watts_max (float): Maximum/peak power usage (watts) for one instance.
     capacity (float): A generic capacity measure (e.g., platform capacity).
     ports (int): Number of ports if relevant for this component.
@@ -299,7 +299,7 @@ expansion modes.
 
 ### ngraph.DirectedLink
 
-One analysis direction of a stored physical link.
+One direction of a physical link: forward (source to target) or reverse.
 
 **Attributes:**
 
@@ -420,7 +420,7 @@ What a result encoder receives: the prepared scenario and the run's units report
 ### ngraph.FailureCase
 
 One failure case: the baseline or one distinct failure pattern, how many draws
-produced it, and the eligibility it applies.
+produced it, and its eligibility (the engine's mask of what the case can use).
 
 **Attributes:**
 
@@ -444,7 +444,7 @@ then applies its rules.
 
 ### ngraph.FailurePattern
 
-Canonical failure mask used as a scheduling and sampling key.
+The nodes and links one draw fails, each sorted; equal patterns are one case.
 
 **Attributes:**
 
@@ -610,12 +610,11 @@ of these.
 
 ### ngraph.Link
 
-One directed link between two nodes.
+One physical link between two nodes.
 
-The model stores a single direction (``source`` -> ``target``). When the
-prepared native graph is built, a reverse
-edge is added automatically for each link to provide bidirectional
-connectivity.
+It carries traffic both ways: the prepared graph gives it a forward edge
+(``source`` -> ``target``) and a reverse edge, each with the link's
+capacity and cost.
 
 Attributes:
     source (str): Name of the source node.
@@ -779,9 +778,9 @@ Attributes:
 
 Scenario-level topology: nodes, links, and risk groups.
 
-Holds persistent state only (nodes and links disabled in the scenario
-configuration). For temporary exclusions, pass a graph-owned Eligibility
-through the native operation's options.
+Holds what the scenario declares, disabled nodes and links included.
+Failures are not edits of the network: an analysis takes them as a
+failure request or exclusions.
 
 The dicts stay editable; their values are immutable records, so an edit
 replaces a record. ``prepare`` keeps a read-only view of these dicts, so
@@ -946,8 +945,8 @@ The paths between one source and destination group: their cost and native paths.
 PhysicalAmount = float
 ```
 
-A physical amount, such as a capacity or a volume, in the scenario's own bandwidth
-unit.
+A physical amount, such as a capacity or a volume, in whatever unit the scenario
+uses (for example Gbit/s), never in units of ``q``.
 
 ### ngraph.PinnedRoutes
 
@@ -1076,8 +1075,8 @@ workflow and for library callers.
 
 One graph, unit and demand binding over a read-only view of a scenario.
 
-``units_report`` is the nominal preparation's report; each analysis
-returns its own precision misses beside it.
+``units_report`` is the preparation's report; each analysis returns its
+own precision misses beside it.
 
 **Attributes:**
 
@@ -1088,7 +1087,7 @@ returns its own precision misses beside it.
 
 ### ngraph.PreparedTopology
 
-One graph with network labels; native edge arrays remain authoritative.
+One engine graph with its network labels; per-edge arrays follow ``edge_refs``.
 
 ``pool_heads`` maps each finite TE ingress pool to its synthetic head node;
 ``pool_budgets`` holds a pool's lossy offer budget in units, when it has one.
@@ -1142,8 +1141,8 @@ where they apply.
 
 ### ngraph.ResolvedDemand
 
-One demand bound to the prepared graph: its identity, endpoints, priority,
-nominal units (its scaled request at alpha 1) and native configuration.
+One demand bound to the prepared graph: its identity, endpoints, priority, units
+at alpha 1 and native configuration.
 
 **Attributes:**
 
@@ -1282,7 +1281,7 @@ reach a prepared scenario. ``dataclasses.replace`` builds an edited copy.
 
 **Methods:**
 
-- `from_yaml(yaml_str: 'str', default_components: 'ComponentsLibrary | None' = None) -> 'Scenario'` - Parse one closed scenario declaration and retain editable domain inputs.
+- `from_yaml(yaml_str: 'str', default_components: 'ComponentsLibrary | None' = None) -> 'Scenario'` - Parse and validate one scenario document; its network and components stay editable.
 
 ### ngraph.Selector
 
@@ -1546,7 +1545,8 @@ rounding, the range sums and every precision miss.
 
 ### ngraph.UnitsSettings
 
-One physical unit and the local relative precision target.
+The bandwidth unit ``q`` (``resolution``: "auto" or a power of two) and the
+relative precision target.
 
 **Attributes:**
 
@@ -1621,7 +1621,7 @@ prepared scenario.
 
 **Methods:**
 
-- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run the step once and publish its question and result as one immutable StepResult.
 - `needs(self) -> 'StepNeeds | None'` - What preparation must bind for this step; None asks for nothing.
 - `run(self, context: 'StepContext') -> 'StepOutput'` - Return this step's typed question and result without publishing state.
 - `yaml_arguments(arguments: 'dict', name: 'str') -> 'dict'` - Turn this step type's YAML keys into constructor arguments.
@@ -1671,7 +1671,8 @@ requested state.
 
 `prepare(scenario: 'Scenario', *, units: 'UnitsSettings | None' = None, demand_sets: 'Sequence[str]' = ()) -> 'PreparedScenario'`
 
-Choose one graph/unit over a read-only view of the scenario.
+Build one graph and choose one bandwidth unit ``q`` over a read-only view of
+the scenario.
 
 The input is not changed. The prepared scenario shares its immutable
 records and keeps read-only copies of the network and component dicts,
@@ -1714,7 +1715,10 @@ Evaluate tunnelled centralized-TE demands at each tunnel count.
 
 `write_json(result: 'RunResult | AnalysisResult', file: 'IO[str]') -> 'None'`
 
-Project once and encode before writing, so encoder errors write nothing.
+Write a run or an analysis as one line of compact JSON.
+
+The whole document is encoded before anything is written, so an encoding
+error writes nothing.
 
 ---
 
@@ -1775,7 +1779,7 @@ Workflow step: export the network in NetworkX node-link form.
 
 **Methods:**
 
-- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run the step once and publish its question and result as one immutable StepResult.
 - `needs(self) -> 'StepNeeds | None'` - What preparation must bind for this step; None asks for nothing.
 - `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
 - `yaml_arguments(arguments: 'dict', name: 'str') -> 'dict'` - Turn this step type's YAML keys into constructor arguments.
@@ -1796,14 +1800,14 @@ Workflow step: hardware cost and power, aggregated by hierarchy level.
 
 **Methods:**
 
-- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run the step once and publish its question and result as one immutable StepResult.
 - `needs(self) -> 'StepNeeds | None'` - What preparation must bind for this step; None asks for nothing.
 - `run(self, context: 'StepContext') -> 'StepOutput'` - Return this step's typed question and result without publishing state.
 - `yaml_arguments(arguments: 'dict', name: 'str') -> 'dict'` - Turn this step type's YAML keys into constructor arguments.
 
 ### ngraph.workflow.MaxFlow
 
-Evaluate independent endpoint capacities with explicit native routing.
+Workflow step: the capacity between two node sets, under one model.
 
 **Attributes:**
 
@@ -1828,7 +1832,7 @@ Evaluate independent endpoint capacities with explicit native routing.
 
 **Methods:**
 
-- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run the step once and publish its question and result as one immutable StepResult.
 - `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
 - `query(self, prepared: ngraph.analysis.preparation.PreparedScenario, failures=None) -> ngraph.analysis.capacity.CapacityQuery`
 - `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
@@ -1856,7 +1860,7 @@ Workflow step: the maximum supported demand of a demand set.
 
 **Methods:**
 
-- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run the step once and publish its question and result as one immutable StepResult.
 - `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
 - `query(self, demands)`
 - `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
@@ -1879,7 +1883,7 @@ Workflow step: node and link counts, and capacity, cost and degree statistics.
 
 **Methods:**
 
-- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run the step once and publish its question and result as one immutable StepResult.
 - `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
 - `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
 - `yaml_arguments(arguments: 'dict', name: 'str') -> 'dict'` - Turn this step type's YAML keys into constructor arguments.
@@ -1910,14 +1914,14 @@ interaction.
 
 **Methods:**
 
-- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run the step once and publish its question and result as one immutable StepResult.
 - `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
 - `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
 - `yaml_arguments(arguments: dict, name: str) -> dict` - Turn this step type's YAML keys into constructor arguments.
 
 ### ngraph.workflow.TunnelCountAnalysis
 
-One native evaluation per demand and tunnel count (or ``up_to`` limit).
+Workflow step: one evaluation per demand and tunnel count (or ``up_to`` limit).
 
 Every demand uses the same ``design_demand`` and ``offer``; the set's
 declared volumes are not read by the rows, though they still take part in
@@ -1940,7 +1944,7 @@ choosing the resolution, as every demand set a step names does.
 
 **Methods:**
 
-- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run the step once and publish its question and result as one immutable StepResult.
 - `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
 - `query(self, prepared: ngraph.analysis.preparation.PreparedScenario) -> ngraph.analysis.counts.TunnelCountQuery`
 - `query_for(self, demands) -> ngraph.analysis.counts.TunnelCountQuery`
@@ -1972,7 +1976,7 @@ The hardware uses of a network and its references to unknown components.
 Attributes:
     uses: Node platforms in node order, then each link's source end and
         target end in link order (the order of every sum over them).
-    unknown: ``(owner, end, name)`` for each reference to a component the
+    unknown: ``(entity, end, name)`` for each reference to a component the
         library lacks: a node name with end None, or a link key with its
         end.
 
@@ -2045,7 +2049,7 @@ Raises:
 
 Get a logger under NetGraph's logging hierarchy.
 
-Use this everywhere in the package. It configures nothing: handlers and
+It configures nothing: handlers and
 levels are inherited from the root 'ngraph' logger, which is configured
 only when an application calls setup_root_logger() (directly or via
 set_global_log_level()).

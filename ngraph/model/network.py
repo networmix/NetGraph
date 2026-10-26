@@ -34,7 +34,7 @@ COST_LIMIT = 1 << 62  # a link cost is below 2^62, the native graph's bound
 
 @dataclass(frozen=True)
 class DirectedLink:
-    """One analysis direction of a stored physical link."""
+    """One direction of a physical link: forward (source to target) or reverse."""
 
     link: str
     """The physical link identifier."""
@@ -83,12 +83,11 @@ class Node:
 
 @dataclass(frozen=True)
 class Link:
-    """One directed link between two nodes.
+    """One physical link between two nodes.
 
-    The model stores a single direction (``source`` -> ``target``). When the
-    prepared native graph is built, a reverse
-    edge is added automatically for each link to provide bidirectional
-    connectivity.
+    It carries traffic both ways: the prepared graph gives it a forward edge
+    (``source`` -> ``target``) and a reverse edge, each with the link's
+    capacity and cost.
 
     Attributes:
         source (str): Name of the source node.
@@ -152,9 +151,9 @@ def _names(values: Any, label: str) -> frozenset[str]:
 class Network:
     """Scenario-level topology: nodes, links, and risk groups.
 
-    Holds persistent state only (nodes and links disabled in the scenario
-    configuration). For temporary exclusions, pass a graph-owned Eligibility
-    through the native operation's options.
+    Holds what the scenario declares, disabled nodes and links included.
+    Failures are not edits of the network: an analysis takes them as a
+    failure request or exclusions.
 
     The dicts stay editable; their values are immutable records, so an edit
     replaces a record. ``prepare`` keeps a read-only view of these dicts, so

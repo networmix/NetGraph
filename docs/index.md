@@ -39,7 +39,7 @@ Two layers:
 
 - **Routing Modes**: IP routing (cost-only, fixed paths) and traffic engineering (capacity-aware) in one model.
 - **Traffic Placement:** ECMP splits equally among equal-cost next hops at each router; WCMP uses weights ([Routing models and admission](concepts.md#routing-models-and-admission)).
-- **Capacity Analysis**: Max-flow between node groups and traffic-matrix placement with selectable placement policies.
+- **Capacity Analysis**: Max-flow between node groups and traffic-matrix placement, each with a choice of routing model.
 
 ### Workflow & Integration
 

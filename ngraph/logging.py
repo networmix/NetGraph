@@ -66,7 +66,7 @@ def setup_root_logger(
 def get_logger(name: str) -> logging.Logger:
     """Get a logger under NetGraph's logging hierarchy.
 
-    Use this everywhere in the package. It configures nothing: handlers and
+    It configures nothing: handlers and
     levels are inherited from the root 'ngraph' logger, which is configured
     only when an application calls setup_root_logger() (directly or via
     set_global_log_level()).

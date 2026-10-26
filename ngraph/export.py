@@ -704,7 +704,11 @@ def _encode_json(result: RunResult | AnalysisResult) -> str:
 
 
 def write_json(result: RunResult | AnalysisResult, file: IO[str]) -> None:
-    """Project once and encode before writing, so encoder errors write nothing."""
+    """Write a run or an analysis as one line of compact JSON.
+
+    The whole document is encoded before anything is written, so an encoding
+    error writes nothing.
+    """
     file.write(_encode_json(result))
     file.write("\n")
 

@@ -51,7 +51,7 @@ assert shortest.cases[0].states["converged"].rows[0].result.delivered == 3
 assert equal.cases[0].states["converged"].rows[0].result.delivered == 2
 ```
 
-The ideal controller uses both routes: 3 cheap units and 3 expensive units. The shortest-support controller uses only the cheap route, whose parallel capacities sum to 3. Equal splitting admits 2, because each capacity-1 parallel member receives half the traffic. A capacity-weighted shortest-path model can use the full 3 while retaining that shortest support. Each `ngc.FlowPolicyConfig` names one model ([Routing models and admission](../concepts.md#routing-models-and-admission)).
+The default question, optimized traffic engineering, uses both routes: 3 units on each. Optimized shortest-path routing uses only the cheap route, whose parallel links sum to 3. Equal splitting admits 2, because each capacity-1 parallel link receives half the traffic. Capacity-weighted splitting (`SHORTEST_PATHS_WCMP`) carries the full 3 on the cheap route. Each `ngc.FlowPolicyConfig` names one model ([Routing models and admission](../concepts.md#routing-models-and-admission)).
 
 ## Request cost information
 
@@ -104,7 +104,7 @@ alternatives = paths(prepared, PathQuery(
 assert [path.cost() for path in alternatives.rows[0].paths] == [2, 4]
 ```
 
-Paths retain native hop/edge identities. `prepared.topology.edge_refs` maps those edge IDs to physical links and directions. Native options control parallel-edge choices, cost ceilings, residuals and masks: `ngc.KspOptions(3, parallel_edges=False)` asks for up to three paths that differ in their nodes ([Paths and sensitivity](../reference/api.md#paths-and-sensitivity)).
+Each path lists its hops by the engine's edge ids; `prepared.topology.edge_refs` maps them to physical links and directions. Native options control parallel-edge choices, cost ceilings, residuals and masks: `ngc.KspOptions(3, parallel_edges=False)` asks for up to three paths that differ in their nodes ([Paths and sensitivity](../reference/api.md#paths-and-sensitivity)).
 
 ## Place declared traffic and export
 
