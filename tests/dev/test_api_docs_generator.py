@@ -196,3 +196,156 @@ def test_the_checks_fail_on_a_missing_entry_and_on_an_extra_one(monkeypatch):
         "### ngraph.model.network.helper\n\nA helper.\n\n### ngraph.Link\n\n- `_cache` (dict)\n",
     )
     assert _extra(planted, PUBLIC) == ["_cache", "ngraph.model.network.helper"]
+
+
+def _undocumented(page: str) -> list[str]:
+    """Entries that say nothing about their object.
+
+    An entry's first paragraph after its import paths, signature and definition is
+    its description. It is missing when it is absent, the generator's placeholder,
+    a record's default ``Immutable X record.`` text, or a dataclass signature that
+    stands in for a docstring.
+    """
+    found = []
+    for block in re.split(r"^### ", page, flags=re.MULTILINE)[1:]:
+        heading, _, body = block.partition("\n")
+        path = heading.strip()
+        name = path.rpartition(".")[2]
+        body = re.sub(r"```.*?```", "", body, flags=re.DOTALL)
+        paragraphs = [
+            text
+            for text in (part.strip() for part in re.split(r"\n\s*\n", body))
+            if text
+            and not text.startswith("Also importable as ")
+            and not re.fullmatch(r"`[^`\n]+`", text)
+        ]
+        first = paragraphs[0] if paragraphs else ""
+        if (
+            not first
+            or first.startswith("**")
+            or first == "No documentation available."
+            or first == f"Immutable {name} record."
+            or first.startswith(f"{name}(")
+        ):
+            found.append(path)
+    return found
+
+
+def test_every_entry_says_what_its_object_is():
+    assert _undocumented(PAGE.read_text()) == []
+
+
+def test_the_description_check_fails_on_each_kind_of_missing_text(monkeypatch):
+    import dataclasses
+    import sys
+    import types
+
+    page = PAGE.read_text()
+    planted = page
+    for path, text in (
+        ("ngraph.capacity", "No documentation available."),
+        ("ngraph.Endpoints", "Immutable Endpoints record."),
+        (
+            "ngraph.DemandSet",
+            "DemandSet(name: 'str', demands: 'tuple[DemandSpec, ...]')",
+        ),
+    ):
+        entry = _entry_text(page, path)
+        description = next(
+            part.strip()
+            for part in re.split(r"\n\s*\n", entry)
+            if part.strip()
+            and not part.strip().startswith("Also importable as ")
+            and not re.fullmatch(r"`[^`\n]+`", part.strip())
+        )
+        planted = planted.replace(
+            f"### {path}\n{entry}",
+            f"### {path}\n{entry.replace(description, text, 1)}",
+        )
+    # An alias entry whose definition has no docstring after it.
+    entry = _entry_text(page, "ngraph.Workers")
+    planted = planted.replace(
+        f"### ngraph.Workers\n{entry}",
+        f"### ngraph.Workers\n{entry.split('```')[0]}```python\nWorkers = int\n```\n\n",
+    )
+    assert sorted(_undocumented(planted)) == [
+        "ngraph.DemandSet",
+        "ngraph.Endpoints",
+        "ngraph.Workers",
+        "ngraph.capacity",
+    ]
+
+    # The generator renders a public class without a docstring as undocumented.
+    throwaway = types.ModuleType("ngraph_throwaway")
+
+    @dataclasses.dataclass(frozen=True)
+    class Bare:
+        value: int
+
+    Bare.__module__ = "ngraph_throwaway"
+    throwaway.Bare = Bare
+    throwaway.__all__ = ["Bare"]
+    monkeypatch.setitem(sys.modules, "ngraph_throwaway", throwaway)
+    generated = _MODULE.generate_api_documentation(modules=("ngraph_throwaway",))
+    assert _undocumented(generated) == ["ngraph_throwaway.Bare"]
+
+
+GUIDE = PAGE.parent / "api.md"
+SPAN = re.compile(
+    r"(\[?)`((?:ngraph\.(?:workflow|hardware|logging)\.)?([A-Za-z_]\w*))(?:[.(][^`]*)?`(\]\(api-full\.md#([\w-]+)\))?"
+)
+
+
+def _guide_links(
+    guide: str, entries: dict[str, str]
+) -> tuple[set[str], set[str], list]:
+    """Public names the guide's prose mentions, those it links, and wrong anchors.
+
+    A mention is a code span outside code blocks that starts with the name; a
+    method signature (with ``->``) names no public function.
+    """
+    prose = re.sub(r"```.*?```", "", guide, flags=re.DOTALL)
+    mentioned, linked, wrong = set(), set(), []
+    for match in SPAN.finditer(prose):
+        name = match[3]
+        if name not in entries or "->" in match[0]:
+            continue
+        mentioned.add(name)
+        if match[4]:
+            linked.add(name)
+            if match[5] != entries[name]:
+                wrong.append((name, match[5]))
+    return mentioned, linked, wrong
+
+
+def _anchors() -> dict[str, str]:
+    """Each public name with one entry, and the anchor of that entry's heading."""
+    from collections import Counter
+
+    entries = [entry for _, part in _MODULE.public_entries() for entry in part]
+    counts = Counter(entry["name"] for entry in entries)
+    return {
+        entry["name"]: re.sub(r"[^\w\- ]", "", entry["paths"][0].lower())
+        for entry in entries
+        if counts[entry["name"]] == 1
+    }
+
+
+def test_the_guide_links_each_public_name_it_mentions_to_its_entry():
+    mentioned, linked, wrong = _guide_links(GUIDE.read_text(), _anchors())
+    assert len(mentioned) >= 40
+    assert sorted(mentioned - linked) == []
+    assert wrong == []
+
+
+def test_the_guide_link_check_fails_on_an_unlinked_or_misdirected_name():
+    anchors = _anchors()
+    guide = GUIDE.read_text()
+    unlinked = re.sub(r"\[`(RunResult)`\]\(api-full\.md#[\w-]+\)", r"`\1`", guide)
+    assert sorted(
+        _guide_links(unlinked, anchors)[0] - _guide_links(unlinked, anchors)[1]
+    ) == ["RunResult"]
+    misdirected = guide.replace(
+        "(api-full.md#ngraphrunresult)", "(api-full.md#ngraphrun)"
+    )
+    assert _guide_links(misdirected, anchors)[2] == [("RunResult", "ngraphrun")]

@@ -29,6 +29,9 @@ from ngraph.utils.values import (
 )
 
 PhysicalAmount = float
+"""A physical amount, such as a capacity or a volume, in the scenario's own bandwidth
+unit.
+"""
 
 
 class FlowPolicyPreset(StrEnum):
@@ -86,6 +89,10 @@ PRESETS = MappingProxyType(
 
 @dataclass(frozen=True)
 class SupportSpec:
+    """A named DAG of directed links that pinned routes can follow (``supports`` in
+    YAML).
+    """
+
     edges: tuple[DirectedLink, ...]
 
     def __post_init__(self) -> None:
@@ -103,6 +110,8 @@ class SupportSpec:
 
 @dataclass(frozen=True)
 class EdgeWeight:
+    """One explicit integer weight on a directed link."""
+
     edge: DirectedLink
     value: int
 
@@ -114,6 +123,10 @@ class EdgeWeight:
 
 @dataclass(frozen=True)
 class WeightSpec:
+    """A named vector of explicit edge weights (``weights`` in YAML); unlisted edges
+    weigh 0.
+    """
+
     entries: tuple[EdgeWeight, ...]
 
     def __post_init__(self) -> None:
@@ -127,6 +140,10 @@ class WeightSpec:
 
 @dataclass(frozen=True)
 class RouteSpec:
+    """A named route from its head: a node path, an edge path or a named support, with
+    an integer weight.
+    """
+
     head: str
     nodes: tuple[str, ...] | None = None
     edges: tuple[DirectedLink, ...] | None = None
@@ -166,6 +183,10 @@ class RouteSpec:
 
 @dataclass(frozen=True)
 class PinnedRoutes:
+    """A pinned model over named routes, in order: its admission and, for a DAG, its
+    allocation and weights.
+    """
+
     routes: tuple[str, ...]
     admission: ngc.Admission = ngc.Admission.LOSSLESS
     allocation: ngc.RouteAllocation | None = None
@@ -256,6 +277,10 @@ or a parsed YAML model."""
 
 @dataclass(frozen=True)
 class DemandSpec:
+    """One declared demand: endpoints, physical volume, model, identity, priority and
+    expansion modes.
+    """
+
     source: Selector
     target: Selector
     volume: PhysicalAmount
@@ -317,6 +342,8 @@ class DemandSpec:
 
 @dataclass(frozen=True)
 class DemandSet:
+    """A named list of demand declarations."""
+
     name: str
     demands: tuple[DemandSpec, ...]
 

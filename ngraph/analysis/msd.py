@@ -39,6 +39,10 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class MSDQuery:
+    """A maximum supported demand question: the search for the largest alpha at which a
+    resolved demand set is placed in full.
+    """
+
     demands: ResolvedDemandSet
     alpha_start: float = 1.0
     growth_factor: float = 2.0
@@ -135,6 +139,7 @@ def _proof(demands: ResolvedDemandSet):
 def maximum_supported_demand(
     prepared: PreparedScenario, query: MSDQuery
 ) -> MSDAnalysis:
+    """Search for the largest alpha at which a resolved demand set is placed in full."""
     topology = prepared.topology
     demands = query.demands
     proof = _proof(demands)

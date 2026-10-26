@@ -20,6 +20,8 @@ from ngraph.workflow.base import WorkflowStep, register_workflow_step
 @register_workflow_step("CostPower")
 @dataclass
 class CostPower(WorkflowStep):
+    """Workflow step: hardware cost and power, aggregated by hierarchy level."""
+
     _immutable = True
     __copy__ = __deepcopy__ = shared_copy
     # The recorded question is the step itself: this kind and its own fields.

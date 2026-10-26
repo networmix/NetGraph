@@ -26,6 +26,10 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class SensitivityQuery:
+    """An edge sensitivity question: how much each directed edge's removal reduces
+    delivery.
+    """
+
     source: Selector
     target: Selector
     config: ngc.FlowPolicyConfig
@@ -68,6 +72,7 @@ class SensitivityQuery:
 def edge_sensitivity(
     prepared: PreparedScenario, query: SensitivityQuery
 ) -> SensitivityAnalysis:
+    """Measure how much each directed edge's removal reduces delivery."""
     topology = prepared.topology
     (pair,) = selected_pairs(
         prepared.scenario.network, query.source, query.target, "combine", "sensitivity"

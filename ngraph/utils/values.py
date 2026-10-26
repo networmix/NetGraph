@@ -14,6 +14,9 @@ import numpy as np
 JSONValue: TypeAlias = (
     None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
 )
+"""JSON data: null, a boolean, a number, a string, or lists and string-keyed mappings
+of these.
+"""
 
 _READ_ONLY = (
     "read-only: records are immutable; edit through Network methods or "

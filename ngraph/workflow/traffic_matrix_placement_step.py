@@ -28,6 +28,10 @@ from ngraph.workflow.base import (
 
 @dataclass
 class TrafficMatrixPlacement(WorkflowStep):
+    """Workflow step: place a demand set, with optional failures, failure states and
+    interaction.
+    """
+
     _immutable = True
     __copy__ = __deepcopy__ = shared_copy
     demand_set: str = ""

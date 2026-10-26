@@ -17,6 +17,16 @@ units:
 
 Capacities, demand volumes, finite offers and designs and minimum unreserved bandwidth are physical amounts, converted to whole units of `q` at preparation ([Units and the resolution q](../concepts.md#units-and-the-resolution-q)); [Precision and the choice of q](../concepts.md#precision-and-the-choice-of-q) says how `q` is chosen and what the units report records. Costs are positive integers ([link keys](#direct-node-and-link-definitions)); counts and weights are integers.
 
+YAML reads a number written with an exponent only when it has a decimal point and a signed exponent: `1.0e+6` and `1.0e-12` are numbers, while `1e6`, `1.0e6` and `1E+6` are text, and a numeric field refuses them:
+
+<!-- example: refusal '1e6' is not of type 'number' -->
+
+```yaml
+network:
+  nodes: {A: {}, B: {}}
+  links: [{source: A, target: B, capacity: 1e6}]
+```
+
 Unknown keys refuse at their configuration boundary; arbitrary user metadata belongs under `attrs`. Every load refusal is a `ValueError` naming its field and raw value; a schema error is retained as the cause. An optional field accepts explicit `null` wherever its Python constructor accepts `None`.
 
 ## Template Syntaxes
@@ -1005,20 +1015,26 @@ for child in region.children:
 
 **Top-level-only keys:** `membership`, `disabled`, and `generate` are honored only on top-level `risk_groups` entries. Nested `children` entries allow only `name`, `attrs`, and `children`; placing any other key on a child is rejected by the JSON schema at scenario load and by the parser with `ValueError`. Define such groups at top level and reference them by name as children.
 
-**Entity references:** Nodes and links reference risk groups by name, a top-level group or a child at any depth:
+**Entity references:** a node or link names the risk groups it belongs to. Any declared group can be named: a top-level group, or a child at any depth with no top-level entry of its own. A failed group fails its own members and the members of every group below it:
 
 ```yaml
 risk_groups:
-  - name: "Site_Seattle"      # Also declared at top level
-  - name: "Region_West"
+  - name: Region_West
     children:
-      - name: "Site_Seattle"  # Also a child for hierarchy
+      - name: Site_Seattle
+      - name: Site_Portland
 
 network:
   nodes:
-    Router_SEA:
-      risk_groups: ["Site_Seattle"]
+    Router_SEA: {risk_groups: [Site_Seattle]}
+    Router_PDX: {risk_groups: [Site_Portland]}
+    Router_SFO: {}
+  links:
+    - {source: Router_SEA, target: Router_PDX, capacity: 10}
+    - {source: Router_PDX, target: Router_SFO, capacity: 10, risk_groups: [Region_West]}
 ```
+
+Failing `Site_Seattle` fails `Router_SEA`; failing `Region_West` fails `Router_SEA`, `Router_PDX` and the link `Router_PDX|Router_SFO|0`.
 
 ### Example 1: Physical Infrastructure (Fiber Links)
 
@@ -1026,12 +1042,12 @@ For fiber links, a hierarchy of Path -> Conduit -> Fiber Pair mirrors the physic
 
 ```yaml
 risk_groups:
-  # Top-level definitions for referenceable groups
+  # Each conduit declared once, with its attributes
   - name: "Conduit_NYC_CHI_C[1-2]"
     attrs:
       type: fiber_conduit
 
-  # Hierarchy defines cascading relationships
+  # The hierarchy names them as its children: its failure fails theirs
   - name: "Path_NYC_CHI"
     attrs:
       type: fiber_path
@@ -1065,12 +1081,13 @@ For data center nodes, a hierarchy of Building -> Room -> Power Zone mirrors the
 
 ```yaml
 risk_groups:
-  # Top-level definitions for referenceable groups
+  # Each power zone declared once, with its attributes
   - name: "PowerZone_DC1_R1_PZ[A,B]"
     attrs:
       type: power_zone
 
-  # Hierarchy defines cascading relationships
+  # The hierarchy names them under the rooms: a room's or the building's failure
+  # fails theirs
   - name: "Building_DC1"
     attrs:
       type: building

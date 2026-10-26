@@ -11,6 +11,7 @@ import yaml
     "relative",
     [
         "README.md",
+        "docs/concepts.md",
         "docs/reference/api.md",
         "docs/examples/basic.md",
         "docs/examples/clos-fabric.md",
@@ -204,7 +205,7 @@ def test_every_marked_kind_occurs_and_the_examples_are_counted():
         "scenario": 38,
         "fragment": 11,
         "unprepared": 9,
-        "refusal": 2,
+        "refusal": 3,
     }
 
 

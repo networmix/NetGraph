@@ -28,6 +28,10 @@ from ngraph.utils.yaml_utils import (
 
 @dataclass(frozen=True)
 class FailureRule:
+    """One failure rule: the entities it matches, and how it fails them: all, ``count``
+    chosen at random, or each with ``probability``.
+    """
+
     scope: EntityScope
     conditions: Sequence[Condition] = ()
     logic: Literal["and", "or"] = "or"
@@ -74,6 +78,10 @@ class FailureRule:
 
 @dataclass(frozen=True)
 class FailureMode:
+    """One weighted alternative of a failure policy: a draw picks one mode by weight,
+    then applies its rules.
+    """
+
     weight: float
     rules: Sequence[FailureRule] = ()
     attrs: dict[str, Any] = field(default_factory=dict)

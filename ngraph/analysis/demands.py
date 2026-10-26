@@ -576,6 +576,9 @@ def bind_plans(
 
 
 def resolve_demands(prepared: PreparedScenario, specs: DemandSet) -> ResolvedDemandSet:
+    """Bind a demand set to a prepared scenario: expand it and resolve its models on the
+    prepared graph.
+    """
     topology = prepared.topology
     plans = expansion_plans(prepared.scenario.network, specs)
     required = pool_requirements(plans)

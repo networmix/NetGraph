@@ -48,6 +48,10 @@ def maximum_config() -> ngc.FlowPolicyConfig:
 
 @dataclass(frozen=True)
 class CapacityQuery:
+    """A capacity question: how much one model delivers from the source selector to the
+    target selector; lossless optimized flow by default.
+    """
+
     source: Selector
     target: Selector
     config: ngc.FlowPolicyConfig = field(default_factory=maximum_config)
@@ -225,6 +229,7 @@ def evaluate(topology, query: CapacityQuery, native_pairs, options, workers: int
 
 
 def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalysis:
+    """Answer a capacity question on a prepared scenario, in each failure case."""
     cost_distribution = None
     if query.export_cost_distribution:
         # Cost reports load only when asked for.

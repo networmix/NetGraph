@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class PathQuery:
+    """A path question: shortest or k shortest paths between two selectors."""
+
     source: Selector
     target: Selector
     mode: Literal["combine", "pairwise"] = "combine"
@@ -113,6 +115,7 @@ def _residual(topology: PreparedTopology, residual) -> tuple[int, ...] | None:
 
 
 def paths(prepared: PreparedScenario, query: PathQuery) -> PathAnalysis:
+    """Find shortest or k shortest paths between two selectors on a prepared scenario."""
     topology = prepared.topology
     pairs = selected_pairs(
         prepared.scenario.network, query.source, query.target, query.mode, "paths"

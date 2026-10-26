@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from ngraph.scenario import PreparedScenario
 
 Workers = int | Literal["auto"]
+"""A number of worker threads: a positive integer, or ``"auto"`` for the CPU count."""
 
 
 @dataclass(frozen=True)

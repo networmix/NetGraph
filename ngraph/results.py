@@ -144,6 +144,8 @@ def _record(cls: type[_RecordT]) -> type[_RecordT]:
 
 @_record
 class ExactAlpha(_ResultRecord):
+    """An alpha (the demand multiplier) as a binary64 value and its exact fraction."""
+
     value: float = field(metadata={"exclusiveMinimum": 0})
     """Alpha as a binary64 value."""
     numerator: int
@@ -154,6 +156,8 @@ class ExactAlpha(_ResultRecord):
 
 @_record
 class Endpoints(_ResultRecord):
+    """The source and destination node names of a row, each sorted."""
+
     sources: tuple[str, ...]
     """Source node names, sorted."""
     destinations: tuple[str, ...]
@@ -162,6 +166,10 @@ class Endpoints(_ResultRecord):
 
 @_record
 class SyntheticIngress(_ResultRecord):
+    """One attachment of a TE ingress pool: the private link from the pool head to one
+    physical source.
+    """
+
     pool_id: str
     """The pool's identifier."""
     source: str
@@ -170,6 +178,8 @@ class SyntheticIngress(_ResultRecord):
 
 @_record
 class PoolHead(_ResultRecord):
+    """The private head of a TE ingress pool and the physical sources it feeds."""
+
     pool_id: str
     """The pool's identifier."""
     physical_sources: tuple[str, ...]
@@ -190,6 +200,8 @@ class PoolMetadata(_ResultRecord):
 
 @_record
 class DiscardedShare(_ResultRecord):
+    """One expansion leaf whose units were discarded, and why."""
+
     label: str
     """The discarded expansion leaf."""
     units: int
@@ -200,6 +212,10 @@ class DiscardedShare(_ResultRecord):
 
 @_record
 class ExpansionAccounting(_ResultRecord):
+    """How a declared demand's units were divided: declared, resolved and discarded
+    units, with each discarded share.
+    """
+
     base_id: str
     """The declared demand's identifier, before expansion."""
     declared_units: int
@@ -214,6 +230,10 @@ class ExpansionAccounting(_ResultRecord):
 
 @_record
 class ResolvedDemand(_ResultRecord):
+    """One demand bound to the prepared graph: its identity, endpoints, priority,
+    nominal units (its scaled request at alpha 1) and native configuration.
+    """
+
     id: str
     base_id: str
     endpoints: Endpoints
@@ -335,6 +355,8 @@ class FailurePattern(_ResultRecord):
 
 @_record
 class FailureSelection(_ResultRecord):
+    """What one failure rule selected in a draw."""
+
     rule_index: int
     """The rule's index in its mode."""
     scope: Literal["node", "link", "risk_group"]
@@ -345,6 +367,10 @@ class FailureSelection(_ResultRecord):
 
 @_record
 class FailureTrace(_ResultRecord):
+    """The first draw that produced a failure pattern: its mode and what each rule
+    selected.
+    """
+
     draw_index: int
     """The draw that first produced the pattern."""
     mode_index: int | None = field(metadata={"null_when": "the policy has no modes"})
@@ -361,6 +387,10 @@ class FailureTrace(_ResultRecord):
 
 @_record
 class FailureCase(_ResultRecord):
+    """One failure case: the baseline or one distinct failure pattern, how many draws
+    produced it, and the eligibility it applies.
+    """
+
     id: str
     kind: Literal["baseline", "failure"]
     pattern: FailurePattern
@@ -371,6 +401,10 @@ class FailureCase(_ResultRecord):
 
 @_record
 class ReportLocation(_ResultRecord):
+    """Where a precision miss happened: the step, the failure case and the MSD probe,
+    where they apply.
+    """
+
     step: str | None = field(metadata={"null_when": "the report is outside a workflow"})
     """The step."""
     case_id: str | None = field(
@@ -383,6 +417,10 @@ class ReportLocation(_ResultRecord):
 
 @_record
 class PreparationScope(_ResultRecord):
+    """What a preparation covered: its workflow steps, and the demand sets bound for the
+    workflow and for library callers.
+    """
+
     workflow_steps: tuple[str, ...]
     """The workflow steps prepared."""
     workflow_demand_sets: tuple[str, ...]
@@ -393,6 +431,10 @@ class PreparationScope(_ResultRecord):
 
 @_record
 class InputQuantization(_ResultRecord):
+    """One physical input converted to units: its binary64 value, its units and the
+    rounding error.
+    """
+
     label: str
     """The input or constraint label: where the value is declared."""
     kind: Literal["capacity", "demand", "offer", "design", "min_unreserved"]
@@ -411,6 +453,10 @@ class InputQuantization(_ResultRecord):
 
 @_record
 class InputConstraint(_ResultRecord):
+    """The input bound of one positive input v at precision p (q at most 2pv), and
+    whether q meets it.
+    """
+
     kind: ClassVar[Literal["input"]] = "input"
     """The record kind, a fixed tag."""
     label: str
@@ -423,6 +469,10 @@ class InputConstraint(_ResultRecord):
 
 @_record
 class SplitConstraint(_ResultRecord):
+    """The split bound of a positive amount v over m members at precision p (q at most
+    pv/(m - 1)), and whether q meets it.
+    """
+
     kind: Literal["expansion", "source", "router", "tunnel"]
     """Where the split is: expansion, sources, a router or tunnels."""
     label: str
@@ -441,6 +491,8 @@ class SplitConstraint(_ResultRecord):
 
 @_record
 class RangeConstraint(_ResultRecord):
+    """A range limit: a value in units against its exclusive limit 2^62 at the tested q."""
+
     kind: Literal["capacity_sum", "cost_sum", "amount"]
     """What is bounded: a capacity sum, a cost sum, or one amount."""
     label: str
@@ -457,6 +509,8 @@ class RangeConstraint(_ResultRecord):
 
 @_record
 class UnverifiedConstraint(_ResultRecord):
+    """A supplied program whose splits cannot be checked against the precision target."""
+
     kind: ClassVar[Literal["unverified"]] = "unverified"
     """The record kind, a fixed tag."""
     label: str
@@ -468,10 +522,15 @@ class UnverifiedConstraint(_ResultRecord):
 UnitConstraint: TypeAlias = (
     InputConstraint | SplitConstraint | RangeConstraint | UnverifiedConstraint
 )
+"""One precision or range constraint of a units report."""
 
 
 @_record
 class PrecisionMiss(_ResultRecord):
+    """One place an analysis missed the precision target: its location, the constraints
+    it missed and its input rounding.
+    """
+
     location: ReportLocation
     """Where the miss was observed: step, case and probe."""
     constraints: tuple[InputConstraint | SplitConstraint | UnverifiedConstraint, ...]
@@ -505,6 +564,10 @@ class WeightApproximation(_ResultRecord):
 
 @_record
 class UnitsReport(_ResultRecord):
+    """How preparation chose q: the mode and target, the bounds that set q, input
+    rounding, the range sums and every precision miss.
+    """
+
     q: float
     """The bandwidth quantum: one unit is q physical units."""
     exponent: int
@@ -576,6 +639,10 @@ class UnitsReport(_ResultRecord):
 
 @_record
 class OutputSelection(_ResultRecord):
+    """The optional outputs an analysis was asked for: native flags, cost reports and
+    details.
+    """
+
     native: ngc.OutputOptions
     """The native output flags."""
     cost_distribution: bool
@@ -586,6 +653,10 @@ class OutputSelection(_ResultRecord):
 
 @_record
 class SamplingMetadata(_ResultRecord):
+    """How failures were drawn: the seed and its source, the number of draws and the
+    fixed drawing rules.
+    """
+
     random_rule_algorithm: ClassVar[Literal["per_entity_bernoulli"]] = (
         "per_entity_bernoulli"
     )
@@ -610,6 +681,8 @@ class SamplingMetadata(_ResultRecord):
 
 @_record
 class AnalysisMetadata(_ResultRecord):
+    """How an analysis ran: its effective number of workers and its failure sampling."""
+
     workers: int
     """The effective number of workers."""
     sampling: SamplingMetadata | None = field(
@@ -620,6 +693,8 @@ class AnalysisMetadata(_ResultRecord):
 
 @_record
 class PathCostBin(_ResultRecord):
+    """Delivered units at one path cost, in a cost report."""
+
     cost: int
     """The path cost (analysis graph for a pool)."""
     physical_path_cost: int
@@ -630,6 +705,8 @@ class PathCostBin(_ResultRecord):
 
 @_record
 class MarginalCostBin(_ResultRecord):
+    """One piece of a marginal cost curve: its marginal cost and its units."""
+
     marginal_cost: int
     """The increase of the minimum total cost per additional unit."""
     units: int
@@ -638,6 +715,8 @@ class MarginalCostBin(_ResultRecord):
 
 @_record
 class DeliveredByPathCost(_ResultRecord):
+    """A cost report: delivered units per path cost, cheapest first."""
+
     kind: ClassVar[Literal["delivered_by_path_cost"]] = "delivered_by_path_cost"
     """The record kind, a fixed tag."""
     cost_domain: Literal["physical_network", "analysis_graph"]
@@ -648,6 +727,8 @@ class DeliveredByPathCost(_ResultRecord):
 
 @_record
 class MarginalCurve(_ResultRecord):
+    """A cost report: the native marginal cost curve of an optimized flow."""
+
     kind: ClassVar[Literal["marginal_curve"]] = "marginal_curve"
     """The record kind, a fixed tag."""
     cost_domain: Literal["physical_network", "analysis_graph"]
@@ -657,13 +738,24 @@ class MarginalCurve(_ResultRecord):
 
 
 CostReport: TypeAlias = DeliveredByPathCost | MarginalCurve
+"""A cost report: delivered units per path cost, or a marginal cost curve."""
+
 CostUnavailableReason: TypeAlias = Literal[
     "mixed_cost_dag", "unsupported_model", "controller_table"
 ]
+"""Why a requested cost report is unavailable: ``controller_table`` (the demand forwards
+on a WCMP controller table, which does not attribute delivery to path costs),
+``mixed_cost_dag`` (a pinned DAG whose routes differ in cost) or
+``unsupported_model`` (the model's delivery cannot be attributed to path costs).
+"""
 
 
 @_record
 class PlacementRow(_ResultRecord):
+    """One placed demand: its identity, endpoints, reference request, native result and
+    optional reports.
+    """
+
     id: str
     base_id: str
     endpoints: Endpoints
@@ -676,6 +768,10 @@ class PlacementRow(_ResultRecord):
 
 @_record
 class CapacityRow(_ResultRecord):
+    """One capacity answer between a source and a destination group: its native result
+    and optional reports.
+    """
+
     id: str
     endpoints: Endpoints
     result: ngc.PlacementResult
@@ -686,6 +782,8 @@ class CapacityRow(_ResultRecord):
 
 @_record
 class SelfPair(_ResultRecord):
+    """A node paired with itself in a capacity question; its capacity is 0."""
+
     kind: ClassVar[Literal["self"]] = "self"
     """The record kind, a fixed tag."""
     id: str
@@ -698,6 +796,10 @@ class SelfPair(_ResultRecord):
 
 @_record
 class PlacementTotals(_ResultRecord):
+    """A state's totals in units: the reference request, the delivery, the losses by
+    kind, the shortfall, the delivery ratio and whether every row was placed in full.
+    """
+
     reference_request_units: int
     """The scaled declared requests over the rows (integer units of q)."""
     delivered_units: int
@@ -771,6 +873,8 @@ class CaseState(_ResultRecord, Generic[RowT]):
 
 @_record
 class CaseResult(_ResultRecord, Generic[RowT]):
+    """One failure case and its states, by name."""
+
     case: FailureCase
     states: Mapping[StateName, CaseState[RowT]]
 
@@ -802,6 +906,8 @@ class _PreparedResult(_ResultRecord):
 
 @_record
 class CapacityAnalysis(_PreparedResult):
+    """The answer of ``capacity``: the question asked and one result per failure case."""
+
     kind: ClassVar[Literal["capacity"]] = "capacity"
     prepared: PreparedScenario
     misses: tuple[PrecisionMiss, ...]
@@ -815,6 +921,10 @@ class CapacityAnalysis(_PreparedResult):
 
 @_record
 class PlacementAnalysis(_PreparedResult):
+    """The answer of ``place``: alpha, one result per failure case and the expansion
+    accounting.
+    """
+
     kind: ClassVar[Literal["placement"]] = "placement"
     prepared: PreparedScenario
     misses: tuple[PrecisionMiss, ...]
@@ -828,6 +938,10 @@ class PlacementAnalysis(_PreparedResult):
 
 @_record
 class SensitivityAnalysis(_PreparedResult):
+    """The answer of ``edge_sensitivity``: the native baseline and the reduction each
+    directed edge's removal causes.
+    """
+
     kind: ClassVar[Literal["sensitivity"]] = "sensitivity"
     prepared: PreparedScenario
     misses: tuple[PrecisionMiss, ...]
@@ -842,6 +956,8 @@ class SensitivityAnalysis(_PreparedResult):
 
 @_record
 class PathRow(_ResultRecord):
+    """The paths between one source and destination group: their cost and native paths."""
+
     id: str
     endpoints: Endpoints
     kind: Literal["paths", "self"]
@@ -851,6 +967,8 @@ class PathRow(_ResultRecord):
 
 @_record
 class PathAnalysis(_PreparedResult):
+    """The answer of ``paths``: one row per endpoint pair."""
+
     kind: ClassVar[Literal["paths"]] = "paths"
     prepared: PreparedScenario
     misses: tuple[PrecisionMiss, ...]
@@ -865,6 +983,9 @@ class PathAnalysis(_PreparedResult):
 MSDStatus: TypeAlias = Literal[
     "feasible", "none_feasible", "range", "stagnation", "limit", "trivial"
 ]
+"""How an MSD search ended; each value is explained under ``MSDAnalysisJSON`` in the
+results reference.
+"""
 MSDStopReason: TypeAlias = Literal[
     "tolerance",
     "alpha_bound",
@@ -875,13 +996,21 @@ MSDStopReason: TypeAlias = Literal[
     "nothing_offered",
     "unit_resolution",
 ]
+"""Why an MSD search stopped; each value is explained under ``MSDAnalysisJSON`` in the
+results reference.
+"""
 MSDProof: TypeAlias = Literal[
     "fixed_program", "single_controller", "nothing_offered", "unproved"
 ]
+"""What makes feasibility downward closed in alpha for an MSD question; each value is
+explained under ``MSDAnalysisJSON`` in the results reference.
+"""
 
 
 @_record
 class RangeRefusal(_ResultRecord):
+    """Why an MSD probe was out of range."""
+
     label: str
     """The input or constraint label: where the value is declared."""
     reason: Literal["scaled_nonfinite", "native_units_range"]
@@ -896,6 +1025,8 @@ class RangeRefusal(_ResultRecord):
 
 @_record
 class MSDProbe(_ResultRecord):
+    """One MSD probe: its alpha, outcome and totals."""
+
     index: int
     """The probe's position in the search history (0 first)."""
     alpha: ExactAlpha
@@ -914,6 +1045,10 @@ class MSDProbe(_ResultRecord):
 
 @_record
 class UpperCertificate(_ResultRecord):
+    """A proved bracket around the largest feasible alpha: a feasible probe and the
+    smallest infeasible probe above it.
+    """
+
     proof: Literal["fixed_program", "single_controller"]
     """What proves the bracket."""
     lower: ExactAlpha
@@ -928,6 +1063,13 @@ class UpperCertificate(_ResultRecord):
 
 @_record
 class MSDAnalysis(_PreparedResult):
+    """The answer of ``maximum_supported_demand``: the largest tested feasible alpha,
+    how the search ended, its proof and every probe.
+
+    The values of ``search_status``, ``stop_reason`` and ``proof`` are explained
+    under ``MSDAnalysisJSON`` in the results reference.
+    """
+
     kind: ClassVar[Literal["msd"]] = "msd"
     prepared: PreparedScenario
     misses: tuple[PrecisionMiss, ...]
@@ -972,6 +1114,8 @@ class TunnelCountRow(_ResultRecord):
 
 @_record
 class TunnelCountAnalysis(_PreparedResult):
+    """The answer of ``tunnel_counts``: one row per demand and count."""
+
     kind: ClassVar[Literal["tunnel_counts"]] = "tunnel_counts"
     prepared: PreparedScenario
     misses: tuple[PrecisionMiss, ...]
@@ -989,10 +1133,15 @@ AnalysisResult: TypeAlias = (
     | MSDAnalysis
     | TunnelCountAnalysis
 )
+"""The result of any analysis: capacity, placement, sensitivity, paths, MSD or tunnel
+counts.
+"""
 
 
 @_record
 class BuildGraphResult(_ResultRecord):
+    """The BuildGraph step's result: the network in NetworkX node-link form."""
+
     kind: ClassVar[Literal["build_graph"]] = "build_graph"
     """The record kind, a fixed tag."""
     add_reverse: bool
@@ -1010,6 +1159,10 @@ class BuildGraphResult(_ResultRecord):
 
 @_record
 class NetworkStatsResult(_ResultRecord):
+    """The NetworkStats step's result: counts, and capacity, cost and degree statistics;
+    capacities are physical amounts.
+    """
+
     kind: ClassVar[Literal["network_stats"]] = "network_stats"
     """The record kind, a fixed tag."""
     node_count: int
@@ -1046,6 +1199,8 @@ class NetworkStatsResult(_ResultRecord):
 
 @_record
 class HardwareRow(_ResultRecord):
+    """Hardware cost and power of one hierarchy path."""
+
     path: str
     """The hierarchy path of the row (empty for the root level)."""
     platform_capex: float
@@ -1110,6 +1265,8 @@ class _CostPowerLevels(_ResultRecord, Mapping[int, tuple[HardwareRow, ...]]):
 
 @_record
 class CostPowerResult(_ResultRecord):
+    """The CostPower step's result: hardware rows per aggregation level."""
+
     kind: ClassVar[Literal["cost_power"]] = "cost_power"
     include_disabled: bool
     aggregation_level: int
@@ -1132,10 +1289,15 @@ class CostPowerResult(_ResultRecord):
 
 
 DomainResult: TypeAlias = BuildGraphResult | NetworkStatsResult | CostPowerResult
+"""The result of a built-in domain step: BuildGraph, NetworkStats or CostPower."""
 
 
 @_record
 class StepResult(_ResultRecord):
+    """One workflow step's published result: its name, type, order, seeds, question and
+    result.
+    """
+
     name: str
     step_type: str
     execution_order: int
@@ -1148,6 +1310,10 @@ class StepResult(_ResultRecord):
 
 @_record
 class RunMetadata(_ResultRecord):
+    """What produced a run: package versions, the native extension's hash, the Python
+    version and the seed.
+    """
+
     schema_version: ClassVar[Literal["1.0"]] = "1.0"
     """The results schema version."""
     netgraph_version: str
@@ -1178,6 +1344,10 @@ class RunResult(_ResultRecord):
 
 @_record
 class ExpansionLeaf(_ResultRecord):
+    """A leaf of a demand's expansion tree: one resolved demand, or a discarded share
+    with its reason.
+    """
+
     id: str
     order: int
     endpoints: Endpoints | None
@@ -1186,6 +1356,8 @@ class ExpansionLeaf(_ResultRecord):
 
 @_record
 class ExpansionSplit(_ResultRecord):
+    """A node of a demand's expansion tree whose units split over its children."""
+
     label: str
     children: tuple[ExpansionSplit | ExpansionLeaf, ...]
 
@@ -1213,8 +1385,6 @@ class ExpansionParent(_ResultRecord):
 
 
 if TYPE_CHECKING:
-    # A step's recorded question: an analysis's own query, a built-in domain
-    # step's configuration, or a custom step's finite JSON parameters.
     StepQuestion: TypeAlias = (
         CapacityQuery
         | PlacementQuery
@@ -1227,12 +1397,19 @@ if TYPE_CHECKING:
         | CostPower
         | Mapping[str, JSONValue]
     )
+    """A step's recorded question: an analysis's own query, a built-in domain step's
+    configuration, or a custom step's finite JSON parameters.
+    """
 else:
     StepQuestion = object
 
 
 @_record
 class StepContext(_ResultRecord):
+    """What a custom step's ``run`` receives: the prepared scenario, earlier steps'
+    results, its name, order and seed.
+    """
+
     prepared: PreparedScenario
     prior_results: Mapping[str, StepResult]
     step_name: str
@@ -1248,12 +1425,16 @@ class StepContext(_ResultRecord):
 
 @_record
 class StepOutput(_ResultRecord):
+    """What a custom step's ``run`` returns: its question and its result."""
+
     question: StepQuestion
     result: object
 
 
 @_record
 class ExportContext(_ResultRecord):
+    """What a result encoder receives: the prepared scenario and the run's units report."""
+
     prepared: PreparedScenario
     units_report: UnitsReport
 

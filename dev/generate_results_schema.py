@@ -20,6 +20,7 @@ declarations.
 
 from __future__ import annotations
 
+import argparse
 import ast
 import dataclasses
 import inspect
@@ -602,6 +603,17 @@ def generate() -> str:
 
 
 def main() -> None:
+    # Arguments are parsed before anything is generated: --help and an unknown
+    # argument stop here and write nothing.
+    parser = argparse.ArgumentParser(
+        description="Generate the results JSON Schema and its reference page."
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="exit nonzero when either committed file differs, writing nothing",
+    )
+    check = parser.parse_args().check
     try:
         text = generate()
     except PresenceError as exc:
@@ -611,7 +623,7 @@ def main() -> None:
     if missing:
         sys.exit("results schema fields without a description: " + ", ".join(missing))
     reference = page(json.loads(text))
-    if "--check" in sys.argv[1:]:
+    if check:
         if TARGET.read_text() != text or PAGE.read_text() != reference:
             sys.exit(
                 "ngraph/schemas/results.json or docs/reference/results.md differs from"

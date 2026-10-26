@@ -49,6 +49,10 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class PlacementQuery:
+    """A placement question: place a resolved demand set at alpha, with optional
+    failures, failure states and interaction.
+    """
+
     demands: ResolvedDemandSet
     alpha: float = 1.0
     failures: FailureRequest | None = None
@@ -459,6 +463,9 @@ def _place_case(prepared, query, case, shared, baseline):
 
 
 def place(prepared: PreparedScenario, query: PlacementQuery) -> PlacementAnalysis:
+    """Place a resolved demand set on a prepared scenario, in each failure case and
+    requested state.
+    """
     cost_distribution = None
     if query.export_cost_distribution:
         # Cost reports load only when asked for.

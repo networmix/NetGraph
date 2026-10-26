@@ -44,6 +44,10 @@ def _count(value: object, label: str) -> int:
 
 @dataclass(frozen=True)
 class TunnelCountQuery:
+    """A tunnel count question: each tunnelled centralized-TE demand at each count, and
+    up to a limit, planned for the design and lossy at the offer.
+    """
+
     demands: ResolvedDemandSet
     counts: tuple[int, ...]
     design_demand: float
@@ -181,6 +185,7 @@ def count_splits(prepared: PreparedScenario, query: TunnelCountQuery, label, mas
 def tunnel_counts(
     prepared: PreparedScenario, query: TunnelCountQuery
 ) -> TunnelCountAnalysis:
+    """Evaluate tunnelled centralized-TE demands at each tunnel count."""
     topology = prepared.topology
     label = "tunnel_counts"
     demands = query.demands.demands

@@ -11,6 +11,8 @@ from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 @dataclass
 class MaximumSupportedDemand(WorkflowStep):
+    """Workflow step: the maximum supported demand of a demand set."""
+
     _immutable = True
     __copy__ = __deepcopy__ = shared_copy
     demand_set: str = ""

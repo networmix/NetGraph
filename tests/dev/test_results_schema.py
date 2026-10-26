@@ -772,3 +772,42 @@ def test_a_condition_that_could_require_a_key_is_refused_by_form(placement, mess
         assert found[1].startswith(
             "$defs.D: allOf[1] has the form {if, then}; its then"
         )
+
+
+@pytest.mark.parametrize(
+    ("argv", "code"), [(["--help"], 0), (["--nonsense"], 2), (["--check", "x"], 2)]
+)
+def test_help_and_unknown_arguments_write_nothing(monkeypatch, tmp_path, argv, code):
+    main = generator()["main"]
+    target, page = tmp_path / "results.json", tmp_path / "results.md"
+    target.write_text("sentinel schema")
+    page.write_text("sentinel page")
+    monkeypatch.setitem(main.__globals__, "TARGET", target)
+    monkeypatch.setitem(main.__globals__, "PAGE", page)
+    monkeypatch.setattr("sys.argv", ["generate_results_schema.py", *argv])
+    with pytest.raises(SystemExit) as stopped:
+        main()
+    assert stopped.value.code == code
+    assert (target.read_text(), page.read_text()) == (
+        "sentinel schema",
+        "sentinel page",
+    )
+
+
+def test_check_writes_nothing_and_no_argument_writes_both(monkeypatch, tmp_path):
+    main = generator()["main"]
+    target, page = tmp_path / "results.json", tmp_path / "results.md"
+    target.write_text("sentinel schema")
+    page.write_text("sentinel page")
+    monkeypatch.setitem(main.__globals__, "TARGET", target)
+    monkeypatch.setitem(main.__globals__, "PAGE", page)
+    monkeypatch.setitem(main.__globals__, "ROOT", tmp_path)
+    monkeypatch.setattr("sys.argv", ["generate_results_schema.py", "--check"])
+    with pytest.raises(SystemExit, match="differs from the record declarations"):
+        main()
+    assert target.read_text() == "sentinel schema"
+    monkeypatch.setattr("sys.argv", ["generate_results_schema.py"])
+    main()
+    packaged = resources.files("ngraph.schemas").joinpath("results.json").read_text()
+    assert target.read_text() == packaged
+    assert page.read_text().startswith("# ")

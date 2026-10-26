@@ -23,6 +23,8 @@ def _names(values, label):
 @register_workflow_step("NetworkStats")
 @dataclass
 class NetworkStats(WorkflowStep):
+    """Workflow step: node and link counts, and capacity, cost and degree statistics."""
+
     _immutable = True
     __copy__ = __deepcopy__ = shared_copy
     # The recorded question is the step itself: this kind and its own fields.

@@ -1620,7 +1620,7 @@
           "type": "boolean"
         },
         "proof": {
-          "description": "The kind of proof behind the status (nothing offered, fixed program, single controller, or unproved).",
+          "description": "What makes feasibility downward closed in alpha (every alpha below a feasible one is feasible). Values: fixed_program (every demand forwards a program that does not change with alpha); single_controller (one centralized-TE demand without a tunnel count, or one optimized shortest-paths demand with a static route choice, alone in its set); nothing_offered (the set offers no traffic); unproved (no proof: the search is a heuristic).",
           "$ref": "#/$defs/MSDProofJSON"
         },
         "upper_certificate": {
@@ -1635,11 +1635,11 @@
           ]
         },
         "search_status": {
-          "description": "How the search ended. When nothing is offered, trivial requires a successful probe; a probe refused as out of range is reported as range.",
+          "description": "How the search ended. Values: feasible (the gap between a feasible and an infeasible alpha closed to alpha_tolerance); limit (a feasible alpha was found, but the search reached alpha_max or an iteration limit); none_feasible (no tested alpha was feasible); range (a probe's scaled volumes left the native range, and the search stopped there); stagnation (the next bracketing value equals the current alpha, or a bisection midpoint rounds to a bracket endpoint); trivial (the set offers no traffic and one probe at alpha_max succeeded).",
           "$ref": "#/$defs/MSDStatusJSON"
         },
         "stop_reason": {
-          "description": "Why the search stopped.",
+          "description": "Why the search stopped. Values: tolerance (the gap closed to alpha_tolerance); alpha_bound (the search reached alpha_min or alpha_max); bracket_limit (max_bracket_iters ran out before a feasible and an infeasible alpha were found); bisect_limit (max_bisect_iters ran out before the gap closed); offer_range (a probe left the native range); representable_limit (the next bracketing value equals the current alpha, or a bisection midpoint rounds to a bracket endpoint); nothing_offered (the set offers no traffic); unit_resolution (no feasible alpha: each tested alpha either rounds some positive volume to zero units or does not fit).",
           "$ref": "#/$defs/MSDStopReasonJSON"
         },
         "history": {
@@ -2243,7 +2243,7 @@
           ]
         },
         "admission": {
-          "description": "LOSSLESS (deliver whole or less) or LOSSY (send and drop where full).",
+          "description": "lossless (admit the largest total whose splits fit, and refuse the rest before it enters) or lossy (send the whole offer; what does not fit is lost at the sources or on the links).",
           "enum": [
             "lossless",
             "lossy"
@@ -2611,7 +2611,7 @@
           "type": "integer"
         },
         "termination": {
-          "description": "The native call's outcome.",
+          "description": "The native call's outcome. Values: complete (the offer is 0, admitted in full when lossless, or forwarded in full when lossy, its losses included); no_route (a positive offer and no source with a route); no_active_weight (the program has routes, but none of positive weight can send anything); exhausted (lossless and less than the offer admitted, or an unlimited offer).",
           "enum": [
             "complete",
             "no_route",
@@ -5966,7 +5966,7 @@
           "$ref": "#/$defs/SourceJSON"
         },
         "status": {
-          "description": "The tunnel's status in this forwarding (up, a setup failure, failed or blackholed).",
+          "description": "The tunnel's status in this forwarding. Values: up (set up and available for forwarding; it may carry zero units); insufficient_bandwidth (down: no path had enough unreserved bandwidth); cost_ceiling_exceeded (down: the cheapest path with enough bandwidth costs more than the cost ceiling); failed (repair state: a failure touches the tunnel, so its route is removed); blackholed (stale state: the tunnel stays up but its path reaches a failed node or link, where its traffic is dropped).",
           "enum": [
             "up",
             "insufficient_bandwidth",

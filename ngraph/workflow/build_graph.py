@@ -16,6 +16,8 @@ from ngraph.workflow.base import WorkflowStep, register_workflow_step
 @register_workflow_step("BuildGraph")
 @dataclass
 class BuildGraph(WorkflowStep):
+    """Workflow step: export the network in NetworkX node-link form."""
+
     _immutable = True
     __copy__ = __deepcopy__ = shared_copy
     # The recorded question is the step itself: this kind and its own fields.

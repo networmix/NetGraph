@@ -8,7 +8,7 @@ Every public name of NetGraph, generated from the docstrings: the `__all__` of `
 
 ### ngraph.AnalysisMetadata
 
-Immutable AnalysisMetadata record.
+How an analysis ran: its effective number of workers and its failure sampling.
 
 **Attributes:**
 
@@ -26,9 +26,12 @@ AnalysisResult = CapacityAnalysis
     | TunnelCountAnalysis
 ```
 
+The result of any analysis: capacity, placement, sensitivity, paths, MSD or tunnel
+counts.
+
 ### ngraph.BuildGraphResult
 
-Immutable BuildGraphResult record.
+The BuildGraph step's result: the network in NetworkX node-link form.
 
 **Attributes:**
 
@@ -40,7 +43,7 @@ Immutable BuildGraphResult record.
 
 ### ngraph.CapacityAnalysis
 
-Immutable CapacityAnalysis record.
+The answer of ``capacity``: the question asked and one result per failure case.
 
 **Attributes:**
 
@@ -56,7 +59,8 @@ Immutable CapacityAnalysis record.
 
 ### ngraph.CapacityQuery
 
-CapacityQuery(source: 'Selector', target: 'Selector', config: 'ngc.FlowPolicyConfig' = <factory>, mode: "Literal['combine', 'pairwise']" = 'combine', offer: 'float | None' = None, design_demand: 'float | None' = None, failures: 'FailureRequest | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_cost_distribution: 'bool' = False, export_details: 'bool' = False, declaration: 'object' = None)
+A capacity question: how much one model delivers from the source selector to the
+target selector; lossless optimized flow by default.
 
 **Attributes:**
 
@@ -75,7 +79,8 @@ CapacityQuery(source: 'Selector', target: 'Selector', config: 'ngc.FlowPolicyCon
 
 ### ngraph.CapacityRow
 
-Immutable CapacityRow record.
+One capacity answer between a source and a destination group: its native result
+and optional reports.
 
 **Attributes:**
 
@@ -88,7 +93,7 @@ Immutable CapacityRow record.
 
 ### ngraph.CaseResult
 
-Immutable CaseResult record.
+One failure case and its states, by name.
 
 **Attributes:**
 
@@ -223,7 +228,7 @@ A root group of one router: its share is a fixed cap, normalized once.
 
 ### ngraph.CostPowerResult
 
-Immutable CostPowerResult record.
+The CostPower step's result: hardware rows per aggregation level.
 
 **Attributes:**
 
@@ -238,6 +243,8 @@ Immutable CostPowerResult record.
 CostReport = DeliveredByPathCost | MarginalCurve
 ```
 
+A cost report: delivered units per path cost, or a marginal cost curve.
+
 ### ngraph.CostUnavailableReason
 
 ```python
@@ -246,9 +253,14 @@ CostUnavailableReason = Literal[
 ]
 ```
 
+Why a requested cost report is unavailable: ``controller_table`` (the demand forwards
+on a WCMP controller table, which does not attribute delivery to path costs),
+``mixed_cost_dag`` (a pinned DAG whose routes differ in cost) or
+``unsupported_model`` (the model's delivery cannot be attributed to path costs).
+
 ### ngraph.DeliveredByPathCost
 
-Immutable DeliveredByPathCost record.
+A cost report: delivered units per path cost, cheapest first.
 
 **Attributes:**
 
@@ -258,7 +270,7 @@ Immutable DeliveredByPathCost record.
 
 ### ngraph.DemandSet
 
-DemandSet(name: 'str', demands: 'tuple[DemandSpec, ...]')
+A named list of demand declarations.
 
 **Attributes:**
 
@@ -267,7 +279,8 @@ DemandSet(name: 'str', demands: 'tuple[DemandSpec, ...]')
 
 ### ngraph.DemandSpec
 
-DemandSpec(source: 'Selector', target: 'Selector', volume: 'PhysicalAmount', policy: 'DemandPolicy' = <FlowPolicyPreset.SHORTEST_PATHS_ECMP: 'SHORTEST_PATHS_ECMP'>, id: 'str | None' = None, priority: 'int' = 0, mode: "Literal['combine', 'pairwise']" = 'combine', group_mode: "Literal['flatten', 'per_group', 'group_pairwise']" = 'flatten', attrs: 'Mapping[str, JSONValue]' = <factory>, *, yaml_label: 'str | None' = None, declaration_ordinal: 'int | None' = None, expand_leaf_index: 'int | None' = None)
+One declared demand: endpoints, physical volume, model, identity, priority and
+expansion modes.
 
 **Attributes:**
 
@@ -295,7 +308,7 @@ One analysis direction of a stored physical link.
 
 ### ngraph.DiscardedShare
 
-Immutable DiscardedShare record.
+One expansion leaf whose units were discarded, and why.
 
 **Attributes:**
 
@@ -309,9 +322,11 @@ Immutable DiscardedShare record.
 DomainResult = BuildGraphResult | NetworkStatsResult | CostPowerResult
 ```
 
+The result of a built-in domain step: BuildGraph, NetworkStats or CostPower.
+
 ### ngraph.EdgeWeight
 
-EdgeWeight(edge: 'DirectedLink', value: 'int')
+One explicit integer weight on a directed link.
 
 **Attributes:**
 
@@ -320,7 +335,7 @@ EdgeWeight(edge: 'DirectedLink', value: 'int')
 
 ### ngraph.Endpoints
 
-Immutable Endpoints record.
+The source and destination node names of a row, each sorted.
 
 **Attributes:**
 
@@ -329,7 +344,7 @@ Immutable Endpoints record.
 
 ### ngraph.ExactAlpha
 
-Immutable ExactAlpha record.
+An alpha (the demand multiplier) as a binary64 value and its exact fraction.
 
 **Attributes:**
 
@@ -339,7 +354,8 @@ Immutable ExactAlpha record.
 
 ### ngraph.ExpansionAccounting
 
-Immutable ExpansionAccounting record.
+How a declared demand's units were divided: declared, resolved and discarded
+units, with each discarded share.
 
 **Attributes:**
 
@@ -351,7 +367,8 @@ Immutable ExpansionAccounting record.
 
 ### ngraph.ExpansionLeaf
 
-Immutable ExpansionLeaf record.
+A leaf of a demand's expansion tree: one resolved demand, or a discarded share
+with its reason.
 
 **Attributes:**
 
@@ -384,7 +401,7 @@ when every leaf of a named pinned declaration was discarded).
 
 ### ngraph.ExpansionSplit
 
-Immutable ExpansionSplit record.
+A node of a demand's expansion tree whose units split over its children.
 
 **Attributes:**
 
@@ -393,7 +410,7 @@ Immutable ExpansionSplit record.
 
 ### ngraph.ExportContext
 
-Immutable ExportContext record.
+What a result encoder receives: the prepared scenario and the run's units report.
 
 **Attributes:**
 
@@ -402,7 +419,8 @@ Immutable ExportContext record.
 
 ### ngraph.FailureCase
 
-Immutable FailureCase record.
+One failure case: the baseline or one distinct failure pattern, how many draws
+produced it, and the eligibility it applies.
 
 **Attributes:**
 
@@ -415,7 +433,8 @@ Immutable FailureCase record.
 
 ### ngraph.FailureMode
 
-FailureMode(weight: 'float', rules: 'Sequence[FailureRule]' = (), attrs: 'dict[str, Any]' = <factory>)
+One weighted alternative of a failure policy: a draw picks one mode by weight,
+then applies its rules.
 
 **Attributes:**
 
@@ -464,7 +483,8 @@ unnamed policy is recorded inline); ``seed_source`` records where a given
 
 ### ngraph.FailureRule
 
-FailureRule(scope: 'EntityScope', conditions: 'Sequence[Condition]' = (), logic: "Literal['and', 'or']" = 'or', mode: "Literal['random', 'choice', 'all']" = 'all', probability: 'float' = 1.0, count: 'int' = 1, weight_by: 'str | None' = None, path: 'str | None' = None)
+One failure rule: the entities it matches, and how it fails them: all, ``count``
+chosen at random, or each with ``probability``.
 
 **Attributes:**
 
@@ -479,7 +499,7 @@ FailureRule(scope: 'EntityScope', conditions: 'Sequence[Condition]' = (), logic:
 
 ### ngraph.FailureSelection
 
-Immutable FailureSelection record.
+What one failure rule selected in a draw.
 
 **Attributes:**
 
@@ -489,7 +509,8 @@ Immutable FailureSelection record.
 
 ### ngraph.FailureTrace
 
-Immutable FailureTrace record.
+The first draw that produced a failure pattern: its mode and what each rule
+selected.
 
 **Attributes:**
 
@@ -539,7 +560,7 @@ network (edges leaving the router, zero shares, duplicates).
 
 ### ngraph.HardwareRow
 
-Immutable HardwareRow record.
+Hardware cost and power of one hierarchy path.
 
 **Attributes:**
 
@@ -553,7 +574,8 @@ Immutable HardwareRow record.
 
 ### ngraph.InputConstraint
 
-Immutable InputConstraint record.
+The input bound of one positive input v at precision p (q at most 2pv), and
+whether q meets it.
 
 **Attributes:**
 
@@ -564,7 +586,8 @@ Immutable InputConstraint record.
 
 ### ngraph.InputQuantization
 
-Immutable InputQuantization record.
+One physical input converted to units: its binary64 value, its units and the
+rounding error.
 
 **Attributes:**
 
@@ -581,6 +604,9 @@ Immutable InputQuantization record.
 ```python
 JSONValue = None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
 ```
+
+JSON data: null, a boolean, a number, a string, or lists and string-keyed mappings
+of these.
 
 ### ngraph.Link
 
@@ -621,7 +647,11 @@ Attributes:
 
 ### ngraph.MSDAnalysis
 
-Immutable MSDAnalysis record.
+The answer of ``maximum_supported_demand``: the largest tested feasible alpha,
+how the search ended, its proof and every probe.
+
+The values of ``search_status``, ``stop_reason`` and ``proof`` are explained
+under ``MSDAnalysisJSON`` in the results reference.
 
 **Attributes:**
 
@@ -645,7 +675,7 @@ Immutable MSDAnalysis record.
 
 ### ngraph.MSDProbe
 
-Immutable MSDProbe record.
+One MSD probe: its alpha, outcome and totals.
 
 **Attributes:**
 
@@ -663,9 +693,13 @@ MSDProof = Literal[
 ]
 ```
 
+What makes feasibility downward closed in alpha for an MSD question; each value is
+explained under ``MSDAnalysisJSON`` in the results reference.
+
 ### ngraph.MSDQuery
 
-MSDQuery(demands: 'ResolvedDemandSet', alpha_start: 'float' = 1.0, growth_factor: 'float' = 2.0, alpha_min: 'float' = 1e-06, alpha_max: 'float' = 1000000000.0, alpha_tolerance: 'float' = 0.01, max_bracket_iters: 'int' = 32, max_bisect_iters: 'int' = 32, export_probe_rows: 'bool' = False, export_details: 'bool' = False)
+A maximum supported demand question: the search for the largest alpha at which a
+resolved demand set is placed in full.
 
 **Attributes:**
 
@@ -688,6 +722,9 @@ MSDStatus = Literal[
 ]
 ```
 
+How an MSD search ended; each value is explained under ``MSDAnalysisJSON`` in the
+results reference.
+
 ### ngraph.MSDStopReason
 
 ```python
@@ -703,9 +740,12 @@ MSDStopReason = Literal[
 ]
 ```
 
+Why an MSD search stopped; each value is explained under ``MSDAnalysisJSON`` in the
+results reference.
+
 ### ngraph.MarginalCostBin
 
-Immutable MarginalCostBin record.
+One piece of a marginal cost curve: its marginal cost and its units.
 
 **Attributes:**
 
@@ -714,7 +754,7 @@ Immutable MarginalCostBin record.
 
 ### ngraph.MarginalCurve
 
-Immutable MarginalCurve record.
+A cost report: the native marginal cost curve of an optimized flow.
 
 **Attributes:**
 
@@ -796,7 +836,8 @@ included) and 'active' (enabled only).
 
 ### ngraph.NetworkStatsResult
 
-Immutable NetworkStatsResult record.
+The NetworkStats step's result: counts, and capacity, cost and degree statistics;
+capacities are physical amounts.
 
 **Attributes:**
 
@@ -838,7 +879,8 @@ Attributes:
 
 ### ngraph.OutputSelection
 
-Immutable OutputSelection record.
+The optional outputs an analysis was asked for: native flags, cost reports and
+details.
 
 **Attributes:**
 
@@ -848,7 +890,7 @@ Immutable OutputSelection record.
 
 ### ngraph.PathAnalysis
 
-Immutable PathAnalysis record.
+The answer of ``paths``: one row per endpoint pair.
 
 **Attributes:**
 
@@ -864,7 +906,7 @@ Immutable PathAnalysis record.
 
 ### ngraph.PathCostBin
 
-Immutable PathCostBin record.
+Delivered units at one path cost, in a cost report.
 
 **Attributes:**
 
@@ -874,7 +916,7 @@ Immutable PathCostBin record.
 
 ### ngraph.PathQuery
 
-PathQuery(source: 'Selector', target: 'Selector', mode: "Literal['combine', 'pairwise']" = 'combine', options: 'ngc.SpfOptions | ngc.KspOptions' = <factory>, costs_only: 'bool' = False, max_paths: 'int | None' = None, split_parallel_edges: 'bool | None' = None)
+A path question: shortest or k shortest paths between two selectors.
 
 **Attributes:**
 
@@ -888,7 +930,7 @@ PathQuery(source: 'Selector', target: 'Selector', mode: "Literal['combine', 'pai
 
 ### ngraph.PathRow
 
-Immutable PathRow record.
+The paths between one source and destination group: their cost and native paths.
 
 **Attributes:**
 
@@ -904,9 +946,13 @@ Immutable PathRow record.
 PhysicalAmount = float
 ```
 
+A physical amount, such as a capacity or a volume, in the scenario's own bandwidth
+unit.
+
 ### ngraph.PinnedRoutes
 
-PinnedRoutes(routes: 'tuple[str, ...]', admission: 'ngc.Admission' = <Admission.LOSSLESS: 0>, allocation: 'ngc.RouteAllocation | None' = None, weight_basis: 'ngc.WeightBasis | None' = None, edge_weights: 'str | None' = None)
+A pinned model over named routes, in order: its admission and, for a DAG, its
+allocation and weights.
 
 **Attributes:**
 
@@ -918,7 +964,8 @@ PinnedRoutes(routes: 'tuple[str, ...]', admission: 'ngc.Admission' = <Admission.
 
 ### ngraph.PlacementAnalysis
 
-Immutable PlacementAnalysis record.
+The answer of ``place``: alpha, one result per failure case and the expansion
+accounting.
 
 **Attributes:**
 
@@ -934,7 +981,8 @@ Immutable PlacementAnalysis record.
 
 ### ngraph.PlacementQuery
 
-PlacementQuery(demands: 'ResolvedDemandSet', alpha: 'float' = 1.0, failures: 'FailureRequest | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_cost_distribution: 'bool' = False, export_details: 'bool' = False, alpha_from_step: 'str | None' = None, states: 'tuple[StateName, ...]' = ('converged',), interaction: "Literal['ordered', 'simultaneous']" = 'ordered')
+A placement question: place a resolved demand set at alpha, with optional
+failures, failure states and interaction.
 
 **Attributes:**
 
@@ -951,7 +999,8 @@ PlacementQuery(demands: 'ResolvedDemandSet', alpha: 'float' = 1.0, failures: 'Fa
 
 ### ngraph.PlacementRow
 
-Immutable PlacementRow record.
+One placed demand: its identity, endpoints, reference request, native result and
+optional reports.
 
 **Attributes:**
 
@@ -966,7 +1015,8 @@ Immutable PlacementRow record.
 
 ### ngraph.PlacementTotals
 
-Immutable PlacementTotals record.
+A state's totals in units: the reference request, the delivery, the losses by
+kind, the shortfall, the delivery ratio and whether every row was placed in full.
 
 **Attributes:**
 
@@ -981,7 +1031,7 @@ Immutable PlacementTotals record.
 
 ### ngraph.PoolHead
 
-Immutable PoolHead record.
+The private head of a TE ingress pool and the physical sources it feeds.
 
 **Attributes:**
 
@@ -1000,7 +1050,8 @@ A TE ingress pool; ``offer_limit_units`` is its prepared lossy offer budget.
 
 ### ngraph.PrecisionMiss
 
-Immutable PrecisionMiss record.
+One place an analysis missed the precision target: its location, the constraints
+it missed and its input rounding.
 
 **Attributes:**
 
@@ -1012,7 +1063,8 @@ Immutable PrecisionMiss record.
 
 ### ngraph.PreparationScope
 
-Immutable PreparationScope record.
+What a preparation covered: its workflow steps, and the demand sets bound for the
+workflow and for library callers.
 
 **Attributes:**
 
@@ -1055,7 +1107,7 @@ One graph with network labels; native edge arrays remain authoritative.
 
 ### ngraph.RangeConstraint
 
-Immutable RangeConstraint record.
+A range limit: a value in units against its exclusive limit 2^62 at the tested q.
 
 **Attributes:**
 
@@ -1068,7 +1120,7 @@ Immutable RangeConstraint record.
 
 ### ngraph.RangeRefusal
 
-Immutable RangeRefusal record.
+Why an MSD probe was out of range.
 
 **Attributes:**
 
@@ -1079,7 +1131,8 @@ Immutable RangeRefusal record.
 
 ### ngraph.ReportLocation
 
-Immutable ReportLocation record.
+Where a precision miss happened: the step, the failure case and the MSD probe,
+where they apply.
 
 **Attributes:**
 
@@ -1089,7 +1142,8 @@ Immutable ReportLocation record.
 
 ### ngraph.ResolvedDemand
 
-Immutable ResolvedDemand record.
+One demand bound to the prepared graph: its identity, endpoints, priority,
+nominal units (its scaled request at alpha 1) and native configuration.
 
 **Attributes:**
 
@@ -1140,7 +1194,8 @@ construction.
 
 ### ngraph.RouteSpec
 
-RouteSpec(head: 'str', nodes: 'tuple[str, ...] | None' = None, edges: 'tuple[DirectedLink, ...] | None' = None, support: 'str | None' = None, weight: 'int' = 1)
+A named route from its head: a node path, an edge path or a named support, with
+an integer weight.
 
 **Attributes:**
 
@@ -1161,7 +1216,8 @@ One IGP domain and the BGP-edge routers around it.
 
 ### ngraph.RunMetadata
 
-Immutable RunMetadata record.
+What produced a run: package versions, the native extension's hash, the Python
+version and the seed.
 
 **Attributes:**
 
@@ -1185,7 +1241,8 @@ One run; ``units_report`` adds every step's precision misses, by step.
 
 ### ngraph.SamplingMetadata
 
-Immutable SamplingMetadata record.
+How failures were drawn: the seed and its source, the number of draws and the
+fixed drawing rules.
 
 **Attributes:**
 
@@ -1255,7 +1312,7 @@ Attributes:
 
 ### ngraph.SelfPair
 
-Immutable SelfPair record.
+A node paired with itself in a capacity question; its capacity is 0.
 
 **Attributes:**
 
@@ -1266,7 +1323,8 @@ Immutable SelfPair record.
 
 ### ngraph.SensitivityAnalysis
 
-Immutable SensitivityAnalysis record.
+The answer of ``edge_sensitivity``: the native baseline and the reduction each
+directed edge's removal causes.
 
 **Attributes:**
 
@@ -1283,7 +1341,8 @@ Immutable SensitivityAnalysis record.
 
 ### ngraph.SensitivityQuery
 
-SensitivityQuery(source: 'Selector', target: 'Selector', config: 'ngc.FlowPolicyConfig', offer: 'float | None' = None, design_demand: 'float | None' = None, eligibility: 'ngc.Eligibility | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_details: 'bool' = False)
+An edge sensitivity question: how much each directed edge's removal reduces
+delivery.
 
 **Attributes:**
 
@@ -1299,7 +1358,8 @@ SensitivityQuery(source: 'Selector', target: 'Selector', config: 'ngc.FlowPolicy
 
 ### ngraph.SplitConstraint
 
-Immutable SplitConstraint record.
+The split bound of a positive amount v over m members at precision p (q at most
+pv/(m - 1)), and whether q meets it.
 
 **Attributes:**
 
@@ -1313,7 +1373,8 @@ Immutable SplitConstraint record.
 
 ### ngraph.StepContext
 
-Immutable StepContext record.
+What a custom step's ``run`` receives: the prepared scenario, earlier steps'
+results, its name, order and seed.
 
 **Attributes:**
 
@@ -1326,7 +1387,7 @@ Immutable StepContext record.
 
 ### ngraph.StepOutput
 
-Immutable StepOutput record.
+What a custom step's ``run`` returns: its question and its result.
 
 **Attributes:**
 
@@ -1348,9 +1409,13 @@ StepQuestion = CapacityQuery
         | Mapping[str, JSONValue]
 ```
 
+A step's recorded question: an analysis's own query, a built-in domain step's
+configuration, or a custom step's finite JSON parameters.
+
 ### ngraph.StepResult
 
-Immutable StepResult record.
+One workflow step's published result: its name, type, order, seeds, question and
+result.
 
 **Attributes:**
 
@@ -1365,7 +1430,8 @@ Immutable StepResult record.
 
 ### ngraph.SupportSpec
 
-SupportSpec(edges: 'tuple[DirectedLink, ...]')
+A named DAG of directed links that pinned routes can follow (``supports`` in
+YAML).
 
 **Attributes:**
 
@@ -1373,7 +1439,8 @@ SupportSpec(edges: 'tuple[DirectedLink, ...]')
 
 ### ngraph.SyntheticIngress
 
-Immutable SyntheticIngress record.
+One attachment of a TE ingress pool: the private link from the pool head to one
+physical source.
 
 **Attributes:**
 
@@ -1382,7 +1449,7 @@ Immutable SyntheticIngress record.
 
 ### ngraph.TunnelCountAnalysis
 
-Immutable TunnelCountAnalysis record.
+The answer of ``tunnel_counts``: one row per demand and count.
 
 **Attributes:**
 
@@ -1396,7 +1463,8 @@ Immutable TunnelCountAnalysis record.
 
 ### ngraph.TunnelCountQuery
 
-TunnelCountQuery(demands: 'ResolvedDemandSet', counts: 'tuple[int, ...]', design_demand: 'float', offer: 'float', up_to: 'int | None' = None, eligibility: 'ngc.Eligibility | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_details: 'bool' = False)
+A tunnel count question: each tunnelled centralized-TE demand at each count, and
+up to a limit, planned for the design and lossy at the offer.
 
 **Attributes:**
 
@@ -1439,9 +1507,12 @@ offer).
 UnitConstraint = InputConstraint | SplitConstraint | RangeConstraint | UnverifiedConstraint
 ```
 
+One precision or range constraint of a units report.
+
 ### ngraph.UnitsReport
 
-Immutable UnitsReport record.
+How preparation chose q: the mode and target, the bounds that set q, input
+rounding, the range sums and every precision miss.
 
 **Attributes:**
 
@@ -1484,7 +1555,7 @@ One physical unit and the local relative precision target.
 
 ### ngraph.UnverifiedConstraint
 
-Immutable UnverifiedConstraint record.
+A supplied program whose splits cannot be checked against the precision target.
 
 **Attributes:**
 
@@ -1494,7 +1565,8 @@ Immutable UnverifiedConstraint record.
 
 ### ngraph.UpperCertificate
 
-Immutable UpperCertificate record.
+A proved bracket around the largest feasible alpha: a feasible probe and the
+smallest infeasible probe above it.
 
 **Attributes:**
 
@@ -1514,7 +1586,8 @@ Which routers the controller programs for SHORTEST_PATHS_WCMP demands.
 
 ### ngraph.WeightSpec
 
-WeightSpec(entries: 'tuple[EdgeWeight, ...]')
+A named vector of explicit edge weights (``weights`` in YAML); unlisted edges
+weigh 0.
 
 **Attributes:**
 
@@ -1525,6 +1598,8 @@ WeightSpec(entries: 'tuple[EdgeWeight, ...]')
 ```python
 Workers = int | Literal["auto"]
 ```
+
+A number of worker threads: a positive integer, or ``"auto"`` for the CPU count.
 
 ### ngraph.WorkflowStep
 
@@ -1559,13 +1634,13 @@ The installed package version, a string.
 
 `capacity(prepared: 'PreparedScenario', query: 'CapacityQuery') -> 'CapacityAnalysis'`
 
-No documentation available.
+Answer a capacity question on a prepared scenario, in each failure case.
 
 ### ngraph.edge_sensitivity
 
 `edge_sensitivity(prepared: 'PreparedScenario', query: 'SensitivityQuery') -> 'SensitivityAnalysis'`
 
-No documentation available.
+Measure how much each directed edge's removal reduces delivery.
 
 ### ngraph.failure_cases
 
@@ -1577,19 +1652,20 @@ The baseline, then each distinct drawn pattern with its draw count.
 
 `maximum_supported_demand(prepared: 'PreparedScenario', query: 'MSDQuery') -> 'MSDAnalysis'`
 
-No documentation available.
+Search for the largest alpha at which a resolved demand set is placed in full.
 
 ### ngraph.paths
 
 `paths(prepared: 'PreparedScenario', query: 'PathQuery') -> 'PathAnalysis'`
 
-No documentation available.
+Find shortest or k shortest paths between two selectors on a prepared scenario.
 
 ### ngraph.place
 
 `place(prepared: 'PreparedScenario', query: 'PlacementQuery') -> 'PlacementAnalysis'`
 
-No documentation available.
+Place a resolved demand set on a prepared scenario, in each failure case and
+requested state.
 
 ### ngraph.prepare
 
@@ -1619,7 +1695,8 @@ Register one concrete step class for a nonempty YAML type name.
 
 `resolve_demands(prepared: 'PreparedScenario', specs: 'DemandSet') -> 'ResolvedDemandSet'`
 
-No documentation available.
+Bind a demand set to a prepared scenario: expand it and resolve its models on the
+prepared graph.
 
 ### ngraph.run
 
@@ -1631,7 +1708,7 @@ Execute once in declaration order; publish a run only after every step succeeds.
 
 `tunnel_counts(prepared: 'PreparedScenario', query: 'TunnelCountQuery') -> 'TunnelCountAnalysis'`
 
-No documentation available.
+Evaluate tunnelled centralized-TE demands at each tunnel count.
 
 ### ngraph.write_json
 
@@ -1685,7 +1762,7 @@ Return the name a step runs under: its name, or its class name when unnamed.
 
 ### ngraph.workflow.BuildGraph
 
-BuildGraph(name: 'str' = '', seed: 'int | None' = None, add_reverse: bool = True, *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
+Workflow step: export the network in NetworkX node-link form.
 
 **Attributes:**
 
@@ -1705,7 +1782,7 @@ BuildGraph(name: 'str' = '', seed: 'int | None' = None, add_reverse: bool = True
 
 ### ngraph.workflow.CostPower
 
-CostPower(name: 'str' = '', seed: 'int | None' = None, include_disabled: 'bool' = False, aggregation_level: 'int' = 2, *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
+Workflow step: hardware cost and power, aggregated by hierarchy level.
 
 **Attributes:**
 
@@ -1759,7 +1836,7 @@ Evaluate independent endpoint capacities with explicit native routing.
 
 ### ngraph.workflow.MaximumSupportedDemand
 
-MaximumSupportedDemand(name: 'str' = '', seed: 'int | None' = None, demand_set: str = '', alpha_start: float = 1.0, growth_factor: float = 2.0, alpha_min: float = 1e-06, alpha_max: float = 1000000000.0, alpha_tolerance: float = 0.01, max_bracket_iters: int = 32, max_bisect_iters: int = 32, export_details: bool = False, *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
+Workflow step: the maximum supported demand of a demand set.
 
 **Attributes:**
 
@@ -1787,7 +1864,7 @@ MaximumSupportedDemand(name: 'str' = '', seed: 'int | None' = None, demand_set: 
 
 ### ngraph.workflow.NetworkStats
 
-NetworkStats(name: 'str' = '', seed: 'int | None' = None, include_disabled: bool = False, excluded_nodes: tuple[str, ...] = (), excluded_links: tuple[str, ...] = (), *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
+Workflow step: node and link counts, and capacity, cost and degree statistics.
 
 **Attributes:**
 
@@ -1809,7 +1886,8 @@ NetworkStats(name: 'str' = '', seed: 'int | None' = None, include_disabled: bool
 
 ### ngraph.workflow.TrafficMatrixPlacement
 
-TrafficMatrixPlacement(name: 'str' = '', seed: 'int | None' = None, demand_set: str = '', failure_policy: str | None = None, iterations: int = 1, workers: int | Literal['auto'] = 'auto', failure_trace: bool = False, outputs: _netgraph_core.OutputOptions = <factory>, export_cost_distribution: bool = False, export_details: bool = False, alpha: float | None = None, alpha_from_step: str | None = None, failure_states: tuple[typing.Literal['converged', 'stale', 'repair'], ...] = ('converged',), interaction: Literal['ordered', 'simultaneous'] = 'ordered', *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
+Workflow step: place a demand set, with optional failures, failure states and
+interaction.
 
 **Attributes:**
 

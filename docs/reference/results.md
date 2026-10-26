@@ -389,10 +389,10 @@ One of: null or boolean or integer or number or string or list of [JSONValue](#j
 | `alpha_feasible` | [ExactAlphaJSON](#exactalphajson) or null | The largest tested feasible alpha. Null when no tested alpha was feasible. |
 | `best_probe_index` | integer or null | The history index of the probe at alpha_feasible. Null when no tested alpha was feasible. |
 | `monotone_proven` | boolean | Whether feasibility (every demand fits) is proven downward closed in alpha for this question class: an alpha below a feasible one is feasible, so the search's bracket is sound. Delivery itself need not be monotone in alpha. |
-| `proof` | [MSDProofJSON](#msdproofjson) | The kind of proof behind the status (nothing offered, fixed program, single controller, or unproved). |
+| `proof` | [MSDProofJSON](#msdproofjson) | What makes feasibility downward closed in alpha (every alpha below a feasible one is feasible). Values: fixed_program (every demand forwards a program that does not change with alpha); single_controller (one centralized-TE demand without a tunnel count, or one optimized shortest-paths demand with a static route choice, alone in its set); nothing_offered (the set offers no traffic); unproved (no proof: the search is a heuristic). |
 | `upper_certificate` | [UpperCertificateJSON](#uppercertificatejson) or null | A proved bracket around the largest feasible alpha. Null when no bracket is proved. |
-| `search_status` | [MSDStatusJSON](#msdstatusjson) | How the search ended. When nothing is offered, trivial requires a successful probe; a probe refused as out of range is reported as range. |
-| `stop_reason` | [MSDStopReasonJSON](#msdstopreasonjson) | Why the search stopped. |
+| `search_status` | [MSDStatusJSON](#msdstatusjson) | How the search ended. Values: feasible (the gap between a feasible and an infeasible alpha closed to alpha_tolerance); limit (a feasible alpha was found, but the search reached alpha_max or an iteration limit); none_feasible (no tested alpha was feasible); range (a probe's scaled volumes left the native range, and the search stopped there); stagnation (the next bracketing value equals the current alpha, or a bisection midpoint rounds to a bracket endpoint); trivial (the set offers no traffic and one probe at alpha_max succeeded). |
+| `stop_reason` | [MSDStopReasonJSON](#msdstopreasonjson) | Why the search stopped. Values: tolerance (the gap closed to alpha_tolerance); alpha_bound (the search reached alpha_min or alpha_max); bracket_limit (max_bracket_iters ran out before a feasible and an infeasible alpha were found); bisect_limit (max_bisect_iters ran out before the gap closed); offer_range (a probe left the native range); representable_limit (the next bracketing value equals the current alpha, or a bisection midpoint rounds to a bracket endpoint); nothing_offered (the set offers no traffic); unit_resolution (no feasible alpha: each tested alpha either rounds some positive volume to zero units or does not fit). |
 | `history` | list of [MSDProbeJSON](#msdprobejson) | Every probe in the order tested. |
 | `best_rows` | list of [PlacementRowJSON](#placementrowjson) or null | The rows at alpha_feasible. Null when no tested alpha was feasible. |
 | `best_accounting` | list of [ExpansionAccountingJSON](#expansionaccountingjson) or null | The accounting at alpha_feasible. Null when no tested alpha was feasible. |
@@ -465,7 +465,7 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | Field | Type | Description |
 | --- | --- | --- |
 | `routing` | `"shortest_paths"` \| `"distributed_te"` \| `"centralized_te"` \| `"pinned"` | The routing model. |
-| `admission` | `"lossless"` \| `"lossy"` | LOSSLESS (deliver whole or less) or LOSSY (send and drop where full). |
+| `admission` | `"lossless"` \| `"lossy"` | lossless (admit the largest total whose splits fit, and refuse the rest before it enters) or lossy (send the whole offer; what does not fit is lost at the sources or on the links). |
 | `allocation` | `"equal"` \| `"weighted"` \| `"optimized"` or null | How a router splits over its members: equal, weighted or optimized. Null when it does not apply to the model. |
 | `source_allocation` | `"equal"` \| `"optimized"` \| `"weighted"` or null | How sources share the demand: equal, weighted or optimized. Null when it does not apply to the model. |
 | `source_weights` | list of [DeclaredSourceWeightJSON](#declaredsourceweightjson) or null | Weighted sources (CentralizedTE without tunnels): the question's declared weights, each graph node with a nonzero weight in node order (a zero weight receives nothing; all zero gives an empty list); a TE ingress pool's private head is named by its pool. Null when the sources are not weighted. |
@@ -513,7 +513,7 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | `unadmitted_units` | integer or null | LOSSLESS: the request minus the delivery; LOSSY: 0. Null when the request is unlimited. |
 | `source_drop_units` | integer | LOSSY: units lost at sources without a usable route; 0 when LOSSLESS. |
 | `edge_drop_units` | integer | LOSSY: units dropped on physical links and TE ingress pool attachments, in all; 0 when LOSSLESS. |
-| `termination` | `"complete"` \| `"no_route"` \| `"exhausted"` \| `"no_active_weight"` | The native call's outcome. |
+| `termination` | `"complete"` \| `"no_route"` \| `"exhausted"` \| `"no_active_weight"` | The native call's outcome. Values: complete (the offer is 0, admitted in full when lossless, or forwarded in full when lossy, its losses included); no_route (a positive offer and no source with a route); no_active_weight (the program has routes, but none of positive weight can send anything); exhausted (lossless and less than the offer admitted, or an unlimited offer). |
 | `total_cost` | integer or null | The controllers only (CentralizedTE without tunnels, ShortestPaths with optimized allocation): the exact sum over links of cost times carried units. Null when the model is another one (T1, T2, pinned, other ShortestPaths). |
 | `call_delivered_units` | integer | The units this call delivered. Absent when details are not requested. |
 | `call_undelivered_units` | integer or null | The request minus this call's delivery. Null when the request is unlimited. Absent when details are not requested. |
@@ -1018,7 +1018,7 @@ One of: [CapacityQueryJSON](#capacityqueryjson) or [PlacementQueryJSON](#placeme
 | --- | --- | --- |
 | `entry_id` | integer | The tunnel's entry identifier in the program. |
 | `head` | [SourceJSON](#sourcejson) | The tunnel head: a node name, or the pool head of a TE ingress pool. |
-| `status` | `"up"` \| `"insufficient_bandwidth"` \| `"cost_ceiling_exceeded"` \| `"failed"` \| `"blackholed"` | The tunnel's status in this forwarding (up, a setup failure, failed or blackholed). |
+| `status` | `"up"` \| `"insufficient_bandwidth"` \| `"cost_ceiling_exceeded"` \| `"failed"` \| `"blackholed"` | The tunnel's status in this forwarding. Values: up (set up and available for forwarding; it may carry zero units); insufficient_bandwidth (down: no path had enough unreserved bandwidth); cost_ceiling_exceeded (down: the cheapest path with enough bandwidth costs more than the cost ceiling); failed (repair state: a failure touches the tunnel, so its route is removed); blackholed (stale state: the tunnel stays up but its path reaches a failed node or link, where its traffic is dropped). |
 | `assigned_units` | integer | The tunnel's share of the injections (LOSSY: sent to it; LOSSLESS: carried). |
 | `delivered_units` | integer | The units this tunnel delivers. |
 | `total_edge_drop_units` | integer | LOSSY: this tunnel's units dropped on physical links and TE ingress pool attachments; 0 when LOSSLESS. |
