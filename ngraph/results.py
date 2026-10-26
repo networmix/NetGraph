@@ -577,7 +577,7 @@ class UnitsReport(_ResultRecord):
     precision: float
     """The relative precision target."""
     target_met: bool
-    """Whether every declared input and split meets the precision at q."""
+    """Whether every declared input and split meets its precision bound at q. The bound is checked, not the rounding: false is possible with no input rounded."""
     input_convention: ClassVar[Literal["promoted_binary64_half_up"]] = (
         "promoted_binary64_half_up"
     )

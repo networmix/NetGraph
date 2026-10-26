@@ -37,6 +37,12 @@ Verify installation:
 ngraph --help
 ```
 
+`python -m ngraph` runs the same command line. Where the shell does not find `ngraph` (the environment's scripts directory is not on `PATH`), run it with the Python that NetGraph is installed in:
+
+```bash
+python -m ngraph --help
+```
+
 ## From Source
 
 For development, or to install from the repository:

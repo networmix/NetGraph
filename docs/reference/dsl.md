@@ -104,7 +104,7 @@ Regex capturing groups create node groupings for analysis:
 
 - Single capturing group: Group by captured value
 - Multiple capturing groups: Join with `|` separator
-- No capturing groups: Group by original pattern string
+- No capturing groups: one group of every matched node, labelled by the pattern string
 
 ### Attribute-based grouping
 
@@ -1285,6 +1285,7 @@ demands:
         group_by: "dc"
       volume: 500
       mode: "pairwise"
+      group_mode: "group_pairwise"  # Node pairs between different datacenters
       priority: 2
 
     # Dict selectors with filtering
@@ -1344,7 +1345,7 @@ demands:
 |-------|------|-------------|
 | `source` | string or selector | Source node selector (required) |
 | `target` | string or selector | Target node selector (required) |
-| `volume` | number | Traffic demand volume (default: 0) |
+| `volume` | number | The declaration's total traffic, a physical amount (default: 0): the pairs and groups it expands into share it, and each `expand` combination has the whole total ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)) |
 | `priority` | integer | Priority class; lower = higher priority (default: 0) |
 | `mode` | string | Node pairing mode: `combine` or `pairwise` (default: `combine`) |
 | `group_mode` | string | How grouped nodes produce demands (default: `flatten`) |
@@ -1493,6 +1494,38 @@ Controls how source and target node sets are paired:
 
 - `combine`: One source-set/destination-set demand, with one ordered roster of sources ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 - `pairwise`: Create one demand for each distinct selected source/target node pair. Node-to-itself pairs receive no share.
+
+A matrix whose sources and targets share nodes, such as all pairs of four sites, needs each shared node in a group of its own on both sides, for example by capturing each name (`^(A|B|C|D)$`) or with `group_by: name`. The declared volume is split over the pairs:
+
+```yaml
+network:
+  nodes: {A: {}, B: {}, C: {}, D: {}}
+  links:
+    - {source: A, target: B, capacity: 10}
+    - {source: B, target: C, capacity: 10}
+    - {source: C, target: D, capacity: 10}
+    - {source: D, target: A, capacity: 10}
+demands:
+  matrix:
+    # 12 ordered pairs of distinct sites, 48 / 12 = 4 each
+    - {source: "^(A|B|C|D)$", target: "^(A|B|C|D)$", volume: 48, mode: pairwise}
+workflow:
+  - {type: TrafficMatrixPlacement, name: matrix, demand_set: matrix}
+```
+
+A pattern without a capturing group makes one group of all its nodes, so the same matrix written `source: "^[ABCD]$"`, `target: "^[ABCD]$"` is refused:
+
+<!-- example: refusal non-diagonal source/target overlap: ['A', 'B', 'C', 'D'] -->
+
+```yaml
+network:
+  nodes: {A: {}, B: {}, C: {}, D: {}}
+demands:
+  matrix:
+    - {source: "^[ABCD]$", target: "^[ABCD]$", volume: 48, mode: pairwise}
+workflow:
+  - {type: TrafficMatrixPlacement, name: matrix, demand_set: matrix}
+```
 
 Overlapping source and target groups are refused in demands, capacity and path questions (no target is silently dropped), except a pair that is one and the same node: a demand gives it no share, and capacity and path questions give it a zero-valued `self` row. A declaration whose every pair is a node-to-itself pair or a same-label group pair is reported whole as discarded, with its reason. If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason. A selection that matches no active node keeps its share as an `empty_selection` discard; a group whose nodes are all filtered out is not selected and takes no share ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 

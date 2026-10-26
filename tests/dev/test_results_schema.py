@@ -1,6 +1,7 @@
 """The packaged results schema is generated from the record declarations."""
 
 import json
+import re
 import runpy
 from importlib import resources
 from pathlib import Path
@@ -116,6 +117,36 @@ def test_a_field_without_a_description_stops_the_generator(monkeypatch, check):
         "sys.argv", ["generate_results_schema.py", *(["--check"] if check else [])]
     )
     with pytest.raises(SystemExit, match="EndpointsJSON/sources"):
+        main()
+
+
+def test_every_table_row_of_the_reference_page_has_its_three_cells():
+    # A line break inside a description would end its row; the rest would render as a
+    # row of its own or as text outside the table.
+    page = (GENERATOR.parents[1] / "docs/reference/results.md").read_text()
+    rows = 0
+    for table in re.findall(
+        r"^\| Field \| Type \| Description \|\n(.*?)(?:\n\n|\Z)", page, re.M | re.S
+    ):
+        for line in table.splitlines():
+            cells = re.split(r"(?<!\\)\|", line)
+            assert line.startswith("| ") and len(cells) == 5 and cells[-1] == "", line
+            rows += 1
+    assert rows > 300
+
+
+@pytest.mark.parametrize("check", [False, True])
+def test_a_line_break_in_a_description_stops_the_generator(monkeypatch, check):
+    tools = generator()
+    document = json.loads(tools["generate"]())
+    node = document["$defs"]["UnitsReportJSON"]["properties"]["target_met"]
+    node["description"] = "Whether the bound\nis met."
+    main = tools["main"]
+    monkeypatch.setitem(main.__globals__, "generate", lambda: json.dumps(document))
+    monkeypatch.setattr(
+        "sys.argv", ["generate_results_schema.py", *(["--check"] if check else [])]
+    )
+    with pytest.raises(SystemExit, match="UnitsReportJSON.target_met: a line break"):
         main()
 
 

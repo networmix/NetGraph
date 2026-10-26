@@ -69,13 +69,35 @@ ngraph run example.yaml --profile --output results/
 The document has `metadata`, `units_report` and an ordered `steps` array. Each step records its normalized `question` (what it asked) and typed `result`. The `units_report` holds `q` and the run's precision ([Results and their units](../concepts.md#results-and-their-units)); each failure case's `states.converged.totals` holds the placement's totals in the converged state ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states), [Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 
 ```bash
-jq '.steps[] | select(.name == "supported_load") | .result.alpha_feasible' results/example.results.json
-jq '.steps[] | select(.name == "under_failures") | .result.cases[].states.converged.totals' results/example.results.json
+jq '.steps[] | select(.name == "supported_load") | .result.alpha_feasible.value' results/example.results.json
 ```
 
-The intact chain has physical capacity 10, cut at A→B, and route cost 3. Either single-link failure disconnects A from C. The 20 draws therefore collapse into at most two failure patterns, plus the baseline. `occurrences` sum to 20; the baseline is not an extra trial ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)).
+<!-- example: output -->
 
-MSD reports its largest tested feasible alpha and every probe it made; the placement step records that it used that alpha ([Maximum supported demand](../concepts.md#maximum-supported-demand)).
+```text
+2.5
+```
+
+MSD reports its largest tested feasible alpha and every probe it made; the placement step records that it used that alpha ([Maximum supported demand](../concepts.md#maximum-supported-demand)). `alpha_feasible` is an exact fraction with its `value`, `numerator` and `denominator`; `.value` prints the number.
+
+```bash
+jq -c '.units_report.q as $q | .steps[] | select(.name == "under_failures") | .result.cases[]
+  | {case: .case.id, occurrences: .case.occurrences,
+     requested: (.states.converged.totals.reference_request_units * $q),
+     delivered: (.states.converged.totals.delivered_units * $q)}' results/example.results.json
+```
+
+<!-- example: output -->
+
+```text
+{"case":"baseline","occurrences":0,"requested":10,"delivered":10}
+{"case":"failure-000001","occurrences":11,"requested":10,"delivered":0}
+{"case":"failure-000002","occurrences":9,"requested":10,"delivered":0}
+```
+
+Totals are in units of `q`, so the command multiplies them by `q` for physical bandwidth ([Units and the resolution q](../concepts.md#units-and-the-resolution-q)). The intact chain has physical capacity 10, cut at A→B, and route cost 3. Either single-link failure disconnects A from C. The 20 draws therefore collapse into at most two failure patterns, plus the baseline. `occurrences` sum to 20; the baseline is not an extra trial ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)).
+
+Every case asks the same request, so the worst case is the one that delivers least, here either failure ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)); what a case does not deliver was not admitted or was dropped ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 
 To export one step, add `--keys under_failures`: the whole workflow still runs, and the step keeps its execution order 2 ([Filtering Results by Step Names](../reference/cli.md#filtering-results-by-step-names)).
 

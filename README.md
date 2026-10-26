@@ -42,7 +42,7 @@ print(row.result.delivered)
 10
 ```
 
-It prints 10: native bandwidth results are whole units of one bandwidth unit `q`, and `UnitsSettings(resolution=1)` sets `q` to 1 ([Units and the resolution q](https://networmix.github.io/NetGraph/concepts/#units-and-the-resolution-q)).
+It prints 10: native bandwidth results are whole units of one bandwidth unit `q`, and `UnitsSettings(resolution=1)` sets `q` to 1 ([Units and the resolution q](https://networmix.github.io/NetGraph/concepts/#units-and-the-resolution-q)). A `CapacityQuery` without a model asks for the most that optimized traffic engineering carries from the sources to the targets (`TE_MAXFLOW_UNLIM`); `cases[0]` is the case without failures, `states["converged"]` its one state and `rows[0]` the A-to-C answer ([Failures: patterns, cases and states](https://networmix.github.io/NetGraph/concepts/#failures-patterns-cases-and-states)). For capacities this small, `q` = 1 misses the default precision target although nothing is rounded, and `prepared.units_report.target_met` is false ([Precision and the choice of q](https://networmix.github.io/NetGraph/concepts/#precision-and-the-choice-of-q)).
 
 ## Scenario DSL
 
@@ -98,7 +98,7 @@ workflow:
 
 ```bash
 ngraph run scenarios/readme_example.yml --output results/
-jq '.steps[] | select(.name == "max_demand") | .result.alpha_feasible' results/readme_example.results.json
+jq '.steps[] | select(.name == "max_demand") | .result.alpha_feasible.value' results/readme_example.results.json
 ```
 
 A preset chooses routing and admission; `SHORTEST_PATHS_ECMP` splits whole units equally among equal-cost next hops at each router ([Routing models and admission](https://networmix.github.io/NetGraph/concepts/#routing-models-and-admission)). [How NetGraph computes](https://networmix.github.io/NetGraph/concepts/) explains the presets such as `SHORTEST_PATHS_ECMP`, maximum supported demand and the numbers in the results; `run(prepare(scenario))` returns the same results in Python.

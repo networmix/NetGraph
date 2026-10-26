@@ -521,7 +521,7 @@ def test_demand_expansion_creates_the_stated_demands():
 
 def test_group_pairwise_creates_one_demand_per_ordered_pair_of_labels():
     """DSL, Example with group_mode: the stated label pairs, and every other ordered one."""
-    fragment = fence(DSL, 'group_mode: "group_pairwise"').text
+    fragment = fence(DSL, "inter_dc_traffic:").text
     (shown,) = re.search(r"# Creates (.*), etc\.", fragment).groups()
     text = "network:\n  nodes: {%s}\n%s" % (
         ", ".join(f"dc{i}/r: {{attrs: {{dc: dc{i}}}}}" for i in (1, 2, 3)),
@@ -539,6 +539,49 @@ def test_group_pairwise_creates_one_demand_per_ordered_pair_of_labels():
         (a, b) for a in ("dc1", "dc2", "dc3") for b in ("dc1", "dc2", "dc3") if a != b
     ]
     assert {tuple(pair.split("->")) for pair in shown.split(", ")} <= set(pairs)
+
+
+def test_the_overview_grouped_pairwise_demand_pairs_nodes_of_different_datacenters():
+    """DSL, `demands` overview: "Node pairs between different datacenters", on a network
+    with two nodes in one datacenter (pairwise within one datacenter would overlap)."""
+    fragment = fence(DSL, "production:").text
+    names = {"dc1/a": "dc1", "dc1/b": "dc1", "dc2/a": "dc2"}
+    text = "network:\n  nodes: {%s}\n%s" % (
+        ", ".join(f"{n}: {{attrs: {{dc: {dc}}}}}" for n, dc in names.items()),
+        fragment,
+    )
+    prepared = prepare(Scenario.from_yaml(text), demand_sets=("production",))
+    pairs = [
+        (d.endpoints.sources, d.endpoints.destinations)
+        for d in prepared.demand_sets["production"].demands
+        if d.base_id == "production|1"
+    ]
+    assert sorted(pairs) == sorted(
+        ((a,), (b,)) for a in names for b in names if names[a] != names[b]
+    )
+
+
+def test_the_all_pairs_matrix_has_its_stated_pairs_and_shares():
+    """DSL, Traffic Modes: "12 ordered pairs of distinct sites, 48 / 12 = 4 each"."""
+    block = fence(DSL, '"^(A|B|C|D)$"').text
+    pairs, total, over, each = (
+        int(g)
+        for g in re.search(
+            r"# (\d+) ordered pairs of distinct sites, (\d+) / (\d+) = (\d+) each",
+            block,
+        ).groups()
+    )
+    [declared] = yaml.safe_load(block)["demands"]["matrix"]
+    assert declared["volume"] == total and over == pairs and total / over == each
+    prepared = prepare(Scenario.from_yaml(block))
+    rows = converged(run(prepared).steps[0].result).rows
+    sites = list(yaml.safe_load(block)["network"]["nodes"])
+    assert sorted((r.endpoints.sources, r.endpoints.destinations) for r in rows) == [
+        ((a,), (b,)) for a in sites for b in sites if a != b
+    ]
+    assert len(rows) == pairs
+    q = prepared.topology.q
+    assert {r.reference_request_units * q for r in rows} == {each}
 
 
 def indent(fragment):

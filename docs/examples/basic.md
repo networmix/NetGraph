@@ -32,7 +32,7 @@ prepared = prepare(Scenario(network, units=UnitsSettings(resolution=1)))
 source, target = Selector("^A$"), Selector("^C$")
 ```
 
-`UnitsSettings(resolution=1)` sets the bandwidth unit `q` to 1, so result units equal physical bandwidth here ([Units and the resolution q](../concepts.md#units-and-the-resolution-q)). `netgraph_core`, imported as `ngc`, is the engine; its native objects configure the models below ([Native models and capacity](../reference/api.md#native-models-and-capacity)). The prepared scenario keeps a read-only view of the network; later edits of the network require a new preparation ([Scenario, preparation and run](../concepts.md#scenario-preparation-and-run)).
+`UnitsSettings(resolution=1)` sets the bandwidth unit `q` to 1, so result units equal physical bandwidth here ([Units and the resolution q](../concepts.md#units-and-the-resolution-q)). For capacities this small, `q` = 1 misses the default precision target although nothing is rounded, so `prepared.units_report.target_met` is false ([Precision and the choice of q](../concepts.md#precision-and-the-choice-of-q)). `netgraph_core`, imported as `ngc`, is the engine; its native objects configure the models below ([Native models and capacity](../reference/api.md#native-models-and-capacity)). The prepared scenario keeps a read-only view of the network; later edits of the network require a new preparation ([Scenario, preparation and run](../concepts.md#scenario-preparation-and-run)).
 
 ## Ask distinct capacity questions
 

@@ -568,6 +568,24 @@ def page(document: dict) -> str:
         "selection](workflow.md#output-selection)). T1 is a `distributed_te` model; T2 is a",
         "`centralized_te` model with a `tunnel_count`.",
         "",
+        "Placement totals and the run's `metadata` and `units_report` use the same field",
+        "names in Python and JSON. In placement and capacity rows with a native `result`,",
+        "that object and its `plan`, `by_source` and `by_tunnel` entries use the engine's",
+        "field names. There a bandwidth amount drops `_units` and a drop count ends in",
+        "`_drops`: `delivered` is `delivered_units`, `source_drops` is `source_drop_units`.",
+        "Edges and nodes are ids (`PreparedTopology.edge_refs` names each edge), so",
+        "`edge_drops` lists (edge, units) pairs, whose sum is `edge_drop_units`, and per-edge",
+        "outputs are vectors in edge order; an unlimited request or design is infinite where",
+        'JSON writes `null` with `request_kind` or `design_kind` `"unlimited"`. For placement',
+        "rows and capacity rows with a native result, `kind` is JSON only; a placement row's",
+        "`reference_shortfall_units` (`reference_request_units` minus `result.delivered`) is",
+        "also JSON only. A step's",
+        "`question` is its typed query in Python, written in normalized form here ([Results",
+        "and export](api.md#results-and-export)). Losses: [Demands: how traffic",
+        "enters](../concepts.md#demands-how-traffic-enters); the worst failure case:",
+        "[Failures: patterns, cases and",
+        "states](../concepts.md#failures-patterns-cases-and-states).",
+        "",
     ]
     for name, definition in document["$defs"].items():
         properties = definition.get("properties")
@@ -582,6 +600,10 @@ def page(document: dict) -> str:
             "| --- | --- | --- |",
         ]
         for field, node in properties.items():
+            if "\n" in node.get("description", ""):
+                raise ValueError(
+                    f"{name}.{field}: a line break in its description ends the table row"
+                )
             description = node.get("description", "").replace("|", "\\|")
             lines.append(f"| `{field}` | {_type(node)} | {description} |")
         lines.append("")
@@ -622,7 +644,10 @@ def main() -> None:
     undescribed(json.loads(text), "#", missing)
     if missing:
         sys.exit("results schema fields without a description: " + ", ".join(missing))
-    reference = page(json.loads(text))
+    try:
+        reference = page(json.loads(text))
+    except ValueError as exc:
+        sys.exit("results reference: " + str(exc))
     if check:
         if TARGET.read_text() != text or PAGE.read_text() != reference:
             sys.exit(

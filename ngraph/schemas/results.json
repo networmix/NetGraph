@@ -6205,7 +6205,7 @@
           "type": "number"
         },
         "target_met": {
-          "description": "Whether every declared input and split meets the precision at q.",
+          "description": "Whether every declared input and split meets its precision bound at q. The bound is checked, not the rounding: false is possible with no input rounded.",
           "type": "boolean"
         },
         "input_convention": {

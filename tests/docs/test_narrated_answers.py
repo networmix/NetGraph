@@ -6,6 +6,7 @@ into the test, and compared with a value the product computes when the page's ow
 examples run; a changed number in the prose fails here.
 """
 
+import math
 import re
 from collections import Counter
 from fractions import Fraction
@@ -13,7 +14,8 @@ from fractions import Fraction
 import netgraph_core as ngc
 import yaml
 
-from ngraph import CapacityQuery, Scenario, capacity, prepare, run
+from ngraph import CapacityQuery, Scenario, Selector, capacity, prepare, run
+from ngraph.model.demand import PRESETS, FlowPolicyPreset
 from tests.docs.pages import ROOT, fence, fences, narration, numbers, stated
 
 CONCEPTS = "docs/concepts.md"
@@ -82,6 +84,50 @@ def test_readme_says_what_its_example_prints():
     found = fences("README.md")
     output = next(f for f in found if f.marker == "output")
     assert output.text == shown + "\n"
+
+
+def test_readme_names_the_question_and_its_precision_miss():
+    """README: a CapacityQuery without a model asks TE_MAXFLOW_UNLIM; `cases[0]` is the
+    case without failures with its one state; q = 1 misses the default target, nothing
+    rounded."""
+    (text,) = stated("README.md", r"\n(It prints \d+:.*)\n")
+    (preset,) = numbers(text, r"carries from the sources to the targets \(`(\w+)`\)")
+    space = examples("README.md", "CapacityQuery(Selector")
+    query = CapacityQuery(Selector("^A$"), Selector("^C$"))
+    assert repr(query.config) == repr(PRESETS[FlowPolicyPreset(preset)])
+    case = space["result"].cases[0]
+    assert case.case.kind == "baseline" and tuple(case.states) == ("converged",)
+    assert "`cases[0]` is the case without failures" in text
+    report = space["prepared"].units_report
+    assert "`prepared.units_report.target_met` is false" in text
+    assert not report.target_met and report.inexact_inputs == report.zeroed_inputs == 0
+
+
+def test_basic_states_its_precision_miss():
+    """Basic Example: q = 1 misses the default target, nothing rounded."""
+    text = (ROOT / BASIC).read_text()
+    assert "so `prepared.units_report.target_met` is false" in text
+    report = examples(BASIC, "network.add_link(Link(source")["prepared"].units_report
+    assert not report.target_met and report.inexact_inputs == report.zeroed_inputs == 0
+
+
+def test_the_api_and_tunnel_count_examples_state_their_precision_miss():
+    """Python API and TunnelCountAnalysis: their examples fix q = 1, which misses the
+    default precision target; nothing is rounded."""
+    api = "docs/reference/api.md"
+    assert "The examples on this page fix `q` to 1" in (ROOT / api).read_text()
+    space = examples(api, 'network.add_link(Link("A", "B"')
+    workflow = "docs/reference/workflow.md"
+    assert "The example fixes `q` to 1, which misses" in (ROOT / workflow).read_text()
+    counts = prepare(
+        Scenario.from_yaml(fence(workflow, "TunnelCountAnalysis", "yaml").text)
+    )
+    for prepared in (space["prepared"], counts):
+        report = prepared.units_report
+        assert prepared.topology.q == 1 and report.mode == "manual"
+        assert (
+            not report.target_met and report.inexact_inputs == report.zeroed_inputs == 0
+        )
 
 
 # How NetGraph computes
@@ -893,6 +939,67 @@ demands:
     prepared = prepare(Scenario.from_yaml(expansion), demand_sets=("d",))
     shares = [d.nominal_units for d in prepared.demand_sets["d"].demands]
     assert shares == [int(first), *map(int, second)]
+
+
+def chain(amount):
+    return f"""
+units: {{resolution: 1}}
+network:
+  nodes: {{A: {{}}, B: {{}}, C: {{}}}}
+  links: [{{source: A, target: B, capacity: {amount}}}, {{source: B, target: C, capacity: {amount}}}]
+"""
+
+
+def test_the_precision_threshold_at_unit_resolution():
+    """Precision: "At `q` = 1 and the default `p`, every input must be at least 500"."""
+    (least,) = stated(
+        CONCEPTS,
+        r"At `q` = 1 and the default `p`, every input must be at least (\d+)\.",
+    )
+    met = [
+        prepare(Scenario.from_yaml(chain(int(least) + d))).units_report.target_met
+        for d in (-1, 0)
+    ]
+    assert met == [False, True]
+
+
+def test_the_failure_coverage_figure():
+    """Failures: "`n` × ln(`n`/ε) draws, rounded up, miss some link with chance at most ε:
+    32 draws for 5 links at ε = 1 %"; and the stated draws do cover the five links of a
+    seeded ring, while `n` draws there miss one."""
+    draws, links, percent = map(
+        int, stated(CONCEPTS, r"(\d+) draws for (\d+) links at ε = (\d+) %")
+    )
+    epsilon = percent / 100
+    assert draws == math.ceil(links * math.log(links / epsilon))
+    missed = sum(
+        (-1) ** (k + 1) * math.comb(links, k) * (1 - k / links) ** draws
+        for k in range(1, links)
+    )
+    assert missed <= epsilon
+    names = [f"N{i}" for i in range(links)]
+    ring = "\n".join(
+        f"    - {{source: {a}, target: {b}, capacity: 1}}"
+        for a, b in zip(names, names[1:] + names[:1], strict=True)
+    )
+
+    def failure_cases(iterations):
+        text = f"""
+seed: 1
+network:
+  nodes: {{{", ".join(f"{n}: {{}}" for n in names)}}}
+  links:
+{ring}
+failures:
+  one: {{modes: [{{weight: 1, rules: [{{scope: link, mode: choice, count: 1}}]}}]}}
+workflow:
+  - {{type: MaxFlow, name: m, source: ^N0$, target: ^N2$, failure_policy: one,
+     iterations: {iterations}}}
+"""
+        cases = run(prepare(Scenario.from_yaml(text))).steps[0].result.cases
+        return len(cases) - 1
+
+    assert failure_cases(draws) == links > failure_cases(links)
 
 
 def test_the_seed_and_weight_approximation_figures():

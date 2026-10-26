@@ -48,13 +48,16 @@ def test_documented_python_client(page, tmp_path, monkeypatch):
         assert printed.getvalue() == expected, f"{page}:{block.line}"
 
 
-def test_every_shown_output_follows_a_python_example():
+def test_every_shown_output_follows_a_python_or_shell_example():
+    """A Python example's output is checked above; a shell example's in the CLI tests."""
     for page in pages():
         found = fences(page)
         for index, block in enumerate(found):
             if block.marker == "output":
                 assert block.lang == "text" and index > 0, f"{page}:{block.line}"
-                assert found[index - 1].lang == "python", f"{page}:{block.line}"
+                assert found[index - 1].lang in ("python", "bash"), (
+                    f"{page}:{block.line}"
+                )
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -222,10 +225,10 @@ def test_a_fragment_is_checked_in_its_schema_context(argument, block, message):
 def test_every_marked_kind_occurs_and_the_examples_are_counted():
     kinds = [param.values[0] for param in EXAMPLES]
     assert {kind: kinds.count(kind) for kind in set(kinds)} == {
-        "scenario": 38,
+        "scenario": 39,
         "fragment": 11,
         "unprepared": 9,
-        "refusal": 3,
+        "refusal": 4,
     }
 
 

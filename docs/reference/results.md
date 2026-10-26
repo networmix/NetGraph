@@ -23,6 +23,24 @@ selects which detail fields appear ([Output
 selection](workflow.md#output-selection)). T1 is a `distributed_te` model; T2 is a
 `centralized_te` model with a `tunnel_count`.
 
+Placement totals and the run's `metadata` and `units_report` use the same field
+names in Python and JSON. In placement and capacity rows with a native `result`,
+that object and its `plan`, `by_source` and `by_tunnel` entries use the engine's
+field names. There a bandwidth amount drops `_units` and a drop count ends in
+`_drops`: `delivered` is `delivered_units`, `source_drops` is `source_drop_units`.
+Edges and nodes are ids (`PreparedTopology.edge_refs` names each edge), so
+`edge_drops` lists (edge, units) pairs, whose sum is `edge_drop_units`, and per-edge
+outputs are vectors in edge order; an unlimited request or design is infinite where
+JSON writes `null` with `request_kind` or `design_kind` `"unlimited"`. For placement
+rows and capacity rows with a native result, `kind` is JSON only; a placement row's
+`reference_shortfall_units` (`reference_request_units` minus `result.delivered`) is
+also JSON only. A step's
+`question` is its typed query in Python, written in normalized form here ([Results
+and export](api.md#results-and-export)). Losses: [Demands: how traffic
+enters](../concepts.md#demands-how-traffic-enters); the worst failure case:
+[Failures: patterns, cases and
+states](../concepts.md#failures-patterns-cases-and-states).
+
 ## AlphaSourceJSON
 
 | Field | Type | Description |
@@ -1060,7 +1078,7 @@ One of: [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#sp
 | `exponent` | integer | q as a power of two: q = 2^exponent. |
 | `mode` | `"auto"` \| `"manual"` | auto (chosen by the recipe) or manual (declared). |
 | `precision` | number | The relative precision target. |
-| `target_met` | boolean | Whether every declared input and split meets the precision at q. |
+| `target_met` | boolean | Whether every declared input and split meets its precision bound at q. The bound is checked, not the rounding: false is possible with no input rounded. |
 | `input_convention` | `"promoted_binary64_half_up"` | Physical inputs round half-up from their binary64 value. |
 | `display_convention` | `"units_authoritative_binary64_display"` | Units are authoritative; physical values are binary64 displays. |
 | `scope` | [PreparationScopeJSON](#preparationscopejson) | What the preparation covered. |

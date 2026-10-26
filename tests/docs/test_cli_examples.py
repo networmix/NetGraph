@@ -1,9 +1,11 @@
 """Every documented shell command runs as shown and gives what its page says.
 
 The commands of each page run in order in one reader's working directory (the bundled
-scenarios and the files the pages ask to save). `ngraph` runs in this process; `jq` and
-`grep` run as programs and read the output piped into them. The commands that set up an
-environment (install, clone, change directory) and `make` are not run here.
+scenarios and the files the pages ask to save). `ngraph` runs in this process, and
+`python -m ngraph` as this interpreter's module; `jq` and `grep` run as programs and read
+the output piped into them. A shell fence followed by an output fence prints that output
+with its last command. The commands that set up an environment (install, clone, change
+directory) and `make` are not run here.
 """
 
 import contextlib
@@ -11,9 +13,11 @@ import io
 import json
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,7 +25,7 @@ import yaml
 
 from ngraph import Scenario
 from ngraph.cli import main
-from tests.docs.pages import fences, pages, stated, workspace
+from tests.docs.pages import ROOT, fences, pages, stated, workspace
 
 NOT_RUN = {
     "pip": "installs packages",
@@ -34,8 +38,8 @@ NOT_RUN = {
 
 
 def commands(page):
-    """(where, text, programs) per command of a page's bash fences: continuation lines
-    joined, comments dropped, a pipeline split into its programs."""
+    """(where, text, programs, fence line) per command of a page's bash fences:
+    continuation lines joined, comments dropped, a pipeline split into its programs."""
     found = []
     for block in fences(page):
         if block.lang != "bash":
@@ -62,8 +66,26 @@ def commands(page):
                     programs.append([])
                 else:
                     programs[-1].append(token)
-            found.append((f"{page}:{block.line + 1 + start}", text, programs))
+            found.append(
+                (f"{page}:{block.line + 1 + start}", text, programs, block.line)
+            )
     return found
+
+
+def shown_outputs(page):
+    """{bash fence line: the output fence after it}, for each bash fence the page follows
+    with what its last command prints."""
+    found = fences(page)
+    return {
+        block.line: after.text
+        for block, after in zip(found, found[1:], strict=False)
+        if block.lang == "bash" and after.marker == "output"
+    }
+
+
+def program(argv):
+    """The program a command runs; `python -m ngraph` is the ngraph command line."""
+    return "python -m ngraph" if argv[:3] == ["python", "-m", "ngraph"] else argv[0]
 
 
 def quotes_closed(text):
@@ -78,7 +100,16 @@ def run_command(programs, cwd):
     """Run one pipeline; returns the last program's stdout and the exit status."""
     data, status = None, 0
     for argv in programs:
-        if argv[0] == "ngraph":
+        if program(argv) == "python -m ngraph":
+            done = subprocess.run(
+                [sys.executable, "-m", "ngraph", *argv[3:]],
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                check=False,
+            )
+            data, status = done.stdout, done.returncode
+        elif argv[0] == "ngraph":
             out, err = io.StringIO(), io.StringIO()
             level = logging.getLogger("ngraph").level
             try:
@@ -104,6 +135,7 @@ def run_command(programs, cwd):
 
 
 TUTORIAL = "docs/getting-started/tutorial.md"
+INSTALL = "docs/getting-started/installation.md"
 CLOS = "docs/examples/clos-fabric.md"
 BUNDLED = "docs/examples/bundled-scenarios.md"
 CLI = "docs/reference/cli.md"
@@ -145,7 +177,10 @@ def matrix_rows(out, d):
 # What the pages say a command gives: (page, command text) -> check(stdout, directory).
 STATED = {
     ("README.md", 'select(.name == "max_demand")'): lambda out, d: (
-        json.loads(out)["value"] > 0
+        type(json.loads(out)) in (int, float) and json.loads(out) > 0
+    ),
+    (INSTALL, "python -m ngraph --help"): lambda out, d: out.startswith(
+        "usage: ngraph "
     ),
     (TUTORIAL, "ngraph run example.yaml --output results/"): lambda out, d: (
         (d / "results/example.results.json").is_file()
@@ -191,11 +226,11 @@ STATED = {
 def test_every_command_is_run_or_named_as_not_run():
     seen = set()
     for page in pages():
-        for where, _, programs in commands(page):
-            program = programs[0][0]
-            assert program in {"ngraph", "jq"} | set(NOT_RUN), where
-            seen.add(program)
-    assert seen >= {"ngraph", "jq", *NOT_RUN}
+        for where, _, programs, _ in commands(page):
+            name = program(programs[0])
+            assert name in {"ngraph", "python -m ngraph", "jq"} | set(NOT_RUN), where
+            seen.add(name)
+    assert seen >= {"ngraph", "python -m ngraph", "jq", *NOT_RUN}
     assert {page for page, _ in STATED} <= set(PAGES)
 
 
@@ -206,19 +241,32 @@ def test_documented_commands_run_and_give_what_the_page_states(page, tmp_path):
     previous = Path.cwd()
     os.chdir(directory)
     try:
-        checked = set()
-        for where, text, programs in commands(page):
-            if programs[0][0] in NOT_RUN:
+        checked, printed = set(), {}
+        for where, text, programs, line in commands(page):
+            if program(programs[0]) in NOT_RUN:
                 continue
             out, status = run_command(programs, directory)
             assert status == 0, f"{where}: {text}"
+            printed[line] = out
             for (stated_page, excerpt), check in STATED.items():
                 if stated_page == page and excerpt in text:
                     assert check(out, directory), f"{where}: {text}"
                     checked.add(excerpt)
         assert checked == {excerpt for p, excerpt in STATED if p == page}
+        for line, shown in shown_outputs(page).items():
+            assert printed[line] == shown, f"{page}:{line}"
     finally:
         os.chdir(previous)
+
+
+def test_every_shown_shell_output_is_compared():
+    """Every output fence that follows a bash fence is one the command test compares."""
+    shown = sum(len(shown_outputs(page)) for page in pages())
+    text = "".join((ROOT / page).read_text() for page in pages())
+    written = re.findall(
+        r"```bash\n(?:(?!```).*\n)*```\n\n<!-- example: output -->", text
+    )
+    assert shown == len(written) > 0
 
 
 def test_a_filtered_export_keeps_the_execution_order(tmp_path, monkeypatch):

@@ -2,7 +2,7 @@
 
 A fence may be marked by an HTML comment on the line before it, `<!-- example: ... -->`;
 the comment does not render. `output` marks a text fence that shows what the Python
-fence before it prints.
+fence before it prints, or the last command of the shell fence before it.
 """
 
 import re
