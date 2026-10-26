@@ -9,13 +9,18 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Callable, Dict, List, Optional
 
+from ngraph.utils.values import _shown
 from ngraph.utils.yaml_utils import (
     check_no_extra_keys,
-    declared,
     normalize_yaml_dict_keys,
 )
-from ngraph.workflow.base import WorkflowStep
+from ngraph.workflow.base import WorkflowStep, _check_name_length
 from ngraph.workflow.base import step_type as registered_step
+from ngraph.workflow.diagnostics import (
+    workflow_declared,
+    workflow_error,
+    workflow_location,
+)
 
 
 def build_workflow_steps(
@@ -44,37 +49,56 @@ def build_workflow_steps(
     assigned_names: set[str] = set()
 
     for step_index, step_info in enumerate(workflow_data):
+        location = workflow_location(step_index, step_info.get("name"))
         step_type = step_info.get("type")
         if not step_type:
-            raise ValueError(
+            raise workflow_error(
+                location,
+                step_info["type"] if "type" in step_info else step_info,
                 "Each workflow entry must have a 'type' field "
-                "indicating the WorkflowStep subclass to use."
+                "indicating the WorkflowStep subclass to use.",
+                "type" if "type" in step_info else "",
             )
 
         step_cls = registered_step(step_type)
         if not step_cls:
-            raise ValueError(f"Unrecognized step 'type': {step_type}")
+            raise workflow_error(location, step_type, "unrecognized step type", "type")
 
         ctor_args = {k: v for k, v in step_info.items() if k != "type"}
         normalized_ctor_args = normalize_yaml_dict_keys(ctor_args)
 
-        raw_name = normalized_ctor_args.get("name")
+        raw_name = workflow_declared(
+            location,
+            step_info,
+            lambda normalized_ctor_args=normalized_ctor_args: _check_name_length(
+                normalized_ctor_args.get("name")
+            ),
+        )
         if isinstance(raw_name, str) and raw_name.strip() == "":
             raw_name = None
         step_name = raw_name or f"{step_type}_{step_index}"
 
+        workflow_declared(
+            workflow_location(step_index, step_name),
+            {"name": step_name},
+            lambda step_name=step_name: _check_name_length(step_name),
+        )
         if step_name in assigned_names:
-            raise ValueError(
-                f"workflow[{step_index}].name: Duplicate workflow step name {step_name!r}. Each step must have a unique name; got {normalized_ctor_args.get('name')!r}."
+            raise workflow_error(
+                workflow_location(step_index, step_name),
+                normalized_ctor_args.get("name"),
+                f"Duplicate workflow step name {step_name!r}. Each step must have a unique name; got {normalized_ctor_args.get('name')!r}.",
+                "name",
             )
         assigned_names.add(step_name)
 
         normalized_ctor_args["name"] = step_name
 
         # Each step type turns its own YAML keys into constructor arguments.
-        location = f"workflow[{step_index}] ({step_name})"
-        normalized_ctor_args = declared(
+        location = workflow_location(step_index, step_name)
+        normalized_ctor_args = workflow_declared(
             location,
+            step_info,
             lambda step_cls=step_cls,
             normalized_ctor_args=normalized_ctor_args,
             step_name=step_name: step_cls.yaml_arguments(
@@ -88,22 +112,32 @@ def build_workflow_steps(
             "yaml_label",
             "derived_seed",
         }
-        check_no_extra_keys(
-            normalized_ctor_args, init_fields, f"workflow step '{step_name}'"
+        workflow_declared(
+            location,
+            step_info,
+            lambda normalized_ctor_args=normalized_ctor_args,
+            init_fields=init_fields,
+            step_name=step_name: check_no_extra_keys(
+                normalized_ctor_args,
+                init_fields,
+                f"workflow step {_shown(str.__str__(step_name) if isinstance(step_name, str) else step_name)}",
+            ),
         )
         provenance: Dict[str, Any] = {"yaml_label": f"workflow step {step_name}"}
         if normalized_ctor_args.get("seed") is None:
             derived = derive_seed(step_name)
             if derived is not None:
                 normalized_ctor_args["seed"] = provenance["derived_seed"] = derived
-        steps.append(
-            declared(
-                location,
-                lambda step_cls=step_cls,
-                normalized_ctor_args=normalized_ctor_args,
-                provenance=provenance: step_cls(**normalized_ctor_args, **provenance),
-                step_type,
-            )
+        step = workflow_declared(
+            location,
+            step_info,
+            lambda step_cls=step_cls,
+            normalized_ctor_args=normalized_ctor_args,
+            provenance=provenance: step_cls(**normalized_ctor_args, **provenance),
+            step_type,
+            f"workflow step {step_name}",
+            f"workflow.{step_name}",
         )
+        steps.append(step)
 
     return steps

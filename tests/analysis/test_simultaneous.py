@@ -608,7 +608,7 @@ def test_pool_budgets_refuse_unknown_and_larger_offers():
     value = pool_scenario(10, [msd, step("tm", alpha_from_step="msd")])
     with pytest.raises(
         ValueError,
-        match="workflow.tm.interaction: demand pooled\\|0: its scale comes from MSD step "
+        match="interaction = 'simultaneous': demand pooled\\|0: its scale comes from MSD step "
         "msd, unknown at preparation, so TE ingress pool pooled\\|0 has no lossy offer budget",
     ):
         prepare(value)

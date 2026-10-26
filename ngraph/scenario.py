@@ -93,10 +93,22 @@ class Scenario:
                 f"Scenario.components_library: expected ComponentsLibrary, got {self.components_library!r}"
             )
         workflow = collection(self.workflow, "Scenario.workflow")
-        if not all(isinstance(step, WorkflowStep) for step in workflow):
-            raise TypeError(
-                f"Scenario.workflow: expected WorkflowStep values, got {self.workflow!r}"
-            )
+        for index, step in enumerate(workflow):
+            if not isinstance(step, WorkflowStep):
+                from ngraph.workflow.diagnostics import (
+                    workflow_error,
+                    workflow_location,
+                )
+
+                raise TypeError(
+                    str(
+                        workflow_error(
+                            workflow_location(index),
+                            step,
+                            "expected WorkflowStep values",
+                        )
+                    )
+                )
         object.__setattr__(self, "workflow", workflow)
         for name, kind in (
             ("demand_sets", DemandSet),

@@ -25,7 +25,7 @@ from ngraph.results import (
     TunnelCountAnalysis,
     TunnelCountRow,
 )
-from ngraph.utils.values import flag, integer, own, physical
+from ngraph.utils.values import _located_error, _shown, flag, integer, own, physical
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -37,8 +37,12 @@ def _count(value: object, label: str) -> int:
     try:
         return integer(value, label, minimum=1, maximum=MAX_COUNT + 1)
     except ValueError:
-        raise ValueError(
-            f"{label}: expected an integer in [1, {MAX_COUNT}], got {value!r}"
+        raise _located_error(
+            ValueError(
+                f"{label}: expected an integer in [1, {MAX_COUNT}], got {_shown(value)}"
+            ),
+            label,
+            value,
         ) from None
 
 
@@ -66,8 +70,12 @@ class TunnelCountQuery:
         if isinstance(self.counts, (str, bytes)) or not hasattr(
             self.counts, "__iter__"
         ):
-            raise TypeError(
-                f"tunnel_counts.counts: expected a sequence of integers, got {self.counts!r}"
+            raise _located_error(
+                TypeError(
+                    f"tunnel_counts.counts: expected a sequence of integers, got {_shown(self.counts)}"
+                ),
+                "tunnel_counts.counts",
+                self.counts,
             )
         counts = tuple(
             _count(value, f"tunnel_counts.counts[{index}]")
@@ -76,13 +84,25 @@ class TunnelCountQuery:
         seen: set[int] = set()
         for value in counts:
             if value in seen:
-                raise ValueError(f"tunnel_counts.counts: duplicate count {value}")
+                raise _located_error(
+                    ValueError(
+                        f"tunnel_counts.counts: duplicate count {_shown(value)}"
+                    ),
+                    "tunnel_counts.counts",
+                    self.counts,
+                )
             seen.add(value)
         object.__setattr__(self, "counts", counts)
         if self.up_to is not None:
             object.__setattr__(self, "up_to", _count(self.up_to, "tunnel_counts.up_to"))
         if not counts and self.up_to is None:
-            raise ValueError("tunnel_counts.counts: give at least one count or up_to")
+            raise _located_error(
+                ValueError(
+                    f"tunnel_counts.counts: give at least one count or up_to, got {_shown(self.counts)}"
+                ),
+                "tunnel_counts.counts",
+                self.counts,
+            )
         for name in ("design_demand", "offer"):
             object.__setattr__(
                 self, name, physical(getattr(self, name), f"tunnel_counts.{name}")
@@ -94,8 +114,12 @@ class TunnelCountQuery:
                 f"tunnel_counts.eligibility: expected native Eligibility, got {self.eligibility!r}"
             )
         if not isinstance(self.outputs, ngc.OutputOptions):
-            raise TypeError(
-                f"tunnel_counts.outputs: expected native OutputOptions, got {self.outputs!r}"
+            raise _located_error(
+                TypeError(
+                    f"tunnel_counts.outputs: expected native OutputOptions, got {_shown(self.outputs)}"
+                ),
+                "tunnel_counts.outputs",
+                self.outputs,
             )
         own(
             self,
@@ -122,9 +146,14 @@ class _Question:
 def _model(demand, label: str) -> ngc.CentralizedTE:
     model = demand.config.routing
     if not isinstance(model, ngc.CentralizedTE) or model.tunnel_count is None:
-        raise ValueError(
-            f"{label}.demands: demand {demand.id}: TunnelCountAnalysis needs a "
-            "CentralizedTE model with a tunnel count"
+        raise _located_error(
+            ValueError(
+                f"{label}.demands: demand {demand.id}: TunnelCountAnalysis needs a "
+                "CentralizedTE model with a tunnel count"
+            ),
+            label,
+            None,
+            field="demand_set",
         )
     return model
 

@@ -13,6 +13,7 @@ import netgraph_core as ngc
 from ngraph.analysis.units import LIMIT, quantize, validate_resolution
 from ngraph.model.network import DirectedLink, Network
 from ngraph.results import SyntheticIngress
+from ngraph.utils.values import _located_error
 
 if TYPE_CHECKING:
     from ngraph.model.demand import RouteSpec, WeightSpec
@@ -57,7 +58,12 @@ class NamedRoutes:
     def vector(self, name: str) -> tuple[int, ...]:
         """The named explicit edge weights."""
         if name not in self.weights:
-            raise ValueError(f"weights.{name}: unknown weights")
+            raise _located_error(
+                ValueError(f"weights.{name}: unknown weights"),
+                f"weights.{name}",
+                name,
+                field="model.routing.edge_weights",
+            )
         return self.weights[name]
 
 

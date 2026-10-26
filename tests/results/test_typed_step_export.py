@@ -392,7 +392,10 @@ def test_a_read_only_record_collection_is_not_a_json_result_or_question():
             PublishesNodes(name="nodes"),
             r"^unregistered result type ngraph\.utils\.values\._FrozenDict$",
         ),
-        (AsksNodes(name="nodes"), r"expected finite JSON data, got .*Node = Node\("),
+        (
+            AsksNodes(name="nodes"),
+            r"expected finite JSON data, got .*Node = Node\(",
+        ),
     ):
         prepared = prepare(Scenario(network, (first, Later(name="later"))))
         with pytest.raises((TypeError, ValueError), match=message):

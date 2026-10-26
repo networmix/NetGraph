@@ -33,7 +33,7 @@ def test_preparation_refusals_name_an_unnamed_step_by_its_class():
     scenario = Scenario(_network(), (TrafficMatrixPlacement(demand_set="nope"),))
     with pytest.raises(ValueError) as exc:
         prepare(scenario)
-    assert str(exc.value) == "step TrafficMatrixPlacement: unknown demand set 'nope'"
+    assert str(exc.value) == "workflow[0].demand_set = 'nope': unknown demand set"
 
 
 def test_a_subclass_labels_its_failure_states_refusal_with_its_class():
@@ -102,7 +102,7 @@ def test_an_unnamed_max_flows_query_refusals_use_its_class_name():
     empty = MaxFlow(source=Selector("^z"), target=Selector("^t$"))
     with pytest.raises(ValueError) as exc:
         run(prepare(Scenario(net, (empty,))))
-    assert str(exc.value) == "step MaxFlow.source: empty selection"
+    assert str(exc.value) == "workflow[0].source: empty selection"
     pinned = MaxFlow(
         source=Selector(r"^(s\d)$"),
         target=Selector("^t$"),
@@ -117,7 +117,7 @@ def test_an_unnamed_max_flows_query_refusals_use_its_class_name():
     )
     with pytest.raises(ValueError) as exc:
         run(prepare(scenario))
-    assert str(exc.value) == "step MaxFlow: pinned model requires one endpoint pair"
+    assert str(exc.value) == "workflow[0]: pinned model requires one endpoint pair"
 
 
 def test_an_unnamed_tunnel_counts_query_refusal_uses_its_class_name():
@@ -127,5 +127,5 @@ def test_an_unnamed_tunnel_counts_query_refusal_uses_its_class_name():
         TunnelCountAnalysis(demand_set="d", design_demand=1.0, offer=1.0)
     assert str(exc.value) == (
         "workflow step TunnelCountAnalysis: "
-        "tunnel_counts.counts: give at least one count or up_to"
+        "tunnel_counts.counts: give at least one count or up_to, got ()"
     )

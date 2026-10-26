@@ -100,6 +100,11 @@ def _frozen_list(items: list) -> list:
 # never numbers. Each refusal names the field and the value.
 
 
+def _bounded(text: str, limit: int = 220) -> str:
+    plain = str.__str__(text)
+    return plain if len(plain) <= limit else plain[: limit - 3] + "..."
+
+
 def _shown(value: object) -> str:
     """Render an input without letting its representation replace a refusal."""
     try:
@@ -179,9 +184,26 @@ def _is_flag(value: object) -> bool:
     return isinstance(value, (bool, np.bool_))
 
 
-def _input_error(label: str, detail: str) -> ValueError:
+def _located_error(error, label, value, *, field=None, reason=None):
+    """Carry diagnostic field/value context without reading the rendered message."""
+    error.__dict__["_input_label"] = label
+    error.__dict__["_input_value"] = value
+    message = str(error)
+    error.__dict__["_input_reason"] = (
+        reason
+        if reason is not None
+        else message[len(label) + 2 :]
+        if message.startswith(label + ": ")
+        else message
+    )
+    if field is not None:
+        error.__dict__["_workflow_field"] = field
+    return error
+
+
+def _input_error(label: str, detail: str, *, value=None) -> ValueError:
     """A refusal with a field-relative path, independent of its readable label."""
-    error = ValueError(f"{label}: {detail}")
+    error = _located_error(ValueError(f"{label}: {detail}"), label, value)
     error.__dict__["_input_path"] = ()
     error.__dict__["_input_detail"] = detail
     return error
@@ -193,10 +215,10 @@ def text(value: object, label: str, *, empty: bool = False) -> str:
     A name is nonempty; whitespace is part of a name, as in every other text.
     """
     if not isinstance(value, str):
-        raise _input_error(label, f"expected text, got {_shown(value)}")
+        raise _input_error(label, f"expected text, got {_shown(value)}", value=value)
     plain = str.__str__(value)
     if not plain and not empty:
-        raise _input_error(label, "expected a nonempty name, got ''")
+        raise _input_error(label, "expected a nonempty name, got ''", value=value)
     return plain
 
 
@@ -211,7 +233,9 @@ def pattern(value: object, label: str, *, empty: bool = False) -> str:
     try:
         re.compile(plain)
     except re.error as exc:
-        raise ValueError(f"{label}: invalid pattern {plain!r}: {exc}") from exc
+        raise _located_error(
+            ValueError(f"{label}: invalid pattern {_shown(plain)}: {exc}"), label, value
+        ) from exc
     return plain
 
 
@@ -223,7 +247,7 @@ def optional_pattern(value: object, label: str, *, empty: bool = False) -> str |
 def flag(value: object, label: str) -> bool:
     """A boolean field: a bool or a NumPy boolean, stored as bool."""
     if not _is_flag(value):
-        raise _input_error(label, f"expected bool, got {_shown(value)}")
+        raise _input_error(label, f"expected bool, got {_shown(value)}", value=value)
     return bool(value)
 
 
@@ -235,17 +259,29 @@ def optional_flag(value: object, label: str) -> bool | None:
 def physical(value: object, label: str, *, positive: bool = False) -> float:
     """Promote a finite nonnegative real input (an amount or a ratio) to binary64."""
     if _is_flag(value) or not isinstance(value, Real):
-        raise ValueError(f"{label}: expected a finite real number, got {_shown(value)}")
+        raise _located_error(
+            ValueError(f"{label}: expected a finite real number, got {_shown(value)}"),
+            label,
+            value,
+        )
     try:
         number = float(value)
     except (OverflowError, ValueError) as exc:
-        raise ValueError(
-            f"{label}: physical value is outside binary64 range, got {_shown(value)}"
+        raise _located_error(
+            ValueError(
+                f"{label}: physical value is outside binary64 range, got {_shown(value)}"
+            ),
+            label,
+            value,
         ) from exc
     if not math.isfinite(number) or number < 0 or (positive and number == 0):
-        raise ValueError(
-            f"{label}: expected a finite {'positive' if positive else 'nonnegative'} "
-            f"amount, got {_shown(value)}"
+        raise _located_error(
+            ValueError(
+                f"{label}: expected a finite {'positive' if positive else 'nonnegative'} "
+                f"amount, got {_shown(value)}"
+            ),
+            label,
+            value,
         )
     return number
 
@@ -258,7 +294,9 @@ def integer(
     Booleans and fractions are refused; the value is stored as int.
     """
     if _is_flag(value):
-        raise _input_error(label, f"expected an integer, got {_shown(value)}")
+        raise _input_error(
+            label, f"expected an integer, got {_shown(value)}", value=value
+        )
     # A subclass of int or float is read as its stored value, not its conversions.
     if isinstance(value, int):
         number = int.__int__(value)
@@ -269,7 +307,9 @@ def integer(
     elif isinstance(value, np.floating) and float(value).is_integer():
         number = int(float(value))
     else:
-        raise _input_error(label, f"expected an integer, got {_shown(value)}")
+        raise _input_error(
+            label, f"expected an integer, got {_shown(value)}", value=value
+        )
     if (minimum is not None and number < minimum) or (
         maximum is not None and number >= maximum
     ):
@@ -277,6 +317,7 @@ def integer(
             label,
             f"integer outside [{_bound(minimum)}, {_bound(maximum)}), "
             f"got {_shown(value)}",
+            value=value,
         )
     return number
 
@@ -302,11 +343,19 @@ def optional_integer(
 def collection(value, label: str) -> tuple:
     """Own an iterable collection, refusing scalars with its field and raw value."""
     if isinstance(value, (str, bytes, Mapping)):
-        raise TypeError(f"{label}: expected a collection, got {_shown(value)}")
+        raise _located_error(
+            TypeError(f"{label}: expected a collection, got {_shown(value)}"),
+            label,
+            value,
+        )
     try:
         return tuple(value)
     except TypeError as exc:
-        raise TypeError(f"{label}: expected a collection, got {_shown(value)}") from exc
+        raise _located_error(
+            TypeError(f"{label}: expected a collection, got {_shown(value)}"),
+            label,
+            value,
+        ) from exc
 
 
 def own(record: object, **values: object) -> None:
@@ -323,14 +372,20 @@ def exact_fraction(value: object, label: str) -> Fraction:
     the declaration means. NumPy integers and strings count as their kind.
     """
     if _is_flag(value) or not isinstance(value, (Integral, str, Fraction)):
-        raise ValueError(
-            f"{label}: expected exact integer or fraction string, got {_shown(value)}"
+        raise _located_error(
+            ValueError(
+                f"{label}: expected exact integer or fraction string, got {_shown(value)}"
+            ),
+            label,
+            value,
         )
     try:
         return Fraction(value if isinstance(value, Fraction) else _exact(value))
     except (ValueError, ZeroDivisionError) as exc:
-        raise ValueError(
-            f"{label}: invalid exact fraction, got {_shown(value)}"
+        raise _located_error(
+            ValueError(f"{label}: invalid exact fraction, got {_shown(value)}"),
+            label,
+            value,
         ) from exc
 
 
@@ -366,7 +421,7 @@ def _plain(value, label):
         raise
     except Exception as exc:
         raise _input_error(
-            label, f"cannot normalize scalar {_type_name(value)}"
+            label, f"cannot normalize scalar {_type_name(value)}", value=value
         ) from exc
     return value
 
@@ -393,7 +448,9 @@ def frozen_json(
             plain = _plain(value, label)
         except ValueError as exc:
             raise _input_error(
-                label, f"expected finite JSON data, got {_type_name(value)}"
+                label,
+                f"expected finite JSON data, got {_type_name(value)}",
+                value=value,
             ) from exc
         if not isinstance(plain, float) or math.isfinite(plain):
             return plain
@@ -410,20 +467,26 @@ def frozen_json(
     elif isinstance(value, Mapping):
         if strict_objects and not isinstance(value, dict):
             raise _input_error(
-                label, f"JSON objects must be dict values, got {_shown(value)}"
+                label,
+                f"JSON objects must be dict values, got {_shown(value)}",
+                value=value,
             )
         result, same = {}, type(value) is _FrozenDict
         for key, item in value.items():
             if not isinstance(key, str):
                 raise _input_error(
-                    label, f"JSON object keys must be strings, got {_shown(key)}"
+                    label,
+                    f"JSON object keys must be strings, got {_shown(key)}",
+                    value=value,
                 )
             plain = _plain(key, label)
             result[plain] = _json_child(item, f"{label}.{plain}", plain, strict_objects)
             same = same and plain is key and result[plain] is item
         return cast(dict, value) if same else frozen_dict(result)
     raise _input_error(
-        label, f"expected finite JSON data, got {_type_name(value)} = {_shown(value)}"
+        label,
+        f"expected finite JSON data, got {_type_name(value)} = {_shown(value)}",
+        value=value,
     )
 
 
@@ -439,7 +502,9 @@ def _json_child(value, label, part, strict_objects):
 def frozen_attrs(value: object, label: str = "attrs") -> dict[str, JSONValue]:
     """Validate an attribute mapping once and return its read-only JSON form."""
     if not isinstance(value, Mapping):
-        raise _input_error(label, f"expected a mapping, got {_shown(value)}")
+        raise _input_error(
+            label, f"expected a mapping, got {_shown(value)}", value=value
+        )
     result = frozen_json(value, label)
     assert isinstance(result, dict)
     return result

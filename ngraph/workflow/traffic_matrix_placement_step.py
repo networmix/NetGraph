@@ -10,6 +10,8 @@ from ngraph.analysis.placement import PlacementQuery, place, state_names
 from ngraph.analysis.preparation import StepNeeds
 from ngraph.results import MSDAnalysis, StateName, StepContext, StepOutput
 from ngraph.utils.values import (
+    _located_error,
+    _shown,
     flag,
     integer,
     optional_text,
@@ -61,11 +63,16 @@ class TrafficMatrixPlacement(WorkflowStep):
             "ordered",
             "simultaneous",
         ):
-            raise ValueError(
-                f"workflow.{step_name(self)}.interaction: "
-                f"expected ordered or simultaneous, got {self.interaction!r}"
+            raise _located_error(
+                ValueError(
+                    f"workflow.{step_name(self)}.interaction: "
+                    f"expected ordered or simultaneous, got {_shown(self.interaction)}"
+                ),
+                f"workflow.{step_name(self)}.interaction",
+                self.interaction,
             )
         if self.alpha is not None:
+            raw_alpha = self.alpha
             object.__setattr__(
                 self,
                 "alpha",
@@ -73,7 +80,7 @@ class TrafficMatrixPlacement(WorkflowStep):
             )
             if self.alpha_from_step is not None:
                 raise ValueError(
-                    "TrafficMatrixPlacement: alpha and alpha_from_step are exclusive"
+                    f"TrafficMatrixPlacement: alpha and alpha_from_step are exclusive, got {_shown((raw_alpha, self.alpha_from_step))}"
                 )
         request = FailureRequest(
             None,
@@ -83,7 +90,7 @@ class TrafficMatrixPlacement(WorkflowStep):
         )
         if not isinstance(self.outputs, ngc.OutputOptions):
             raise TypeError(
-                f"TrafficMatrixPlacement.outputs: expected native OutputOptions, got {self.outputs!r}"
+                f"TrafficMatrixPlacement.outputs: expected native OutputOptions, got {_shown(self.outputs)}"
             )
         own(
             self,

@@ -763,9 +763,7 @@ def test_group_states_refuse_a_programmed_router_inside_the_domain():
     step = TrafficMatrixPlacement(
         name="tm", demand_set="d", workers=1, failure_policy="f", iterations=0
     )
-    with pytest.raises(
-        ValueError, match="workflow.tm.failure_states: forwarding_groups.u"
-    ):
+    with pytest.raises(ValueError, match="failure_states: forwarding_groups.u"):
         prepare(
             Scenario(
                 value.network,

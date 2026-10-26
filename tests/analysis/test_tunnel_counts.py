@@ -550,7 +550,10 @@ def test_an_offer_above_a_prepared_budget_is_refused():
 @pytest.mark.parametrize(
     ("fields", "message"),
     [
-        ({"counts": ()}, r"^tunnel_counts\.counts: give at least one count or up_to$"),
+        (
+            {"counts": ()},
+            r"^tunnel_counts\.counts: give at least one count or up_to, got \(\)$",
+        ),
         (
             {"counts": (0,)},
             r"^tunnel_counts\.counts\[0\]: expected an integer in \[1, 10000\], got 0$",

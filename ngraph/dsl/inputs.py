@@ -26,7 +26,14 @@ from ngraph.model.demand import (
 )
 from ngraph.model.network import DirectedLink
 from ngraph.model.selectors import normalize_selector
-from ngraph.utils.values import exact_fraction, flag, integer, physical
+from ngraph.utils.values import (
+    _located_error,
+    _shown,
+    exact_fraction,
+    flag,
+    integer,
+    physical,
+)
 from ngraph.utils.yaml_utils import (
     check_no_extra_keys,
     declared,
@@ -44,7 +51,7 @@ OUTPUT_FLAGS = (
 
 def mapping(value, label):
     if not isinstance(value, dict):
-        raise ValueError(f"{label}: expected mapping")
+        raise _located_error(ValueError(f"{label}: expected mapping"), label, value)
     return value
 
 
@@ -56,13 +63,19 @@ def closed(value, keys, label):
 
 def enum(kind, value, label):
     if not isinstance(value, str):
-        raise ValueError(f"{label}: expected lowercase enum name")
+        raise _located_error(
+            ValueError(f"{label}: expected lowercase enum name"), label, value
+        )
     try:
         result = kind.__members__[value.upper()]
     except KeyError as exc:
-        raise ValueError(f"{label}: unknown value {value!r}") from exc
+        raise _located_error(
+            ValueError(f"{label}: unknown value {_shown(value)}"), label, value
+        ) from exc
     if value != value.lower():
-        raise ValueError(f"{label}: expected lowercase enum name")
+        raise _located_error(
+            ValueError(f"{label}: expected lowercase enum name"), label, value
+        )
     return result
 
 
@@ -72,8 +85,12 @@ def names(value, label, *, nonempty=False):
         or not all(isinstance(n, str) and n for n in value)
         or (nonempty and not value)
     ):
-        raise ValueError(
-            f"{label}: expected {'nonempty ' if nonempty else ''}list of names"
+        raise _located_error(
+            ValueError(
+                f"{label}: expected {'nonempty ' if nonempty else ''}list of names"
+            ),
+            label,
+            value,
         )
     return tuple(value)
 
@@ -81,7 +98,9 @@ def names(value, label, *, nonempty=False):
 def directed(value, label):
     value = closed(value, ("link", "direction"), label)
     if set(value) != {"link", "direction"}:
-        raise ValueError(f"{label}: link and direction are required")
+        raise _located_error(
+            ValueError(f"{label}: link and direction are required"), label, value
+        )
     return declared(
         label,
         lambda: DirectedLink(value["link"], value["direction"]),
@@ -102,25 +121,37 @@ def tunnel_count(value, label):
 def ceiling(value, label):
     value = closed(value, ("type", "value"), label)
     if set(value) != {"type", "value"}:
-        raise ValueError(f"{label}: type and value are required")
+        raise _located_error(
+            ValueError(f"{label}: type and value are required"), label, value
+        )
     if value["type"] == "absolute":
         return ngc.AbsoluteCost(integer(value["value"], label + ".value"))
     if value["type"] == "stretch":
         return ngc.CostStretch(exact_fraction(value["value"], f"{label}.value"))
-    raise ValueError(f"{label}.type: expected absolute or stretch")
+    raise _located_error(
+        ValueError(f"{label}.type: expected absolute or stretch"),
+        label + ".type",
+        value["type"],
+    )
 
 
 def policy(value, label):
     """Parse one discriminated model, retaining physical T1 minimum until q is fixed."""
     try:
         if "preset" in value and "model" in value:
-            raise ValueError(f"{label}: preset and model are exclusive")
+            raise _located_error(
+                ValueError(f"{label}: preset and model are exclusive"), label, value
+            )
         if "model" not in value:
             try:
                 return FlowPolicyPreset(value.get("preset", "SHORTEST_PATHS_ECMP"))
             except (TypeError, ValueError) as exc:
-                raise ValueError(
-                    f"{label}.preset: unknown preset {value.get('preset')!r}"
+                raise _located_error(
+                    ValueError(
+                        f"{label}.preset: unknown preset {_shown(value.get('preset'))}"
+                    ),
+                    label + ".preset",
+                    value.get("preset"),
                 ) from exc
         model = closed(value["model"], ("routing", "admission"), label + ".model")
         admission = enum(
@@ -169,7 +200,11 @@ def policy(value, label):
             )
             weight = routing.get("edge_weights")
             if weight is not None and (not isinstance(weight, str) or not weight):
-                raise ValueError(f"{location}.edge_weights: expected a name")
+                raise _located_error(
+                    ValueError(f"{location}.edge_weights: expected a name"),
+                    location + ".edge_weights",
+                    weight,
+                )
             tie = enum(
                 ngc.RouteTieBreak,
                 routing.get("tie_break", "fewer_hops"),
@@ -274,12 +309,20 @@ def policy(value, label):
                 routing.get("edge_weights"),
             )
         else:
-            raise ValueError(f"{location}.type: unknown routing type {kind!r}")
+            raise _located_error(
+                ValueError(f"{location}.type: unknown routing type {_shown(kind)}"),
+                location + ".type",
+                kind,
+            )
         return _ParsedModel(parsed, admission)
     except (ValueError, TypeError) as exc:
         if str(exc).startswith(label + ":") or str(exc).startswith(label + "."):
             raise
-        raise type(exc)(f"{label}: {exc}") from exc
+        error = type(exc)(f"{label}: {exc}")
+        error.__dict__.update(exc.__dict__)
+        if not hasattr(error, "_input_label"):
+            _located_error(error, label + ".model", value.get("model"))
+        raise error from exc
 
 
 def named_declarations(data):
@@ -482,7 +525,11 @@ def flow_outputs(arguments, name):
         ("export_cost_distribution", "outputs.cost_distribution"),
     ):
         if key in arguments:
-            raise ValueError(f"{label}: unknown key {key}; use {replacement}")
+            raise _located_error(
+                ValueError(f"{label}: unknown key {key}; use {replacement}"),
+                label + "." + key,
+                arguments[key],
+            )
     native, cost, details = outputs(arguments.get("outputs", {}), f"{label}.outputs")
     arguments["outputs"] = native
     arguments["export_cost_distribution"] = cost

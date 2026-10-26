@@ -31,7 +31,7 @@ from ngraph.results import (
     UpperCertificate,
     exact_alpha,
 )
-from ngraph.utils.values import flag, integer, own, physical
+from ngraph.utils.values import _located_error, _shown, flag, integer, own, physical
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -73,11 +73,17 @@ class MSDQuery:
                 self, name, physical(getattr(self, name), f"msd.{name}", positive=True)
             )
         if self.growth_factor <= 1:
-            raise ValueError(f"msd.growth_factor: must exceed 1, got {raw_growth!r}")
+            raise _located_error(
+                ValueError(
+                    f"msd.growth_factor: must exceed 1, got {_shown(raw_growth)}"
+                ),
+                "msd.growth_factor",
+                raw_growth,
+            )
         if not self.alpha_min <= self.alpha_start <= self.alpha_max:
             raise ValueError(
                 "msd: require alpha_min <= alpha_start <= alpha_max, "
-                f"got {raw_bounds!r}"
+                f"got {_shown(raw_bounds)}"
             )
         own(
             self,

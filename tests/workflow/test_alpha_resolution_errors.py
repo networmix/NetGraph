@@ -49,7 +49,7 @@ def _consumer():
     ],
 )
 def test_missing_producer_step_reports_step_error(workflow):
-    with pytest.raises(ValueError, match="alpha_from_step 'msd'.*earlier MSD"):
+    with pytest.raises(ValueError, match="alpha_from_step = 'msd':.*earlier MSD"):
         prepare(_scenario(workflow))
     result = run(prepare(_scenario((_producer(), _consumer()))))
     producer, consumer = result.steps

@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import Any, Literal, Optional, get_args
 
 from ngraph.utils.values import (
+    _located_error,
+    _shown,
     collection,
     frozen_json,
     optional_flag,
@@ -64,12 +66,20 @@ class Condition:
     def __post_init__(self) -> None:
         attr = text(self.attr, "condition.attr")
         if not isinstance(self.op, str) or self.op not in VALID_OPERATORS:
-            raise ValueError(
-                f"condition.op: expected one of {sorted(VALID_OPERATORS)}, got {self.op!r}"
+            raise _located_error(
+                ValueError(
+                    f"condition.op: expected one of {sorted(VALID_OPERATORS)}, got {_shown(self.op)}"
+                ),
+                "condition.op",
+                self.op,
             )
         if self.op in ("in", "not_in") and not isinstance(self.value, list):
-            raise ValueError(
-                f"condition {attr}.value: {self.op!r} requires a list, got {self.value!r}"
+            raise _located_error(
+                ValueError(
+                    f"condition {attr}.value: {_shown(self.op)} requires a list, got {_shown(self.value)}"
+                ),
+                f"condition {attr}.value",
+                self.value,
             )
         own(
             self,
@@ -95,10 +105,12 @@ class MatchSpec:
         conditions = collection(self.conditions, "match.conditions")
         if not all(isinstance(c, Condition) for c in conditions):
             raise TypeError(
-                f"match.conditions: expected Condition values, got {conditions!r}"
+                f"match.conditions: expected Condition values, got {_shown(conditions)}"
             )
         if not isinstance(self.logic, str) or self.logic not in ("and", "or"):
-            raise ValueError(f"match.logic: expected and or or, got {self.logic!r}")
+            raise ValueError(
+                f"match.logic: expected and or or, got {_shown(self.logic)}"
+            )
         own(self, conditions=conditions, logic=str.__str__(self.logic))
 
 
@@ -140,5 +152,5 @@ class Selector:
         )
         if self.match is not None and not isinstance(self.match, MatchSpec):
             raise TypeError(
-                f"Selector 'match' must be MatchSpec or None, got {self.match!r}"
+                f"Selector 'match' must be MatchSpec or None, got {_shown(self.match)}"
             )

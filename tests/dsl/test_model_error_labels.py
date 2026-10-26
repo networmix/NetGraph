@@ -49,7 +49,7 @@ def test_illegal_native_combination_keeps_yaml_path(owner, kind):
             + model
             + "}\n"
         )
-        label = "workflow step m"
+        label = "workflow[0] (name 'm')"
     with pytest.raises(ValueError) as error:
         prepare(Scenario.from_yaml(text))
     assert str(error.value).startswith(label + ": ")

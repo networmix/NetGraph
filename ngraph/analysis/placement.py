@@ -41,7 +41,14 @@ from ngraph.results import (
     StateName,
     exact_alpha,
 )
-from ngraph.utils.values import flag, optional_text, own, physical
+from ngraph.utils.values import (
+    _located_error,
+    _shown,
+    flag,
+    optional_text,
+    own,
+    physical,
+)
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -107,12 +114,22 @@ class PlacementQuery:
 def state_names(value, label) -> tuple[StateName, ...]:
     """Requested failure states: nonempty and unique, held in canonical order."""
     if isinstance(value, str) or not isinstance(value, (tuple, list)):
-        raise ValueError(f"{label}: expected a list of failure states")
+        raise _located_error(
+            ValueError(
+                f"{label}: expected a list of failure states, got {_shown(value)}"
+            ),
+            label,
+            value,
+        )
     names = list(value)
     unknown = [name for name in names if name not in STATE_ORDER]
     if unknown or not names or len(set(names)) != len(names):
-        raise ValueError(
-            f"{label}: expected distinct states from {list(STATE_ORDER)}, got {names}"
+        raise _located_error(
+            ValueError(
+                f"{label}: expected distinct states from {list(STATE_ORDER)}, got {_shown(names)}"
+            ),
+            label,
+            value,
         )
     return tuple(name for name in STATE_ORDER if name in names)
 

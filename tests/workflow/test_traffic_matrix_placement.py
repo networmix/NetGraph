@@ -85,7 +85,7 @@ def test_traffic_matrix_placement_alpha_from_step_missing_msd_raises():
     step = TrafficMatrixPlacement(
         name="tm", demand_set="load", alpha_from_step="absent"
     )
-    with pytest.raises(ValueError, match="alpha_from_step 'absent'.*earlier MSD"):
+    with pytest.raises(ValueError, match="alpha_from_step = 'absent':.*earlier MSD"):
         prepare(_scenario((step,)))
     assert _placement()[1].question.alpha == 1
 

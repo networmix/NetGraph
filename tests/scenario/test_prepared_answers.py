@@ -116,7 +116,7 @@ def test_custom_step_needs_bind_its_demand_set_and_refuse_unknown_names():
     unknown = Scenario(
         network(), [Needs(name="custom", demand_set="nope")], demand_sets={"load": load}
     )
-    with pytest.raises(ValueError, match="step custom: unknown demand set 'nope'"):
+    with pytest.raises(ValueError, match="demand_set = 'nope': unknown demand set"):
         prepare(unknown)
 
 

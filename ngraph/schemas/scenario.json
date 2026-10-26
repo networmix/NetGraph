@@ -1468,7 +1468,8 @@
             "minLength": 1
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 100
           },
           "seed": {
             "type": [
@@ -1501,7 +1502,8 @@
                   "minLength": 1
                 },
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "seed": {
                   "type": [
@@ -1538,7 +1540,8 @@
                   "minLength": 1
                 },
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "seed": {
                   "type": [
@@ -1579,7 +1582,8 @@
                   "minLength": 1
                 },
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "seed": {
                   "type": [
@@ -1632,7 +1636,8 @@
                   "minLength": 1
                 },
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "seed": {
                   "type": [
@@ -1763,7 +1768,8 @@
                   "minLength": 1
                 },
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "seed": {
                   "type": [
@@ -1872,7 +1878,8 @@
                   "minLength": 1
                 },
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "seed": {
                   "type": [
@@ -1949,7 +1956,8 @@
                   "minLength": 1
                 },
                 "name": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 100
                 },
                 "seed": {
                   "type": [

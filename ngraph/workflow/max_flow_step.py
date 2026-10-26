@@ -15,6 +15,8 @@ from ngraph.model.demand import FlowPolicyPreset, PinnedRoutes, _ParsedModel
 from ngraph.model.selectors import Selector
 from ngraph.results import StepContext, StepOutput
 from ngraph.utils.values import (
+    _located_error,
+    _shown,
     flag,
     integer,
     optional_text,
@@ -57,24 +59,30 @@ class MaxFlow(WorkflowStep):
             self.target, Selector
         ):
             raise TypeError(
-                f"MaxFlow endpoints: expected Selectors, got {(self.source, self.target)!r}"
+                f"MaxFlow endpoints: expected Selectors, got {_shown((self.source, self.target))}"
             )
         if not isinstance(self.mode, str) or self.mode not in ("combine", "pairwise"):
-            raise ValueError(
-                f"MaxFlow.mode: expected combine or pairwise, got {self.mode!r}"
+            raise _located_error(
+                ValueError(
+                    f"MaxFlow.mode: expected combine or pairwise, got {_shown(self.mode)}"
+                ),
+                "MaxFlow.mode",
+                self.mode,
             )
         if self.preset is not None and self.model is not None:
-            raise ValueError("MaxFlow: preset and model are exclusive")
+            raise ValueError(
+                f"MaxFlow: preset and model are exclusive, got {_shown((self.preset, self.model))}"
+            )
         if self.preset is not None and not isinstance(self.preset, FlowPolicyPreset):
             raise TypeError(
-                f"MaxFlow.preset: expected FlowPolicyPreset, got {self.preset!r}"
+                f"MaxFlow.preset: expected FlowPolicyPreset, got {_shown(self.preset)}"
             )
         if self.model is not None and not isinstance(
             self.model, (ngc.FlowPolicyConfig, PinnedRoutes, _ParsedModel)
         ):
             raise TypeError(
                 "MaxFlow.model: expected a declared model or native FlowPolicyConfig, "
-                f"got {self.model!r}"
+                f"got {_shown(self.model)}"
             )
         for name in ("offer", "design_demand"):
             if getattr(self, name) is not None:
@@ -89,7 +97,7 @@ class MaxFlow(WorkflowStep):
         )
         if not isinstance(self.outputs, ngc.OutputOptions):
             raise TypeError(
-                f"MaxFlow.outputs: expected native OutputOptions, got {self.outputs!r}"
+                f"MaxFlow.outputs: expected native OutputOptions, got {_shown(self.outputs)}"
             )
         own(
             self,
@@ -112,12 +120,23 @@ class MaxFlow(WorkflowStep):
 
         for endpoint in ("source", "target"):
             if endpoint not in arguments:
-                raise ValueError(f"workflow step {name}: {endpoint} is required")
-            arguments[endpoint] = declared(
-                f"workflow step {name}.{endpoint}",
-                partial(normalize_selector, arguments[endpoint], "workflow"),
-                "selector",
-            )
+                raise _located_error(
+                    ValueError(f"workflow step {name}: {endpoint} is required"),
+                    f"workflow step {name}.{endpoint}",
+                    None,
+                )
+            try:
+                arguments[endpoint] = declared(
+                    f"workflow step {name}.{endpoint}",
+                    partial(normalize_selector, arguments[endpoint], "workflow"),
+                    "selector",
+                )
+            except (ValueError, TypeError) as exc:
+                if not hasattr(exc, "_input_label"):
+                    _located_error(
+                        exc, f"workflow step {name}.{endpoint}", arguments[endpoint]
+                    )
+                raise
         for optional in ("preset", "model"):
             if arguments.get(optional) is None:
                 arguments.pop(optional, None)
@@ -157,8 +176,17 @@ class MaxFlow(WorkflowStep):
             f"step {step_name(self)}",
         )
         if isinstance(self.declaration, PinnedRoutes) and len(pairs) != 1:
-            raise ValueError(
-                f"step {step_name(self)}: pinned model requires one endpoint pair"
+            raise _located_error(
+                ValueError(
+                    f"step {step_name(self)}: pinned model requires one endpoint pair"
+                ),
+                f"step {step_name(self)}",
+                {
+                    "source": self.source.path,
+                    "target": self.target.path,
+                    "mode": self.mode,
+                },
+                field="",
             )
         config = materialize_config(
             prepared.topology, prepared._named, pairs[0], self.declaration

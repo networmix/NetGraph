@@ -470,9 +470,10 @@ def test_python_and_yaml_refuse_and_store_the_same_values(
         else:
             if case == "selector path" and field_path[-1] != "path":
                 field_path += ["path"]
-            expected = (
-                location(field_path, constructor=True) + python_message[len(label) :]
-            )
+            expected = location(field_path)
+            if field_path[0] == "workflow":
+                expected += f" = {raw!r}"
+            expected += python_message[len(label) :]
             assert str(yaml_error.value) == expected, (
                 case,
                 value,
@@ -538,7 +539,7 @@ PYTHON_LABELS = {
 }
 
 
-def location(path, constructor=False):
+def location(path):
     result = ""
     for index, part in enumerate(path):
         result += (
@@ -546,8 +547,8 @@ def location(path, constructor=False):
         )
         if path[: index + 1] == ["network", "links", 0]:
             result += " (A->T)"
-        if constructor and path[:index] == ["workflow"]:
-            result += f" ({BASE['workflow'][part]['name']})"
+        if path[:index] == ["workflow"]:
+            result += f" (name {BASE['workflow'][part]['name']!r})"
     return result
 
 

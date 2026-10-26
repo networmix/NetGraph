@@ -10,13 +10,25 @@ from ngraph.results import (
     StepContext,
     StepOutput,
 )
-from ngraph.utils.values import collection, flag, own, shared_copy, text
+from ngraph.utils.values import (
+    _located_error,
+    _shown,
+    collection,
+    flag,
+    own,
+    shared_copy,
+    text,
+)
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 
 def _names(values, label):
     if isinstance(values, str):
-        raise ValueError(f"{label}: expected a sequence of names, got {values!r}")
+        raise _located_error(
+            ValueError(f"{label}: expected a sequence of names, got {_shown(values)}"),
+            label,
+            values,
+        )
     return tuple(sorted({text(name, label) for name in collection(values, label)}))
 
 

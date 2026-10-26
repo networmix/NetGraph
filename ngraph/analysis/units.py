@@ -19,7 +19,7 @@ from ngraph.results import (
     UnitsReport,
     UnverifiedConstraint,
 )
-from ngraph.utils.values import integer, physical
+from ngraph.utils.values import _located_error, integer, physical
 
 LIMIT = 1 << 62
 _InputKind: TypeAlias = Literal[
@@ -342,9 +342,13 @@ def choose_resolution(
                 break
     if not valid:
         detail = failures[max(failures)]
-        raise ValueError(
-            f"{detail.label}: no legal resolution represents the complete prepared input/augmented graph"
+        reason = (
+            "no legal resolution represents the complete prepared input/augmented graph"
         )
+        error = ValueError(f"{detail.label}: {reason}")
+        if detail.kind == "amount":
+            _located_error(error, detail.label, inputs[detail.label][1])
+        raise error
     q = valid[-1]
     value = last[1] if last is not None and last[0] == q else candidate(q)[0]
     return value, failures.get(q / 2)

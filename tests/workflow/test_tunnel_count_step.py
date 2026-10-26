@@ -389,7 +389,7 @@ def test_a_non_tunnelled_set_is_refused_at_preparation():
     )
     with pytest.raises(
         ValueError,
-        match=r"^workflow\.c\.demands: demand x\|0: TunnelCountAnalysis needs a "
+        match=r"^workflow\[0\] \(name 'c'\).demand_set = 'd': workflow\.c\.demands: demand x\|0: TunnelCountAnalysis needs a "
         r"CentralizedTE model with a tunnel count$",
     ):
         prepare(scenario(TWO_HEADS, [spec], (step(),)))
@@ -525,7 +525,7 @@ workflow:
         (
             {"counts": ()},
             ValueError,
-            r"tunnel_counts\.counts: give at least one count or up_to",
+            r"tunnel_counts\.counts: give at least one count or up_to, got \(\)",
         ),
         (
             {"outputs": {}},
@@ -546,7 +546,7 @@ def test_an_unnamed_step_names_itself_by_its_class():
     with pytest.raises(
         ValueError,
         match=r"^workflow step TunnelCountAnalysis: tunnel_counts\.counts: give at "
-        r"least one count or up_to$",
+        r"least one count or up_to, got \(\)$",
     ):
         TunnelCountAnalysis(demand_set="d", counts=(), design_demand=1, offer=1)
 
@@ -586,12 +586,18 @@ def test_the_scenario_schema_refuses_what_the_step_does_not_take(extra, message)
             "Unrecognized key\\(s\\) in workflow step 'counts': failure_policy",
         ),
         ({"export_details": True}, "unknown key export_details; use outputs.details"),
-        ({"counts": 4}, "counts: expected a list of integers"),
-        ({"design_demand": None}, r"workflow\[0\] \(counts\).design_demand: required"),
-        ({"offer": None}, r"workflow\[0\] \(counts\).offer: required"),
+        ({"counts": 4}, "counts = 4: expected a list of integers"),
+        (
+            {"design_demand": None},
+            r"workflow\[0\] \(name 'counts'\).design_demand = None: required",
+        ),
+        (
+            {"offer": None},
+            r"workflow\[0\] \(name 'counts'\).offer = None: required",
+        ),
         (
             {"counts": [1, 1]},
-            r"^workflow\[0\] \(counts\): workflow step counts: tunnel_counts\.counts: duplicate count 1$",
+            r"^workflow\[0\] \(name 'counts'\).counts = \[1, 1\]: duplicate count 1$",
         ),
     ],
 )

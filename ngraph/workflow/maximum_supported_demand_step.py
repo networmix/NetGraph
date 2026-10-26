@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from ngraph.analysis.msd import MSDQuery, maximum_supported_demand
 from ngraph.analysis.preparation import StepNeeds
 from ngraph.results import ResolvedDemandSet, StepContext, StepOutput
-from ngraph.utils.values import flag, own, shared_copy, text
-from ngraph.workflow.base import WorkflowStep, register_workflow_step
+from ngraph.utils.values import _located_error, flag, own, shared_copy, text
+from ngraph.workflow.base import WorkflowStep, _query_error, register_workflow_step
 
 
 @dataclass
@@ -36,7 +36,7 @@ class MaximumSupportedDemand(WorkflowStep):
                 message = "MaximumSupportedDemand" + message[3:]
             else:
                 message = "MaximumSupportedDemand." + message
-            raise type(exc)(message) from exc
+            raise _query_error(exc, message, "msd", "MaximumSupportedDemand") from exc
         # The query checks every field it shares with the step.
         for name in (
             "alpha_start",
@@ -69,8 +69,10 @@ class MaximumSupportedDemand(WorkflowStep):
 
         label = f"workflow step {name}"
         if "export_details" in arguments:
-            raise ValueError(
-                f"{label}: unknown key export_details; use outputs.details"
+            raise _located_error(
+                ValueError(f"{label}: unknown key export_details; use outputs.details"),
+                label + ".export_details",
+                arguments["export_details"],
             )
         selected = closed(
             arguments.pop("outputs", {}), ("details",), f"{label}.outputs"

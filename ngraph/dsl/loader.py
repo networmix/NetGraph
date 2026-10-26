@@ -13,8 +13,9 @@ from typing import Any, Dict
 from jsonschema.exceptions import best_match
 from jsonschema.validators import validator_for
 
-from ngraph.utils.values import _diagnostic_value, _shown
+from ngraph.utils.values import _bounded, _diagnostic_value, _shown
 from ngraph.utils.yaml_load import _load_yaml
+from ngraph.workflow.diagnostics import workflow_location
 
 
 def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
@@ -98,8 +99,11 @@ def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
     if error is not None:
         # Name the field and its value, as a constructor's refusal does.
         where = _where(error.absolute_path, data)
+        reason = error.message
+        if error.validator == "maxLength" and where.startswith("workflow["):
+            reason = f"{_shown(error.instance)} is too long"
         raise ValueError(
-            f"{where} = {_shown(error.instance)}: {error.message}"
+            f"{where} = {_shown(error.instance)}: {_bounded(reason)}"
         ) from error
 
     return data
@@ -115,6 +119,9 @@ def _where(path, data) -> str:
     for part in path:
         text += f"[{part}]" if isinstance(part, int) else f".{part}"
         node = node[part] if isinstance(node, (dict, list)) else None
+        if isinstance(part, int) and text == f".workflow[{part}]":
+            name = node.get("name") if isinstance(node, dict) else None
+            text = "." + workflow_location(part, name)
         if (
             isinstance(part, int)
             and text.endswith(f"links[{part}]")

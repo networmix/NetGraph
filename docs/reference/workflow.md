@@ -1,6 +1,6 @@
 # Workflow Steps
 
-`Scenario.from_yaml(text)` parses an ordered workflow. Python callers execute `run(prepare(scenario))`; the returned `RunResult.steps` tuple holds each step's name, type, execution order, where its seed came from, normalized question and typed result. Duplicate names refuse before execution.
+`Scenario.from_yaml(text)` parses an ordered workflow. Python callers execute `run(prepare(scenario))`; the returned `RunResult.steps` tuple holds each step's name, type, execution order, where its seed came from, normalized question and typed result. Duplicate names refuse before execution; step names longer than 100 characters are refused.
 
 An unnamed YAML step receives `<type>_<declaration index>`. A step seed is explicit or derived from the scenario seed and effective step name ([Seeds](dsl.md#seeds)). Results are returned only after the complete workflow succeeds; `ngraph run --keys` exports selected steps after the whole workflow runs ([Filtering Results by Step Names](cli.md#filtering-results-by-step-names)). The domain steps are separate from the analyses: `BuildGraph` provides physical NetworkX node-link data, `NetworkStats` describes topology, and `CostPower` (with the `NetworkExplorer`) presents hardware metrics. Built-in steps are immutable records ([Records and editing](api.md#records-and-editing)); custom steps and result exporters: [Custom steps and exporters](api.md#custom-steps-and-exporters).
 

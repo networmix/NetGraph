@@ -304,12 +304,12 @@ def test_network_metadata_is_checked_when_assembled():
         (
             "offer",
             float("inf"),
-            "workflow[1] (bad).offer: expected a finite nonnegative amount, got inf",
+            "workflow[1] (name 'bad').offer = inf: expected a finite nonnegative amount, got inf",
         ),
         (
             "source",
             "[",
-            "workflow[1] (bad).source.path: invalid pattern '[': unterminated character set at position 0",
+            "workflow[1] (name 'bad').source.path = '[': invalid pattern '[': unterminated character set at position 0",
         ),
     ],
 )

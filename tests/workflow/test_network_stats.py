@@ -137,15 +137,22 @@ def test_network_stats_with_exclusions(mock_scenario):
 @pytest.mark.parametrize(
     ("fields", "message"),
     [
-        ({"excluded_nodes": ("Z",)}, "step stats: unknown node 'Z'"),
-        ({"excluded_links": ("A|Z|0",)}, "step stats: unknown link 'A|Z|0'"),
+        (
+            {"excluded_nodes": ("Z",)},
+            "workflow[0] (name 'stats').excluded_nodes: unknown node 'Z'",
+        ),
+        (
+            {"excluded_links": ("A|Z|0",)},
+            "workflow[0] (name 'stats').excluded_links: unknown link 'A|Z|0'",
+        ),
     ],
 )
 def test_an_unknown_exclusion_is_refused_at_preparation(mock_scenario, fields, message):
     # Only the network knows its names, so preparation checks them.
     step = NetworkStats(name="stats", **fields)
-    with pytest.raises(ValueError, match=f"^{message.replace('|', r'\|')}$"):
+    with pytest.raises(ValueError) as error:
         prepare(Scenario(mock_scenario.network, (step,)))
+    assert str(error.value) == message
     kind, name = next(iter(fields.items()))
     text = f"""
 network:
@@ -153,8 +160,9 @@ network:
   links: [{{source: A, target: B}}]
 workflow: [{{type: NetworkStats, name: stats, {kind}: ["{name[0]}"]}}]
 """
-    with pytest.raises(ValueError, match=f"^{message.replace('|', r'\|')}$"):
+    with pytest.raises(ValueError) as error:
         prepare(Scenario.from_yaml(text))
+    assert str(error.value) == message
     # Control: known names prepare and run.
     known = (
         {"excluded_nodes": ("A",)}

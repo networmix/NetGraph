@@ -416,7 +416,7 @@ def test_generation_retains_its_source_position_and_resolved_raw_value(position,
 def test_duplicate_names_retain_the_offending_source_position_and_value(kind):
     if kind == "workflow":
         data = {"workflow": [{"type": "BuildGraph", "name": "same"}] * 2}
-        path, raw = "workflow[1].name", "same"
+        path, raw = "workflow[1] (name 'same').name", "same"
         good = {
             "workflow": [
                 {"type": "BuildGraph", "name": "first"},
@@ -477,7 +477,7 @@ def test_cli_refusals_keep_the_declaration_path_and_value(
         text = (
             "workflow: [{type: BuildGraph, name: same}, {type: BuildGraph, name: same}]"
         )
-        path, shown = "workflow[1].name", "'same'"
+        path, shown = "workflow[1] (name 'same').name", "'same'"
     else:
         text = f"components: {{c: {{count: {hex(10**5000)}}}}}"
         path, shown = "components.c.count", "an integer of 5001 digits"
@@ -570,7 +570,7 @@ def test_duplicate_automatic_step_name_retains_the_supplied_spelling(raw):
     with pytest.raises(ValueError) as error:
         Scenario.from_yaml(source(data))
     assert str(error.value) == (
-        "workflow[1].name: Duplicate workflow step name 'BuildGraph_1'. "
+        f"workflow[1] (name 'BuildGraph_1').name = {raw!r}: Duplicate workflow step name 'BuildGraph_1'. "
         f"Each step must have a unique name; got {raw!r}."
     )
     data["workflow"][0]["name"] = "distinct"

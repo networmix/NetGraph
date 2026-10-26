@@ -122,7 +122,11 @@ def checked_workers(workers: object) -> Workers:
     """A worker count: "auto" or a positive integer."""
     if isinstance(workers, str) and workers == "auto":
         return "auto"
-    return integer(workers, "workers", minimum=1)
+    try:
+        return integer(workers, "workers", minimum=1)
+    except ValueError as exc:
+        exc.__dict__["_workflow_field"] = "workers"
+        raise
 
 
 def resolve_workers(workers: Workers) -> int:

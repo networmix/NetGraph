@@ -626,7 +626,7 @@ def test_collection_refusals_keep_the_field_for_scalar_and_mapping_inputs(bad):
         ),
         (
             lambda: Scenario(Network(), workflow=[1]),
-            "Scenario.workflow: expected WorkflowStep values, got [1]",
+            "workflow[0] = 1: expected WorkflowStep values",
         ),
     ],
 )

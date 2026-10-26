@@ -11,6 +11,7 @@ from ngraph.analysis.topology import NamedRoutes, PreparedTopology
 from ngraph.model.demand import PinnedRoutes, RouteSpec, SupportSpec, WeightSpec
 from ngraph.model.network import DirectedLink
 from ngraph.results import Endpoints
+from ngraph.utils.values import _located_error, _shown
 
 
 def edge_id(topology: PreparedTopology, ref: DirectedLink, label: str) -> int:
@@ -220,7 +221,13 @@ def validate_pinned(declaration, routes, weights):
     """
     for name in declaration.routes:
         if name not in routes:
-            raise ValueError(f"route.{name}: unknown route")
+            raise _located_error(
+                ValueError(f"route.{name}: unknown route"),
+                f"route.{name}",
+                name,
+                field="model.routing.routes",
+                reason=f"unknown route {_shown(name)}",
+            )
     has_dag = any(routes[name].support is not None for name in declaration.routes)
     if not has_dag and any(
         value is not None
@@ -230,9 +237,19 @@ def validate_pinned(declaration, routes, weights):
             declaration.edge_weights,
         )
     ):
-        raise ValueError("pinned: split fields require a DAG route")
+        raise _located_error(
+            ValueError("pinned: split fields require a DAG route"),
+            "pinned",
+            declaration,
+            field="model",
+        )
     if declaration.edge_weights is not None and declaration.edge_weights not in weights:
-        raise ValueError(f"weights.{declaration.edge_weights}: unknown weights")
+        raise _located_error(
+            ValueError(f"weights.{declaration.edge_weights}: unknown weights"),
+            f"weights.{declaration.edge_weights}",
+            declaration.edge_weights,
+            field="model.routing.edge_weights",
+        )
 
 
 def pinned_config(

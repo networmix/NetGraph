@@ -12,7 +12,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from functools import cache
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 import netgraph_core as ngc
 
@@ -71,8 +71,14 @@ from ngraph.results import (
     UnitsReport,
     approximations,
 )
-from ngraph.utils.values import physical
+from ngraph.utils.values import _input_error, _shown, physical
 from ngraph.workflow.base import step_name
+from ngraph.workflow.diagnostics import (
+    _MISSING,
+    error_context,
+    workflow_error,
+    workflow_location,
+)
 
 if TYPE_CHECKING:
     from ngraph.analysis.controller import ControllerSetup
@@ -223,19 +229,31 @@ def _capacity_splits(prepared, step, name, needs, precision):
             extra.extend(other)
         return splits, extra
     except (ValueError, TypeError) as exc:
-        raise _labelled(step, exc) from exc
+        raise _labelled(step, exc, prepared.scenario) from exc
 
 
-def _labelled(step, exc):
-    """A step's refusal, labelled with its YAML declaration if it has one."""
-    label = step.yaml_label
-    if label is None or str(exc).startswith(label + ":"):
-        return exc
-    return type(exc)(f"{label}: {exc}")
+def _labelled(step, exc, scenario, value=_MISSING):
+    """Relabel built-in refusals; extension exceptions pass through unchanged."""
+    if type(exc) not in (ValueError, TypeError):
+        raise exc
+    index = next(i for i, owner in enumerate(scenario.workflow) if owner is step)
+    field, reason = error_context(
+        exc,
+        (f"step {step_name(step)}", f"workflow.{step_name(step)}", type(step).__name__),
+    )
+    if value is _MISSING:
+        value = getattr(step, field, _MISSING)
+        if field == "model.routing.edge_weights":
+            value = getattr(exc, "_input_value", _MISSING)
+    if not isinstance(value, (str, int, float, bool)):
+        value = _MISSING
+    error = workflow_error(workflow_location(index, step.name), value, reason, field)
+    return TypeError(error.args[0]) if type(exc) is TypeError else error
 
 
-def _step_pools(network, capacities, pools):
+def _step_pools(scenario, capacities, pools):
     """Give each pooled capacity question's sources a pool, unless one exists."""
+    network = scenario.network
     for step, name, needs in capacities:
         if needs.pool_endpoints is None:
             continue
@@ -243,18 +261,20 @@ def _step_pools(network, capacities, pools):
         try:
             (pair,) = selected_pairs(network, source, target, "combine", f"step {name}")
         except (ValueError, TypeError) as exc:
-            raise _labelled(step, exc) from exc
+            raise _labelled(step, exc, scenario) from exc
         if pair.sources == pair.destinations and len(pair.sources) == 1:
             continue
         if any(set(members) == set(pair.sources) for members in pools.values()):
             continue
         pool_id = f"workflow.{name}.pair[0]"
         if pool_id in pools:
-            raise ValueError(f"step {name}: pool {pool_id!r} is also a demand id")
+            raise _labelled(
+                step, ValueError(f"pool {pool_id!r} is also a demand id"), scenario
+            )
         pools[pool_id] = pair.sources
 
 
-def _check_controller(topology, setup, resolved, failing):
+def _check_controller(topology, setup, resolved, failing, scenario):
     """Refuse an uncalled controller, an ignored tree and unsupported failure states."""
     if not any(demands.controller is not None for demands in resolved.values()):
         raise ValueError(
@@ -283,7 +303,7 @@ def _check_controller(topology, setup, resolved, failing):
                     f"workflow.{name}.failure_states",
                 )
             except ValueError as exc:
-                raise _labelled(step, exc) from None
+                raise _labelled(step, exc, scenario) from exc
 
 
 def prepare_scenario(
@@ -292,9 +312,13 @@ def prepare_scenario(
     """Prepare a read-only scenario view; the steps' needs decide what is bound."""
     numerical, active, capacities, providers, failing = [], [], [], set(), []
     simultaneous, counting, declared_inputs = [], [], []
-    for step in scenario.workflow:
+    for index, step in enumerate(scenario.workflow):
         name = step_name(step)
-        needs = step.needs()
+        location = workflow_location(index, step.name)
+        try:
+            needs = step.needs()
+        except (ValueError, TypeError) as exc:
+            raise _labelled(step, exc, scenario) from exc
         if needs is None:
             continue
         if needs.numerical:
@@ -305,11 +329,15 @@ def prepare_scenario(
         ):
             unknown = [value for value in names if value not in known]
             if unknown:
-                raise ValueError(f"step {name}: unknown {kind} {unknown[0]!r}")
+                raise workflow_error(
+                    location,
+                    reason=f"unknown {kind} {_shown(unknown[0])}",
+                    field="excluded_nodes" if kind == "node" else "excluded_links",
+                )
         if needs.demand_set is not None:
             if needs.demand_set not in scenario.demand_sets:
-                raise ValueError(
-                    f"step {name}: unknown demand set {needs.demand_set!r}"
+                raise workflow_error(
+                    location, needs.demand_set, "unknown demand set", "demand_set"
                 )
             if needs.demand_set not in active:
                 active.append(needs.demand_set)
@@ -323,12 +351,18 @@ def prepare_scenario(
             needs.failure_policy is not None
             and needs.failure_policy not in scenario.failure_policies
         ):
-            raise ValueError(
-                f"step {name}: unknown failure policy {needs.failure_policy!r}"
+            raise workflow_error(
+                location,
+                needs.failure_policy,
+                "unknown failure policy",
+                "failure_policy",
             )
         if needs.alpha_from_step is not None and needs.alpha_from_step not in providers:
-            raise ValueError(
-                f"step {name}: alpha_from_step {needs.alpha_from_step!r} must name an earlier MSD step"
+            raise workflow_error(
+                location,
+                needs.alpha_from_step,
+                "must name an earlier MSD step",
+                "alpha_from_step",
             )
         if needs.provides_alpha:
             providers.add(name)
@@ -336,7 +370,7 @@ def prepare_scenario(
             capacities.append((step, name, needs))
         if needs.counts is not None:
             counting.append((step, name, needs))
-        declared_inputs.append((name, needs.inputs))
+        declared_inputs.append((step, name, needs.inputs))
     scope = PreparationScope(tuple(numerical), tuple(active), requested)
     network = scenario.network
     plans_by_name = {
@@ -353,7 +387,7 @@ def prepare_scenario(
                 )
             identities[plan.base_id] = name
     pools = pool_requirements(plans)
-    _step_pools(network, capacities, pools)
+    _step_pools(scenario, capacities, pools)
     lossy_plans = []
     for step, name, demand_set, alpha, source in simultaneous:
         values = plans_by_name[demand_set]
@@ -363,12 +397,12 @@ def prepare_scenario(
         if alpha is None and pooled:
             raise _labelled(
                 step,
-                ValueError(
-                    f"workflow.{name}.interaction: demand {pooled[0]}: its scale comes "
-                    f"from MSD step {source}, unknown at "
-                    f"preparation, so TE ingress pool {pooled[0]} has no lossy offer "
-                    "budget"
+                _input_error(
+                    f"workflow.{name}.interaction",
+                    f"demand {pooled[0]}: its scale comes from MSD step {source}, unknown at "
+                    f"preparation, so TE ingress pool {pooled[0]} has no lossy offer budget",
                 ),
+                scenario,
             )
         if alpha is not None:
             lossy_plans.extend((plan, alpha) for plan in values)
@@ -398,10 +432,12 @@ def prepare_scenario(
             for source in pools[pool]
         )
 
-    inputs = {}
-    for name, values in declared_inputs:
+    inputs, input_sources = {}, {}
+    for step, name, values in declared_inputs:
         for field_name, atom in values.items():
-            inputs[f"workflow.{name}.{field_name}"] = atom
+            label = f"workflow.{name}.{field_name}"
+            inputs[label] = atom
+            input_sources[label] = (step, field_name)
     for link_id, link in network.links.items():
         inputs[f"link.{link_id}.capacity"] = ("capacity", link.capacity)
     for plan in plans:
@@ -414,12 +450,27 @@ def prepare_scenario(
                 "min_unreserved",
                 policy.routing.min_unreserved_bandwidth,
             )
-    owned_inputs = MappingProxyType(
-        {
-            label: (kind, physical(value, label))
-            for label, (kind, value) in inputs.items()
-        }
-    )
+
+    def input_refusal(exc) -> NoReturn:
+        label = getattr(exc, "_input_label", None)
+        if label not in input_sources:
+            raise exc
+        step, field = input_sources[label]
+        routing = getattr(getattr(step, "declaration", None), "routing", None)
+        if field == "min_unreserved" and isinstance(routing, _DistributedTEInput):
+            field = "model.routing.min_unreserved_bandwidth"
+        exc.__dict__["_workflow_field"] = field
+        raise _labelled(step, exc, scenario, inputs[label][1]) from exc
+
+    try:
+        owned_inputs = MappingProxyType(
+            {
+                label: (kind, physical(value, label))
+                for label, (kind, value) in inputs.items()
+            }
+        )
+    except (ValueError, TypeError) as exc:
+        input_refusal(exc)
     occurrences = Counter(source for members in pools.values() for source in members)
     coefficients = {
         link_id: 2 + occurrences[link.source] + occurrences[link.target]
@@ -470,7 +521,7 @@ def prepare_scenario(
             for name, values in plans_by_name.items()
         }
         if setup is not None:
-            _check_controller(topology, setup, resolved, failing)
+            _check_controller(topology, setup, resolved, failing, scenario)
         observations = input_observations(inputs, q, settings.precision)
         report = make_report(
             q,
@@ -524,7 +575,7 @@ def prepare_scenario(
                     topology.disabled,
                 )
             except (ValueError, TypeError) as exc:
-                raise _labelled(step, exc) from exc
+                raise _labelled(step, exc, scenario) from exc
             splits.extend(local)
             extra.extend(other)
         report = with_splits(report, tuple(splits), tuple(extra))
@@ -534,14 +585,17 @@ def prepare_scenario(
             )
         return replace(prepared, units_report=report), report.target_met
 
-    prepared, finer_failure = choose_resolution(
-        settings,
-        inputs,
-        coefficients,
-        (c.q_upper_bound for c in expansion),
-        candidate,
-        budget_excess,
-    )
+    try:
+        prepared, finer_failure = choose_resolution(
+            settings,
+            inputs,
+            coefficients,
+            (c.q_upper_bound for c in expansion),
+            candidate,
+            budget_excess,
+        )
+    except (ValueError, TypeError) as exc:
+        input_refusal(exc)
     report = prepared.units_report
     # A plan rejected at the next coarser unit explains the automatic choice.
     coarser = unresolved.get(report.q * 2, ()) if report.target_met else ()

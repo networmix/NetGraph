@@ -23,25 +23,26 @@ class _InputLoader(yaml.SafeLoader):
 
 
 def _scalar_path(root, target):
-    pending: list[tuple[Any, tuple[str | int, ...]]] = [(root, ())]
+    pending: list[tuple[Any, tuple[str | int, ...], Any]] = [(root, (), None)]
     visited = set()
     while pending:
-        node, path = pending.pop()
+        node, path, entry = pending.pop()
         if node is target:
-            return path
+            return path, entry
         if node in visited:
             continue
         visited.add(node)
         if isinstance(node, MappingNode):
             pending.extend(
-                (value, (*path, key.value)) for key, value in reversed(node.value)
+                (value, (*path, key.value), entry)
+                for key, value in reversed(node.value)
             )
         elif isinstance(node, SequenceNode):
             pending.extend(
-                (value, (*path, index))
+                (value, (*path, index), value if path == ("workflow",) else entry)
                 for index, value in reversed(list(enumerate(node.value)))
             )
-    return ()
+    return (), None
 
 
 def _load_yaml(source: str, context: str) -> Any:
@@ -58,7 +59,7 @@ def _load_yaml(source: str, context: str) -> Any:
                 raise ValueError(
                     f"{context} = {_shown(source)}: invalid YAML: {exc}"
                 ) from exc
-            parts = _scalar_path(root, node)
+            parts, entry = _scalar_path(root, node)
             if context == "components" and (not parts or parts[0] != "components"):
                 parts = ("components", *parts)
             path = (
@@ -67,6 +68,40 @@ def _load_yaml(source: str, context: str) -> Any:
                 ).lstrip(".")
                 or context
             )
+            workflow_entry = False
+            if (
+                context == "scenario"
+                and isinstance(root, MappingNode)
+                and len(parts) >= 2
+                and parts[0] == "workflow"
+                and isinstance(parts[1], int)
+            ):
+                workflow_entry = True
+                from ngraph.workflow.diagnostics import workflow_location
+
+                name_node = (
+                    next(
+                        (
+                            value
+                            for key, value in reversed(entry.value)
+                            if key.value == "name"
+                        ),
+                        None,
+                    )
+                    if isinstance(entry, MappingNode)
+                    else None
+                )
+                name = (
+                    name_node.value
+                    if isinstance(name_node, ScalarNode)
+                    and name_node is not node
+                    and name_node.tag == "tag:yaml.org,2002:str"
+                    else None
+                )
+                path = workflow_location(parts[1], name) + "".join(
+                    f"[{part}]" if isinstance(part, int) else "." + part
+                    for part in parts[2:]
+                )
             lexical = node.value.replace("_", "").lstrip("+-")
             size = (
                 f"an integer of {len(lexical)} digits"
@@ -74,9 +109,11 @@ def _load_yaml(source: str, context: str) -> Any:
                 else f"{_shown(node.value)} ({len(node.value)} characters)"
             )
             mark = node.start_mark
-            raise ValueError(
-                f"{path}: invalid YAML scalar at line {mark.line + 1}, column {mark.column + 1}: {size}"
-            ) from exc
+            if workflow_entry:
+                message = f"{path} = {size}: invalid YAML scalar at line {mark.line + 1}, column {mark.column + 1}"
+            else:
+                message = f"{path}: invalid YAML scalar at line {mark.line + 1}, column {mark.column + 1}: {size}"
+            raise ValueError(message) from exc
     except yaml.YAMLError as exc:
         raise ValueError(f"{context} = {_shown(source)}: invalid YAML: {exc}") from exc
     finally:

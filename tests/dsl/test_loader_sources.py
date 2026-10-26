@@ -330,7 +330,7 @@ def test_scalar_conversion_path_in_a_sequence(loader):
         loader(prefix + value)
     assert (
         str(error.value)
-        == "workflow[0].iterations: invalid YAML scalar at line 5, column 17: an integer of 4301 digits"
+        == "workflow[0].iterations = an integer of 4301 digits: invalid YAML scalar at line 5, column 17"
     )
     assert type(error.value.__cause__) is ValueError
 

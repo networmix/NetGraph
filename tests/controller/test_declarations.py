@@ -203,9 +203,7 @@ def test_a_wcmp_capacity_question_under_the_controller_is_refused():
         FIXTURE
         + "  - {type: MaxFlow, name: wcmp, source: '^DC_A$', target: '^DC_B$', preset: SHORTEST_PATHS_WCMP}\n"
     )
-    with pytest.raises(
-        ValueError, match="workflow.wcmp: SHORTEST_PATHS_WCMP is programmed"
-    ):
+    with pytest.raises(ValueError, match="SHORTEST_PATHS_WCMP is programmed"):
         prepare(Scenario.from_yaml(text))
     # Control: without the controller the same question is native capacity WCMP.
     plain = prepare(Scenario(network(LINE)))

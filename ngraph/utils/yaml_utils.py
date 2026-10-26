@@ -2,6 +2,8 @@
 
 from typing import AbstractSet, Any, Callable, Dict, Mapping, TypeVar
 
+from ngraph.utils.values import _located_error
+
 V = TypeVar("V")
 T = TypeVar("T")
 
@@ -40,14 +42,29 @@ def check_no_extra_keys(
     """
     extra = sorted(str(k) for k in data if k not in allowed)
     if extra:
-        raise ValueError(
-            f"Unrecognized key(s) in {context}: {', '.join(extra)}. "
-            f"Allowed keys are: {sorted(allowed)}"
+        raise _located_error(
+            ValueError(
+                f"Unrecognized key(s) in {context}: {', '.join(extra)}. "
+                f"Allowed keys are: {sorted(allowed)}"
+            ),
+            context,
+            data,
         )
 
 
-def _declaration_error(where: str, message: str) -> ValueError:
+def _declaration_error(where: str, message: str, source=None, record="") -> ValueError:
     error = ValueError(message)
+    error.__dict__["_relative_declaration_path"] = where
+    if source is not None and hasattr(source, "_input_reason"):
+        error.__dict__["_input_reason"] = source._input_reason
+    if source is not None and hasattr(source, "_input_label"):
+        label = source._input_label
+        if record and (label == record or label.startswith(record + ".")):
+            label = where + label[len(record) :]
+        error.__dict__["_input_label"] = label
+        error.__dict__["_input_value"] = source._input_value
+        if hasattr(source, "_workflow_field"):
+            error.__dict__["_workflow_field"] = source._workflow_field
     # Constructor labels such as "workflow step mf" are still relative;
     # only actual YAML declaration roots stop an enclosing relabelling.
     root = where.split(".", 1)[0].split("[", 1)[0]
@@ -87,7 +104,7 @@ def declared(where: str, build: Callable[[], T], record: str = "") -> T:
             suffix = message[len(record) :]
             if suffix.startswith(" "):
                 suffix = "." + suffix[1:]
-            raise _declaration_error(where, where + suffix) from exc
+            raise _declaration_error(where, where + suffix, exc, record) from exc
         if message.startswith(where + ".") or message.startswith(where + ":"):
-            raise _declaration_error(where, message) from exc
-        raise _declaration_error(where, f"{where}: {message}") from exc
+            raise _declaration_error(where, message, exc, record) from exc
+        raise _declaration_error(where, f"{where}: {message}", exc, record) from exc

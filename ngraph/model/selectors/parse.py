@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Dict, Literal, Union
 
-from ngraph.utils.values import flag
+from ngraph.utils.values import _located_error, _shown, flag
 from ngraph.utils.yaml_utils import check_no_extra_keys, declared
 
 from .schema import Condition, MatchSpec, Selector
@@ -48,7 +48,7 @@ def parse_match_spec(
     logic = raw.get("logic", default_logic)
     if logic not in ("and", "or"):
         raise ValueError(
-            f"Invalid logic '{logic}' in {context}. Must be 'and' or 'or'."
+            f"Invalid logic {_shown(logic)} in {context}. Must be 'and' or 'or'."
         )
 
     conditions_raw = raw.get("conditions", [])
@@ -56,7 +56,7 @@ def parse_match_spec(
         raise ValueError(f"'conditions' in {context} must be a list")
     if require_conditions and not conditions_raw:
         raise ValueError(
-            f"{context}.conditions: expected at least one condition, got {conditions_raw!r}"
+            f"{context}.conditions: expected at least one condition, got {_shown(conditions_raw)}"
         )
 
     conditions = []
@@ -145,7 +145,20 @@ def _parse_dict(raw: Dict[str, Any], default_active_only: bool) -> Selector:
     check_no_extra_keys(raw, {"path", "group_by", "match", "active_only"}, "selector")
     match_spec = None
     if raw.get("match") is not None:
-        match_spec = parse_match_spec(raw["match"])
+        try:
+            match_spec = parse_match_spec(raw["match"])
+        except (ValueError, TypeError) as exc:
+            label = getattr(exc, "_input_label", "")
+            if label == "match" or label.startswith("match."):
+                exc.__dict__["_input_label"] = "selector." + label
+            elif label.startswith("condition."):
+                location = getattr(exc, "_relative_declaration_path", "match")
+                exc.__dict__["_input_label"] = (
+                    "selector." + location + label[len("condition") :]
+                )
+            else:
+                _located_error(exc, "selector.match", raw["match"])
+            raise
 
     return Selector(
         path=raw.get("path"),

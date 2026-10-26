@@ -12,7 +12,14 @@ from ngraph.analysis.failures import FailureRequest
 from ngraph.export import is_question, owned_step_result
 from ngraph.logging import get_logger
 from ngraph.results import StepContext, StepOutput, StepResult
-from ngraph.utils.values import frozen_attrs, optional_integer, optional_text, own, text
+from ngraph.utils.values import (
+    _input_error,
+    frozen_attrs,
+    optional_integer,
+    optional_text,
+    own,
+    text,
+)
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import StepNeeds
@@ -59,19 +66,63 @@ def register_workflow_step(name: str) -> Callable[[type[StepT]], type[StepT]]:
     return register
 
 
+def _query_error(exc, message, source, record):
+    """Keep a query refusal's text and rebase its field onto the owning step."""
+    error = type(exc)(message)
+    error.__dict__.update(exc.__dict__)
+    label = getattr(exc, "_input_label", "")
+    if label.startswith(source + "."):
+        error.__dict__["_input_label"] = record + label[len(source) :]
+    elif label == "export_details":
+        error.__dict__["_workflow_field"] = label
+    return error
+
+
 def step_name(step: WorkflowStep) -> str:
     """Return the name a step runs under: its name, or its class name when unnamed."""
     return step.name or type(step).__name__
 
 
+def _check_name_length(name):
+    if isinstance(name, str) and len(str.__str__(name)) > 100:
+        raise _input_error(
+            "workflow step name",
+            f"expected a name of at most 100 characters, got {len(str.__str__(name))}",
+            value=name,
+        )
+    return name
+
+
 def validate_unique_step_names(workflow: Sequence[WorkflowStep]) -> None:
     seen = set()
-    for step in workflow:
+    for index, step in enumerate(workflow):
         if not isinstance(step, WorkflowStep):
-            raise TypeError("workflow: expected WorkflowStep values")
+            from ngraph.workflow.diagnostics import workflow_error, workflow_location
+
+            raise TypeError(
+                str(
+                    workflow_error(
+                        workflow_location(index), step, "expected WorkflowStep values"
+                    )
+                )
+            )
+        from ngraph.workflow.diagnostics import workflow_declared, workflow_location
+
+        workflow_declared(
+            workflow_location(index, step.name),
+            {"name": step.name},
+            lambda step=step: _check_name_length(step.name),
+        )
         name = step_name(step)
         if name in seen:
-            raise ValueError(f"Duplicate workflow step name: {name}")
+            from ngraph.workflow.diagnostics import workflow_error, workflow_location
+
+            raise workflow_error(
+                workflow_location(index, step.name),
+                step.name,
+                f"Duplicate workflow step name: {name}",
+                "name",
+            )
         seen.add(name)
 
 
@@ -124,7 +175,7 @@ class WorkflowStep(ABC):
         # An empty name asks the scenario to name the step.
         own(
             self,
-            name=text(self.name, "workflow step name", empty=True),
+            name=_check_name_length(text(self.name, "workflow step name", empty=True)),
             seed=optional_integer(self.seed, "workflow step seed", minimum=None),
             yaml_label=optional_text(self.yaml_label, "workflow step yaml_label"),
             derived_seed=optional_integer(

@@ -35,6 +35,7 @@ from ngraph.results import (
     TableReport,
     WeightApproximation,
 )
+from ngraph.utils.values import _located_error
 
 LIMIT = 1 << 62
 
@@ -316,10 +317,14 @@ class ControllerSetup:
         for _, table in demands.controller_tables:
             for router in table.programmed:
                 if router in self.domain:
-                    raise ValueError(
-                        f"{label}: forwarding_groups.{self.trees[router][0]}: router "
-                        f"{topology.node_names[router]} is inside routing.igp_domain; "
-                        "converged and repair need programmed routers at the BGP edge"
+                    raise _located_error(
+                        ValueError(
+                            f"{label}: forwarding_groups.{self.trees[router][0]}: router "
+                            f"{topology.node_names[router]} is inside routing.igp_domain; "
+                            "converged and repair need programmed routers at the BGP edge"
+                        ),
+                        label,
+                        states,
                     )
 
 

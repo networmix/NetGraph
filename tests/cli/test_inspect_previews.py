@@ -421,7 +421,7 @@ def test_top_demands_and_detail_rows_use_selector_labels(tmp_path):
     path.write_text(W7.replace('target: "^B"', 'target: "["'))
     code, out, err = _cli(["--quiet", "inspect", str(path), "--detail"])
     assert code == 1
-    assert "workflow[1] (mf).target.path: invalid pattern '['" in out + err
+    assert "workflow[1] (name 'mf').target.path = '[': invalid pattern '['" in out + err
 
 
 def test_a_summary_lists_the_first_five_group_labels():

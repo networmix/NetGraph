@@ -40,6 +40,7 @@ from ngraph.results import (
     ResolvedDemandSet,
     SyntheticIngress,
 )
+from ngraph.utils.values import _located_error
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -94,9 +95,17 @@ def selected_pairs(
     sources = selected_groups(network, source, label + ".source")
     targets = selected_groups(network, target, label + ".target")
     if not sources:
-        raise ValueError(f"{label}.source: empty selection")
+        raise _located_error(
+            ValueError(f"{label}.source: empty selection"),
+            label + ".source",
+            source.path,
+        )
     if not targets:
-        raise ValueError(f"{label}.target: empty selection")
+        raise _located_error(
+            ValueError(f"{label}.target: empty selection"),
+            label + ".target",
+            target.path,
+        )
     if mode == "combine":
         pairs = [
             Endpoints(
@@ -111,7 +120,12 @@ def selected_pairs(
     else:
         raise ValueError(f"{label}.mode: expected combine or pairwise")
     for i, pair in enumerate(pairs):
-        refuse_overlap(pair.sources, pair.destinations, f"{label}.pair[{i}]")
+        try:
+            refuse_overlap(pair.sources, pair.destinations, f"{label}.pair[{i}]")
+        except ValueError as exc:
+            raise _located_error(
+                exc, label, {"source": source.path, "target": target.path}, field=""
+            ) from None
     return tuple(pairs)
 
 
