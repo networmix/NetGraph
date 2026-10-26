@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING**: a link end's hardware `exclusive` and Python boolean flag arguments (including `NetworkExplorer.get_bom(include_disabled)`, `NetworkExplorer.print_tree(skip_leaves, detailed, include_disabled)` and `Network.find_links(any_direction)`) must be booleans; 0.24 read any value by truthiness, so `"false"` counted as true.
 - **BREAKING**: a pairwise or group-pairwise volume is divided only among pairs that can carry traffic: node-to-itself pairs and same-label group pairs get no share. A group or group pair containing only excluded pairs gives its share to the others; for a group or group pair containing only node-to-itself pairs, 0.24 dropped that share. A declaration with no eligible pair is reported whole as discarded; an empty selection keeps its discarded share.
 - **BREAKING**: requires `netgraph-core` 0.12 (`>=0.12.0,<0.13`), the rebuilt engine, which computes bandwidth in whole units of one bandwidth unit `q`; 0.24 runs on `netgraph-core` 0.10 and 0.11.
 - **BREAKING**: analyses run as `Scenario` → `prepare` → `run` on native NetGraph-Core results. `prepare` chooses one bandwidth unit and builds the graph once, without changing its input; `run(prepare(scenario))` returns a `RunResult`. Library questions are `capacity`, `place`, `paths`, `edge_sensitivity` and `maximum_supported_demand` with typed queries (`CapacityQuery`, `PlacementQuery`, `PathQuery`, `SensitivityQuery`, `MSDQuery`) and `FailureRequest` for failure cases.
@@ -40,10 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A random failure rule draws one random number per matched entity, the same on every supported Python, so random-rule draws on Python 3.12 and later differ from 0.24; choice-rule seeds are unchanged. Results record the runtime, seed and draw order.
 - `workers: auto` (formerly `parallelism: auto`) uses every CPU for traffic-matrix placement too; 0.24 used one worker there unless the demand set used an LSP preset or Python was free-threaded.
 - Inputs are rounded to whole units of `q` before analysis, so bandwidth answers can differ from 0.24. The precision target (default 0.1%) constrains local rounding and splitting, not final-answer error; the units report records rounding and missed targets.
+- Combined-source shortest-path ECMP now reports delivery from the traffic its equal source shares actually carry; a selected source with a zero-capacity route can stop lossless admission, where 0.24 could overstate delivery.
 - Shortest-path capacity between node groups keeps every selected source on its own shortest routes; 0.24 used one shortest-path tree for the whole group, which could leave farther sources out, so a grouped answer can be larger than 0.24's.
 - A step with no failure policy counts its requested draws (`iterations`, 1 by default), each with the empty failure set, in the baseline's `occurrences`; 0.24 recorded no draws.
 - K-shortest paths can choose or order equal-cost paths differently at the `k` limit; parallel links remain separate paths unless `parallel_edges=False`.
 - Preparation refusals name what they refuse: the workflow step (`workflow step <name>: ...`, a step built in Python without a name by its class), the demand, link or node, and the YAML location; 0.24 messages did not name the workflow step.
+- Nodes and links may reference a risk group declared only as a nested child; that group's failures and its ancestors' failures include the members without a duplicate top-level declaration.
 - Nested risk-group declarations that reuse a name must be identical; conflicting ones are refused with both paths.
 - `import ngraph` loads each module on first use; NetworkX loads only for `BuildGraph`.
 - Step log lines and export type errors name the class by module (`ngraph.workflow.max_flow_step.MaxFlow`).
@@ -63,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: `from_networkx`, `to_networkx`, `NodeMap` and `EdgeMap`; `BuildGraph` exports node-link JSON.
 - **BREAKING**: the modules `ngraph.types`, `ngraph.lib` (with `ngraph.lib.nx`), `ngraph.model.flow`, `ngraph.model.path`, `ngraph.dsl.selectors` (`normalize_selector` is in `ngraph.model.selectors`), `ngraph.utils.ids`, `ngraph.analysis.context`, `ngraph.analysis.demand`, `ngraph.analysis.functions`, `ngraph.analysis.failure_manager` and `ngraph.analysis.static_paths`, and the submodules of `ngraph.results`, `ngraph.model.demand` and `ngraph.model.failure`, which are single modules now.
 - `FailurePolicySet`, `build_failure_policy` and `build_failure_policy_set`; use the `Scenario.failure_policies` mapping of `FailurePolicy` values.
+- `ngraph.model.components.resolve_link_end_components`; use `ngraph.hardware.hardware_inventory` or `ngraph.hardware.resolve_link_end` for one end.
 - `validate_risk_group_hierarchy` and `validate_risk_group_references`; `prepare` validates risk groups.
 - `NetworkExplorer.get_bom_by_path` and `get_bom_map`; use `get_bom` or a tree node's `stats.bom`.
 - Worker profiles of `run --profile` (`NGRAPH_PROFILE_DIR`, the `<scenario>.profiles` directory, `PerformanceProfiler.merge_child_profiles`, `StepProfile.worker_profiles_merged`) and `PerformanceProfiler.get_top_functions`/`save_detailed_profile`; the report covers the main process.
@@ -70,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Ordering conditions compare integers exactly; 0.24 compared floats, so `2**53 + 1 > 2**53` was false and integers above the float range crashed.
+- Hardware totals too large for a finite float are refused with the entity (node, link end or aggregate path) and field named; 0.24 wrote them as infinity: `Infinity` in the results file (not valid JSON) and `inf` in `ngraph inspect`.
 - Weighted failure modes and weighted choices follow their weights when the total weight overflows or a weight is subnormal (0.24 picked the last mode, or fell back to name order); other draws are unchanged.
 - `ngraph inspect` previews selectors as analyses select: attribute conditions and `group_by` apply, and selectors sharing a path are listed apart (they were matched and merged as node-name patterns).
 - The `--profile` report's CPU time is the process CPU time of each step, all threads and native code included, and can exceed the wall time (it was the profiled wall time); the function table is labelled as cProfile time and the CPU-intensive advice no longer suggests parallelization.

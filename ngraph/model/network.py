@@ -194,12 +194,22 @@ class Network:
     def snapshot(self) -> Network:
         """Return a read-only view sharing this network's immutable records.
 
-        Each dict is copied by reference, under plain string keys, into a
-        read-only dict of its own; ``attrs`` is checked as JSON and frozen.
+        Each dict is copied under plain string keys into a read-only dict of
+        its own; ``attrs`` is checked as JSON and frozen. Finalized links are
+        shared; a provisional link is copied with its current identity.
         """
+        links = {}
+        for key, link in self.links.items():
+            if "_placed" not in vars(link):
+                # A provisional record can still acquire an id in add_link.
+                # Own that record so another network cannot change this view.
+                link = replace(link)
+                object.__setattr__(link, "id", self.links[key].id)
+                object.__setattr__(link, "_placed", True)
+            links[key] = link
         view = Network(
             owned_dict(self.nodes, "network.nodes"),
-            owned_dict(self.links, "network.links"),
+            owned_dict(links, "network.links"),
             owned_dict(self.risk_groups, "network.risk_groups"),
             frozen_attrs(self.attrs, "network.attrs"),
         )
@@ -426,6 +436,7 @@ class Network:
         Returns:
             List[Link]: Matching Link objects, deduplicated by link ID.
         """
+        any_direction = flag(any_direction, "find_links.any_direction")
         src_pat = re.compile(source_regex) if source_regex else None
         tgt_pat = re.compile(target_regex) if target_regex else None
 
@@ -459,6 +470,7 @@ class Network:
             recursive (bool): If True, also disable members of child groups,
                 transitively.
         """
+        recursive = flag(recursive, "disable_risk_group.recursive")
         index = MembershipIndex.build(self)
         if name not in index.groups:
             return
@@ -480,6 +492,7 @@ class Network:
             recursive (bool): If True, also enable members of child groups,
                 transitively.
         """
+        recursive = flag(recursive, "enable_risk_group.recursive")
         index = MembershipIndex.build(self)
         if name not in index.groups:
             return

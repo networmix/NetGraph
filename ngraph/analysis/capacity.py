@@ -20,6 +20,7 @@ from ngraph.analysis.failures import (
 from ngraph.analysis.metadata import analysis_metadata
 from ngraph.analysis.precision import query_has_splits, query_inputs, query_miss
 from ngraph.analysis.units import quantize
+from ngraph.analysis.validation import validate_model
 from ngraph.model.selectors import Selector
 from ngraph.results import (
     CapacityAnalysis,
@@ -215,16 +216,20 @@ def evaluate(topology, query: CapacityQuery, native_pairs, options, workers: int
     """Evaluate each pair once with the native evaluator the question names."""
     if isinstance(query.config.routing, ngc.Pinned):
         # Supplied programs have fixed endpoints and no native pair batch.
+        if not native_pairs:
+            validate_model(topology, query.config, options)
+            return ()
         return schedule_cases(
             native_pairs,
             lambda pair: ngc.evaluate_demand(topology.graph, pair[0], pair[1], options),
             workers,
         )
-    if query.mode == "combine":
+    if query.mode == "combine" and native_pairs:
         return tuple(
             ngc.evaluate_demand(topology.graph, sources, destinations, options)
             for sources, destinations in native_pairs
         )
+    # An empty batch still applies the native graph-dependent model checks.
     return ngc.evaluate_pairs(topology.graph, native_pairs, options, workers=workers)
 
 
@@ -307,6 +312,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
                     case.eligibility,
                     f"capacity.pair[{index}]",
                     pools.get(index),
+                    indexed[index],
                 )
                 for index, pair in jobs
             )

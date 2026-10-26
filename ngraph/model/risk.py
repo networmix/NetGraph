@@ -542,7 +542,7 @@ def resolve_membership_rules(
             if matched_count:
                 network.risk_groups[rg_name] = replace(rg, children=tuple(children))
         else:
-            matched_ids = _select_entity_ids(network, spec, _flat(spec.scope))
+            matched_ids = _select_entity_ids(spec, _flat(spec.scope))
             matched_count = len(matched_ids)
             _join_groups(
                 network, spec.scope, {entity_id: {rg_name} for entity_id in matched_ids}
@@ -637,14 +637,12 @@ def _match_spec_ids(
 
 
 def _select_entity_ids(
-    network: "Network",
     spec: MembershipSpec,
     entity_attrs: Dict[str, Dict[str, Any]],
 ) -> Set[str]:
     """Select node names or link ids based on path and/or match conditions.
 
     Args:
-        network: Network to search.
         spec: Membership specification with scope ("node" or "link"),
             path, and match.
         entity_attrs: Pre-flattened attribute map for the spec's scope.

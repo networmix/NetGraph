@@ -204,7 +204,6 @@ def maximum_supported_demand(
         miss = placement_miss(
             prepared,
             demands,
-            owners,
             results,
             records,
             topology.disabled,

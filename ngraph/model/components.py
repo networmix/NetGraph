@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from ngraph.utils.values import (
     _shown,
+    flag,
     frozen_attrs,
     integer,
     own,
@@ -93,11 +94,17 @@ class Component:
         )
 
     def total_capex(self) -> float:
-        """Return capex of this component and all descendants, times ``count``."""
+        """Return capex of this component and all descendants, times ``count``.
+
+        Raises:
+            ValueError: If the total exceeds the finite float range.
+        """
         single_instance_capex = self.capex
         for child in self.children.values():
             single_instance_capex += child.total_capex()
-        return single_instance_capex * self.count
+        return physical(
+            single_instance_capex * self.count, f"component {self.name}.capex"
+        )
 
     def total_power(self) -> float:
         """Computes *typical* power for this component and all descendants.
@@ -105,11 +112,16 @@ class Component:
         Returns:
             float: Typical power in watts, summed over children and multiplied
                 by this component's ``count``.
+
+        Raises:
+            ValueError: If the total exceeds the finite float range.
         """
         single_instance_power = self.power_watts
         for child in self.children.values():
             single_instance_power += child.total_power()
-        return single_instance_power * self.count
+        return physical(
+            single_instance_power * self.count, f"component {self.name}.power_watts"
+        )
 
     def total_power_max(self) -> float:
         """Computes *peak* power for this component and all descendants.
@@ -117,11 +129,17 @@ class Component:
         Returns:
             float: Maximum (peak) power in watts, summed over children and
                 multiplied by this component's ``count``.
+
+        Raises:
+            ValueError: If the total exceeds the finite float range.
         """
         single_instance_power_max = self.power_watts_max
         for child in self.children.values():
             single_instance_power_max += child.total_power_max()
-        return single_instance_power_max * self.count
+        return physical(
+            single_instance_power_max * self.count,
+            f"component {self.name}.power_watts_max",
+        )
 
     def total_capacity(self) -> float:
         """Computes capacity for this component and all descendants.
@@ -129,11 +147,16 @@ class Component:
         Returns:
             float: Capacity summed over children and multiplied by this
                 component's ``count``, in dimensionless or user-defined units.
+
+        Raises:
+            ValueError: If the total exceeds the finite float range.
         """
         single_instance_capacity = self.capacity
         for child in self.children.values():
             single_instance_capacity += child.total_capacity()
-        return single_instance_capacity * self.count
+        return physical(
+            single_instance_capacity * self.count, f"component {self.name}.capacity"
+        )
 
     def as_dict(self, include_children: bool = True) -> Dict[str, Any]:
         """Returns a dictionary containing all properties of this component.
@@ -145,6 +168,7 @@ class Component:
             Dict[str, Any]: One key per field, with ``attrs`` shallow-copied and
                 a ``children`` key present only when ``include_children``.
         """
+        include_children = flag(include_children, "Component.as_dict.include_children")
         data = {
             "name": self.name,
             "component_type": self.component_type,
@@ -239,6 +263,7 @@ class ComponentsLibrary:
         Returns:
             ComponentsLibrary: This instance, updated in place.
         """
+        override = flag(override, "ComponentsLibrary.merge.override")
         for comp_name, comp_obj in other.components.items():
             if override or comp_name not in self.components:
                 self.components[comp_name] = comp_obj
@@ -482,10 +507,17 @@ def totals_with_multiplier(
 
     Returns:
         Tuple of total capex, total power (typical), and total capacity as floats.
+
+    Raises:
+        ValueError: If a total exceeds the finite float range.
     """
-    capex = comp.total_capex() * hw_count
-    power = comp.total_power() * hw_count
-    capacity = comp.total_capacity() * hw_count
+    capex = physical(comp.total_capex() * hw_count, f"component {comp.name}.capex")
+    power = physical(
+        comp.total_power() * hw_count, f"component {comp.name}.power_watts"
+    )
+    capacity = physical(
+        comp.total_capacity() * hw_count, f"component {comp.name}.capacity"
+    )
     return capex, power, capacity
 
 
@@ -501,56 +533,16 @@ def resolve_link_end(
         (component or None when the name is absent or unknown, count, exclusive).
 
     Raises:
-        ValueError: If ``spec`` is not a mapping or ``count`` is not a finite
-            positive number.
+        ValueError: If ``spec`` is not a mapping, ``count`` is not a finite
+            positive number, or ``exclusive`` is not a boolean.
     """
     comp_name = _require_mapping(spec).get("component")
     comp = library.get(str(comp_name)) if comp_name is not None else None
     return (
         comp,
         _positive_count(spec.get("count", 1)),
-        bool(spec.get("exclusive", False)),
+        flag(spec.get("exclusive", False), "hardware.exclusive"),
     )
-
-
-def resolve_link_end_components(
-    attrs: Dict[str, Any],
-    library: ComponentsLibrary,
-) -> tuple[
-    tuple[Optional[Component], float, bool],
-    tuple[Optional[Component], float, bool],
-]:
-    """Resolve per-end hardware components for a link.
-
-    Input format inside ``link.attrs`` is a structured mapping under the
-    ``hardware`` key only:
-      ``{"hardware": {"source": {"component": NAME, "count": N},
-                       "target": {"component": NAME, "count": N}}}``
-    Each end resolves with ``resolve_link_end``; an absent or null end has no
-    component.
-
-    Args:
-        attrs: Link attributes mapping.
-        library: Components library for lookups.
-
-    Returns:
-        ((src_comp, src_count, src_exclusive), (dst_comp, dst_count, dst_exclusive))
-        where a component is ``None`` when the end or its name is absent or
-        unknown.
-
-    Raises:
-        ValueError: If ``hardware`` or an end is not a mapping, or an end's
-            ``count`` is not a finite positive number.
-    """
-    hw = attrs.get("hardware")
-    if hw is None:
-        return (None, 1.0, False), (None, 1.0, False)
-    _require_mapping(hw)
-    source, target = (
-        resolve_link_end({} if hw.get(end) is None else hw[end], library)
-        for end in ("source", "target")
-    )
-    return source, target
 
 
 def _components(values: object) -> bool:

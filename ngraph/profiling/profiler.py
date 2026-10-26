@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from ngraph.logging import get_logger
+from ngraph.utils.values import flag
 
 logger = get_logger(__name__)
 
@@ -97,7 +98,9 @@ class PerformanceProfiler:
         self.results = ProfileResults()
         self._scenario_start_time: Optional[float] = None
         self._scenario_end_time: Optional[float] = None
-        self._track_memory: bool = bool(track_memory)
+        self._track_memory: bool = flag(
+            track_memory, "PerformanceProfiler.track_memory"
+        )
 
     def start_scenario(self) -> None:
         """Record the scenario start time."""

@@ -219,7 +219,11 @@ def _observation_records(
             or (
                 isinstance(model, ngc.CentralizedTE)
                 and model.tunnel_count is None
-                and model.source_allocation == ngc.SourceAllocation.EQUAL
+                and model.source_allocation
+                in (
+                    ngc.SourceAllocation.EQUAL,
+                    ngc.SourceAllocation.WEIGHTED,
+                )
             )
         )
 
@@ -364,7 +368,6 @@ def _place_state(prepared, query, case, state, entries, tables, shared):
             miss = placement_miss(
                 prepared,
                 demands,
-                owners,
                 results,
                 records,
                 case.eligibility,

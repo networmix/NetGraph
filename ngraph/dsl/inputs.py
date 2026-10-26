@@ -54,10 +54,6 @@ def closed(value, keys, label):
     return value
 
 
-def boolean(value, label):
-    return flag(value, label)
-
-
 def enum(kind, value, label):
     if not isinstance(value, str):
         raise ValueError(f"{label}: expected lowercase enum name")
@@ -99,7 +95,7 @@ def tunnel_count(value, label):
         value.get("per_head"), label + ".per_head", minimum=1, maximum=10001
     )
     return ngc.TunnelCount(
-        count, up_to=boolean(value.get("up_to", False), label + ".up_to")
+        count, up_to=flag(value.get("up_to", False), label + ".up_to")
     )
 
 
@@ -179,8 +175,8 @@ def policy(value, label):
                 routing.get("tie_break", "fewer_hops"),
                 location + ".tie_break",
             )
-            multipath = boolean(routing.get("multipath", True), location + ".multipath")
-            parallel = boolean(
+            multipath = flag(routing.get("multipath", True), location + ".multipath")
+            parallel = flag(
                 routing.get("parallel_edges", True), location + ".parallel_edges"
             )
             # Check combinations now; graph-size validation uses the named vector at preparation.
@@ -226,7 +222,7 @@ def policy(value, label):
                 routing.get("tie_break", "fewer_hops"),
                 location + ".tie_break",
             )
-            parallel = boolean(
+            parallel = flag(
                 routing.get("parallel_edges", True), location + ".parallel_edges"
             )
             ngc.DistributedTE(
@@ -249,7 +245,7 @@ def policy(value, label):
                 if routing.get("tunnel_count") is None
                 else tunnel_count(routing["tunnel_count"], location + ".tunnel_count")
             )
-            headroom = boolean(
+            headroom = flag(
                 routing.get("prefer_headroom", False), location + ".prefer_headroom"
             )
             ngc.CentralizedTE(
@@ -496,7 +492,7 @@ def flow_outputs(arguments, name):
 
 def outputs(raw, label):
     raw = closed(raw, (*OUTPUT_FLAGS, "cost_distribution", "details"), label)
-    values = {name: boolean(value, label + "." + name) for name, value in raw.items()}
+    values = {name: flag(value, label + "." + name) for name, value in raw.items()}
     cost = values.pop("cost_distribution", False)
     details = values.pop("details", False)
     return ngc.OutputOptions(**values), cost, details

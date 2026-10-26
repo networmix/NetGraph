@@ -158,7 +158,6 @@ def _nominal_splits(prepared, demands, precision):
             topology,
             prepared._named,
             demands,
-            owners,
             results,
             records,
             topology.disabled,
@@ -217,6 +216,7 @@ def _capacity_splits(prepared, step, name, needs, precision):
                 f"workflow.{name}.pair[{index}]",
                 precision,
                 pools.get(index),
+                result=result,
             )
             splits.extend(local)
             unverified.extend(opaque)

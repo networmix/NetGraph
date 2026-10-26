@@ -14,7 +14,7 @@ from ngraph.hardware import HardwareUse, hardware_inventory, link_active
 from ngraph.logging import get_logger
 from ngraph.model.components import ComponentsLibrary
 from ngraph.model.network import Network, Node
-from ngraph.utils.values import flag
+from ngraph.utils.values import flag, physical
 
 logger = get_logger(__name__)
 
@@ -416,7 +416,10 @@ class NetworkExplorer:
             for an in a_src & a_dst:
                 for stats in (an.stats, an.active_stats) if active else (an.stats,):
                     stats.internal_link_count += 1
-                    stats.internal_link_capacity += link.capacity
+                    stats.internal_link_capacity = physical(
+                        stats.internal_link_capacity + link.capacity,
+                        f"link {link.id}.internal_link_capacity",
+                    )
             for an in a_src ^ a_dst:
                 other_path = dst_path if an in a_src else src_path
                 for stats in (an.stats, an.active_stats) if active else (an.stats,):
@@ -443,9 +446,7 @@ class NetworkExplorer:
         for link in self.network.links.values():
             if link_active(self.network, link):
                 for endpoint in dict.fromkeys((link.source, link.target)):
-                    attached[endpoint] = attached.get(endpoint, 0.0) + float(
-                        link.capacity
-                    )
+                    attached[endpoint] = attached.get(endpoint, 0.0) + link.capacity
         optics: Dict[str, List[HardwareUse]] = {}
         end_capacity: Dict[str, Dict[Optional[str], float]] = {}
         for use in uses:
@@ -497,15 +498,25 @@ class NetworkExplorer:
                 ``strict_validation`` is True.
         """
         comp = platform.component
+        label = f"node {platform.node}"
         used_ports = 0.0
         for use in optics:
             if use.active and use.component.ports > 0:
-                used_ports += use.count * float(use.component.ports)
-        total_ports_available = float(comp.ports) * float(platform.count)
+                used_ports = physical(
+                    used_ports
+                    + use.count * physical(use.component.ports, f"{label}.ports_used"),
+                    f"{label}.ports_used",
+                )
+        total_ports_available = physical(
+            physical(comp.ports, f"{label}.ports_available") * platform.count,
+            f"{label}.ports_available",
+        )
         capacity_violation = attached_capacity > platform.capacity
         ports_violation = comp.ports > 0 and used_ports > total_ports_available + 1e-9
         ports_utilization = (
-            (used_ports / total_ports_available) if total_ports_available > 0.0 else 0.0
+            physical(used_ports / total_ports_available, f"{label}.ports_utilization")
+            if total_ports_available > 0.0
+            else 0.0
         )
         self._node_utilization[platform.node] = NodeUtilization(
             node_name=platform.node,
@@ -513,7 +524,9 @@ class NetworkExplorer:
             hw_count=float(platform.count),
             capacity_supported=float(platform.capacity),
             attached_capacity_active=float(attached_capacity),
-            capacity_utilization=float(attached_capacity / platform.capacity),
+            capacity_utilization=physical(
+                attached_capacity / platform.capacity, f"{label}.capacity_utilization"
+            ),
             ports_available=float(total_ports_available),
             ports_used=float(used_ports),
             ports_utilization=float(ports_utilization),
@@ -577,6 +590,9 @@ class NetworkExplorer:
                 node; None prints all.
             line_prefix: String prepended to every printed line.
         """
+        skip_leaves = flag(skip_leaves, "print_tree.skip_leaves")
+        detailed = flag(detailed, "print_tree.detailed")
+        include_disabled = flag(include_disabled, "print_tree.include_disabled")
         if node is None:
             node = self.root_node
             if node is None:
@@ -674,6 +690,7 @@ class NetworkExplorer:
         Returns:
             Mapping component_name -> count.
         """
+        include_disabled = flag(include_disabled, "get_bom.include_disabled")
         if self.root_node is None:
             return {}
         stats = (
@@ -700,7 +717,12 @@ class NetworkExplorer:
 
 def _add_hardware(stats: TreeStats, use: HardwareUse) -> None:
     """Add one hardware use to a subtree's capex, power and BOM."""
-    stats.total_capex += use.capex
-    stats.total_power += use.power_watts
+    label = f"node {use.node}" if use.link is None else f"link {use.link} {use.end} end"
+    stats.total_capex = physical(stats.total_capex + use.capex, f"{label}.total_capex")
+    stats.total_power = physical(
+        stats.total_power + use.power_watts, f"{label}.total_power"
+    )
     name = use.component.name
-    stats.bom[name] = stats.bom.get(name, 0.0) + use.bom_count
+    stats.bom[name] = physical(
+        stats.bom.get(name, 0.0) + use.bom_count, f"{label}.bom.{name}"
+    )

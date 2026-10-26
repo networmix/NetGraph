@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Dict, Literal, Union
 
+from ngraph.utils.values import flag
 from ngraph.utils.yaml_utils import check_no_extra_keys, declared
 
 from .schema import Condition, MatchSpec, Selector
@@ -42,6 +43,7 @@ def parse_match_spec(
             condition is not a dict or lacks 'attr'/'op', 'in'/'not_in' is
             given a non-list value, or conditions are required but empty.
     """
+    require_conditions = flag(require_conditions, "parse_match_spec.require_conditions")
     check_no_extra_keys(raw, {"conditions", "logic"}, context)
     logic = raw.get("logic", default_logic)
     if logic not in ("and", "or"):

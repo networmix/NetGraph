@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from ngraph.analysis.msd import MSDQuery, maximum_supported_demand
 from ngraph.analysis.preparation import StepNeeds
 from ngraph.results import ResolvedDemandSet, StepContext, StepOutput
-from ngraph.utils.values import own, shared_copy, text
+from ngraph.utils.values import flag, own, shared_copy, text
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 
@@ -65,7 +65,7 @@ class MaximumSupportedDemand(WorkflowStep):
 
     @classmethod
     def yaml_arguments(cls, arguments: dict, name: str) -> dict:
-        from ngraph.dsl.inputs import boolean, closed
+        from ngraph.dsl.inputs import closed
 
         label = f"workflow step {name}"
         if "export_details" in arguments:
@@ -75,7 +75,7 @@ class MaximumSupportedDemand(WorkflowStep):
         selected = closed(
             arguments.pop("outputs", {}), ("details",), f"{label}.outputs"
         )
-        arguments["export_details"] = boolean(
+        arguments["export_details"] = flag(
             selected.get("details", False), f"{label}.outputs.details"
         )
         return arguments

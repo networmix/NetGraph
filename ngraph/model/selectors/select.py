@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Dict, List, Set
 
+from ngraph.utils.values import flag
+
 from .conditions import evaluate_conditions
 from .schema import Condition, MatchSpec, Selector
 
@@ -51,6 +53,7 @@ def select_nodes(
         Dict mapping group labels to lists of nodes. Groups that filter down
         to nothing are dropped.
     """
+    default_active_only = flag(default_active_only, "select_nodes.default_active_only")
     active_only = (
         selector.active_only
         if selector.active_only is not None

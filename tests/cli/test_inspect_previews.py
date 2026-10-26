@@ -231,12 +231,8 @@ def test_a_selection_failure_other_than_a_regex_is_reported(tmp_path):
     ]
 
 
-def test_a_number_too_large_for_a_float_in_a_comparison_is_reported(tmp_path):
-    """`size > 5` on a 310-digit attribute: the engine's float() overflows; an ERROR preview, exit 0."""
-    try:
-        float(10**309)
-    except OverflowError as exc:
-        reason = f"OverflowError: {exc}"
+def test_a_wide_json_integer_is_compared_exactly_in_the_preview(tmp_path):
+    """A positive wide integer selects its node without a float conversion."""
     text = (
         f"network:\n  nodes:\n    A: {{attrs: {{size: 1{'0' * 309}}}}}\n    B: {{}}\n"
         "demands:\n  d:\n"
@@ -245,10 +241,10 @@ def test_a_number_too_large_for_a_float_in_a_comparison_is_reported(tmp_path):
     )
     label = "^A [match: size > 5]"
     lines = _inspect(tmp_path, text)
-    assert f"source {label}: ERROR {reason}" in lines
+    assert f"source {label}: 1 groups, 1 nodes (1 enabled)" in lines
     detail = _inspect(tmp_path, text, "--detail")
     assert _table_row(detail, label, 7) == [
-        [label, "^B", "1", "1", f"ERROR {reason}", "1g/1n (1e)", "-"]
+        [label, "^B", "1", "1", "1g/1n (1e)", "1g/1n (1e)", "^A"]
     ]
 
 

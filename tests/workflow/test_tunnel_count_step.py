@@ -136,12 +136,12 @@ def test_count_rows_bind_q_through_their_largest_split():
 
 
 def test_count_splits_solve_no_traffic_and_search_once_per_leaf(monkeypatch):
-    calls = {"evaluate": 0, "searches": 0, "candidates": 0}
+    calls = {"evaluate": 0, "validations": 0, "searches": 0, "candidates": 0}
     real_pairs, real_demand = ngc.evaluate_pairs, ngc.evaluate_demand
     real_spf, real_splits = ngc.spf, counts.count_splits
 
     def pairs(*args, **kwargs):
-        calls["evaluate"] += 1
+        calls["evaluate" if args[1] else "validations"] += 1
         return real_pairs(*args, **kwargs)
 
     def demand(*args, **kwargs):
@@ -162,7 +162,7 @@ def test_count_splits_solve_no_traffic_and_search_once_per_leaf(monkeypatch):
     monkeypatch.setattr(counts, "count_splits", splits)
     leaves = [heads(), DemandSpec(Selector("^A$"), Selector("^T$"), 0, t2(), id="one")]
     assert active(scenario(TWO_HEADS, leaves)).topology.q == 2**-3
-    assert calls == {"evaluate": 0, "searches": 0, "candidates": 0}
+    assert calls == {"evaluate": 0, "validations": 2, "searches": 0, "candidates": 0}
     prep = prepare(scenario(TWO_HEADS, leaves, (step(counts=(2, 4), up_to=8),)))
     assert calls["evaluate"] == 0
     # The recipe tries each q from the capacities' 2^-3 down to 2^-8 (te's heads at
@@ -170,6 +170,8 @@ def test_count_splits_solve_no_traffic_and_search_once_per_leaf(monkeypatch):
     # three of its rows: 2 leaves x 6 candidates.
     assert prep.topology.q == 2**-8
     assert (calls["candidates"], calls["searches"]) == (6, 2 * 6)
+    # Two distinct configurations per candidate, plus the initial active-only bind.
+    assert calls["validations"] == 2 + 2 * 6
 
 
 def library(prep, offer, count=4, **fields):

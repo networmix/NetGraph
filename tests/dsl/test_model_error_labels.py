@@ -76,7 +76,7 @@ def _direct_native_refusal():
     return str(error.value)
 
 
-def test_python_native_config_refusal_is_not_relabelled():
+def test_python_native_config_refusal_keeps_its_reason_and_demand_label():
     native_text = _direct_native_refusal()
     n = Network(nodes={k: Node(k) for k in ("s", "t")})
     n.add_link(Link("s", "t", 10))
@@ -88,10 +88,9 @@ def test_python_native_config_refusal_is_not_relabelled():
     with pytest.raises(ValueError) as error:
         prepare(Scenario(n, demand_sets={"d": ds}), demand_sets=("d",))
     assert (
-        str(error.value)
-        == native_text
-        == "CentralizedTE without tunnel_count requires admission=LOSSLESS"
+        native_text == "CentralizedTE without tunnel_count requires admission=LOSSLESS"
     )
+    assert str(error.value) == f"demands.d[0](d|0): {native_text}"
 
 
 def test_pinned_binding_refusal_keeps_demand_label_and_has_legal_control():

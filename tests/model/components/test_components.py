@@ -450,7 +450,7 @@ def test_helper_resolve_and_totals_with_multiplier() -> None:
 def test_hardware_count_must_be_positive_number(count) -> None:
     """Invalid hardware counts raise instead of silently becoming 1."""
     from ngraph.model.components import (
-        resolve_link_end_components,
+        resolve_link_end,
         resolve_node_hardware,
     )
 
@@ -458,9 +458,7 @@ def test_hardware_count_must_be_positive_number(count) -> None:
     with pytest.raises(ValueError, match="must be a finite positive number"):
         resolve_node_hardware({"hardware": {"component": "box", "count": count}}, lib)
     with pytest.raises(ValueError, match="must be a finite positive number"):
-        resolve_link_end_components(
-            {"hardware": {"source": {"component": "o", "count": count}}}, lib
-        )
+        resolve_link_end({"component": "o", "count": count}, lib)
 
 
 def test_as_dict_round_trips_through_from_dict() -> None:

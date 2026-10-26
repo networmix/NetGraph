@@ -47,7 +47,14 @@ def test_many_lsps_over_small_pairwise_volumes_find_tested_feasible_alpha():
     )
     prepared = prepare(Scenario(network, (step,), demand_sets={"load": demands}))
     result = run(prepared).steps[0].result
-    assert prepared.topology.q <= 1 / 4096
+    # Each parent of 1 splits among three off-diagonal pairs: p*1/(3-1)
+    # is .0005, whose coarsest power of two is 2^-11. Each pair's small
+    # design fits one tunnel, so the up-to limit adds no tunnel constraint.
+    assert prepared.topology.q == 1 / 2048
+    assert all(
+        c.kind == "expansion" and c.members == 3
+        for c in prepared.units_report.binding_constraints
+    )
     assert 64 <= result.alpha_feasible.value <= 512
     assert result.history[0].outcome == "feasible"
     assert result.proof == "unproved" and result.upper_certificate is None

@@ -1,7 +1,7 @@
 """Local split-precision constraints of native observations, under one set of rules.
 
 A placed demand and an evaluated capacity question split traffic by the same
-rules: sources share a demand equally, tunnels share a head, and DAG routers
+rules: sources share a demand equally or by positive weights, tunnels share a head, and DAG routers
 share their incoming amount by allocation and weights. The rules read their
 facts from one of two observers: a placement's native records, or the
 searches a capacity evaluator would make on an empty ledger.
@@ -246,8 +246,35 @@ def _equal_sources(model: ngc.ShortestPaths) -> bool:
     return allocation == ngc.SourceAllocation.EQUAL
 
 
+def tunnel_members(model, heads, plan=None):
+    """Describe actual T2 tunnels, or declared counts without an observation.
+
+    T1 always attempts its requested tunnels, including at dead heads.
+    """
+    assert model.tunnel_count is not None
+    if plan is None or isinstance(model, ngc.DistributedTE):
+        return tuple((head, model.tunnel_count.per_head) for head in heads)
+    live = set(plan.heads_with_capacity)
+    # Without a whole unit per tunnel, the chosen count is only a fallback.
+    members = (
+        model.tunnel_count.per_head
+        if plan.max_bandwidth_per_tunnel == 0
+        else plan.tunnels_per_head
+    )
+    return tuple((head, members) for head in heads if head in live)
+
+
 def _model_splits(
-    topology, named, model, declaration, label, amount, facts, precision, table=None
+    topology,
+    named,
+    model,
+    declaration,
+    label,
+    amount,
+    facts,
+    precision,
+    table=None,
+    plan=None,
 ):
     """Apply the split rules of one native model to one observed amount.
 
@@ -277,12 +304,12 @@ def _model_splits(
         assert isinstance(model, (ngc.DistributedTE, ngc.CentralizedTE))
         assert model.tunnel_count is not None
         add("source", "sources", amount, len(heads))
-        for head in heads:
+        for head, members in tunnel_members(model, heads, plan):
             add(
                 "tunnel",
                 f"head[{head}]",
                 amount / len(heads),
-                model.tunnel_count.per_head,
+                members,
             )
     elif table is not None or isinstance(model, ngc.ShortestPaths):
         if table is None:
@@ -348,11 +375,16 @@ def _model_splits(
                         allowed_edges=facts.allowed,
                     )
                 )
-    elif (
-        isinstance(model, ngc.CentralizedTE)
-        and model.source_allocation == ngc.SourceAllocation.EQUAL
+    elif isinstance(model, ngc.CentralizedTE) and model.source_allocation in (
+        ngc.SourceAllocation.EQUAL,
+        ngc.SourceAllocation.WEIGHTED,
     ):
-        add("source", "sources", amount, len(facts.sources))
+        roster = facts.sources
+        if model.source_allocation == ngc.SourceAllocation.WEIGHTED:
+            weights = model.source_weights
+            assert weights is not None
+            roster = [source for source in roster if weights[source] > 0]
+        add("source", "sources", amount, len(roster))
     return constraints, ()
 
 
@@ -444,7 +476,6 @@ def placement_splits(
     topology: PreparedTopology,
     named: NamedRoutes,
     demands,
-    owners,
     results,
     record_sets,
     mask,
@@ -491,6 +522,7 @@ def placement_splits(
             )
             if controlled(demands.controller, parents[demand.base_id].policy)
             else None,
+            plan=result.plan,
         )
         constraints.extend(local)
         extra.extend(opaque)
@@ -538,7 +570,7 @@ class _Searched:
         if isinstance(model, ngc.DistributedTE) or (
             isinstance(model, ngc.CentralizedTE) and model.tunnel_count is not None
         ):
-            return self._reached(self.mask)
+            return self.sources
         return None
 
     def shortest(self, model):
@@ -572,8 +604,9 @@ class _Searched:
     def sources(self):
         model = self.model
         mask = self.mask
-        if model.support is not None:
-            members = {int(edge) for edge in model.support.via_edges()}
+        support = getattr(model, "support", None)
+        if support is not None:
+            members = {int(edge) for edge in support.via_edges()}
             mask = ngc.Eligibility.intersect(
                 mask,
                 self.topology.graph.eligibility(
@@ -695,6 +728,7 @@ def query_splits(
     precision,
     pool=None,
     facts=None,
+    result=None,
 ):
     """Describe this native evaluation's splits, without another traffic solve.
 
@@ -721,8 +755,9 @@ def query_splits(
     if facts is None:
         facts = _Searched(topology, named, model, pair, mask, pool)
     declaration = getattr(query, "declaration", None)  # sensitivity has none
+    plan = None if result is None else result.plan
     constraints, opaque = _model_splits(
-        topology, named, model, declaration, label, amount, facts, precision
+        topology, named, model, declaration, label, amount, facts, precision, plan=plan
     )
     if observed:
         constraints = [replace(c, basis="observed") for c in constraints]
@@ -743,14 +778,14 @@ def query_splits(
                         precision,
                     )
                 )
-            if model.tunnel_count.per_head > 1:
-                for head in heads:
+            for head, members in tunnel_members(model, heads, plan):
+                if members > 1:
                     constraints.append(
                         split_constraint(
                             "tunnel",
                             f"{label}.design.head[{head}]",
                             design / len(heads),
-                            model.tunnel_count.per_head,
+                            members,
                             topology.q,
                             precision,
                         )
@@ -824,7 +859,6 @@ def query_inputs(prepared: PreparedScenario, query, label):
 def placement_miss(
     prepared: PreparedScenario,
     demands,
-    owners,
     results,
     records,
     mask,
@@ -843,7 +877,6 @@ def placement_miss(
         prepared.topology,
         prepared._named,
         demands,
-        owners,
         results,
         records,
         mask,
@@ -860,13 +893,13 @@ def query_miss(
 ) -> PrecisionMiss | None:
     """The missed local targets of one capacity question's evaluations.
 
-    ``observations`` holds (pair, delivered units, eligibility, label, pool)
+    ``observations`` holds (pair, delivered units, eligibility, label, pool, result)
     rows.
     """
     samples, constraints = inputs
     constraints = list(constraints)
     if query_has_splits(query):
-        for pair, delivered, mask, label, pool in observations:
+        for pair, delivered, mask, label, pool, result in observations:
             splits, opaque = query_splits(
                 prepared.topology,
                 prepared._named,
@@ -877,6 +910,7 @@ def query_miss(
                 label,
                 prepared.units_report.precision,
                 pool,
+                result=result,
             )
             constraints.extend((*splits, *opaque))
     return precision_miss(location, samples, constraints)

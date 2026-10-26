@@ -9,7 +9,7 @@ from ngraph.analysis.counts import TunnelCountQuery, tunnel_counts
 from ngraph.analysis.failures import Workers
 from ngraph.analysis.precision import question_inputs
 from ngraph.analysis.preparation import PreparedScenario, StepNeeds
-from ngraph.utils.values import own, shared_copy, text
+from ngraph.utils.values import flag, own, shared_copy, text
 from ngraph.workflow.base import WorkflowStep, register_workflow_step, step_name
 
 
@@ -69,7 +69,7 @@ class TunnelCountAnalysis(WorkflowStep):
 
     @classmethod
     def yaml_arguments(cls, arguments: dict, name: str) -> dict:
-        from ngraph.dsl.inputs import OUTPUT_FLAGS, boolean, closed
+        from ngraph.dsl.inputs import OUTPUT_FLAGS, closed
 
         label = f"workflow step {name}"
         if "export_details" in arguments:
@@ -80,7 +80,7 @@ class TunnelCountAnalysis(WorkflowStep):
             arguments.pop("outputs", {}), (*OUTPUT_FLAGS, "details"), f"{label}.outputs"
         )
         flags = {
-            key: boolean(value, f"{label}.outputs.{key}")
+            key: flag(value, f"{label}.outputs.{key}")
             for key, value in selected.items()
         }
         arguments["export_details"] = flags.pop("details", False)

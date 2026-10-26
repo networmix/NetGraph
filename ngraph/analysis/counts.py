@@ -147,7 +147,9 @@ def _group_key(model: ngc.CentralizedTE) -> tuple:
     return (model.source_allocation, model.prefer_headroom, model.support)
 
 
-def count_splits(prepared: PreparedScenario, query: TunnelCountQuery, label, mask):
+def count_splits(
+    prepared: PreparedScenario, query: TunnelCountQuery, label, mask, results=None
+):
     """The rows' split constraints, declared from the offer, design and live heads.
 
     One reverse search per demand finds its live heads for all its rows; no
@@ -157,7 +159,7 @@ def count_splits(prepared: PreparedScenario, query: TunnelCountQuery, label, mas
     precision = prepared.units_report.precision
     specs = query.specs
     splits, opaque = [], []
-    for demand in query.demands.demands:
+    for index, demand in enumerate(query.demands.demands):
         model = _model(demand, label)
         facts = _Searched(
             topology, prepared._named, model, demand.endpoints, mask, demand.pool
@@ -176,6 +178,7 @@ def count_splits(prepared: PreparedScenario, query: TunnelCountQuery, label, mas
                 precision,
                 demand.pool,
                 facts,
+                result=None if results is None else results[(index, count, up_to)],
             )
             splits.extend(local)
             opaque.extend(unverified)
@@ -260,7 +263,7 @@ def tunnel_counts(
                     cost,
                 )
             )
-    splits, opaque = count_splits(prepared, query, label, mask)
+    splits, opaque = count_splits(prepared, query, label, mask, results)
     samples, constraints = query_inputs(prepared, query, label)
     miss = precision_miss(
         ReportLocation(None, "baseline", None),

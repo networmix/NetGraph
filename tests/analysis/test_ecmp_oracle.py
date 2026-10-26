@@ -32,3 +32,14 @@ def test_sources_pool_at_shared_router_and_masks_recompute_support():
     assert (
         equal_shortest_capacity(network, ("s",), ("t",), 1, excluded_nodes=("a",)) == 5
     )
+
+
+def test_half_units_round_up_even_when_the_lower_integer_is_even():
+    from tests.ecmp_oracle import _units
+
+    for value, expected in ((0.5, 1), (2.5, 3), (0.25, 0), (2.75, 3)):
+        assert _units(value, 1) == expected
+        assert _units(value / 2, 0.5) == expected
+        network = network_of([("s", "t", value, 1)])
+        assert equal_shortest_capacity(network, ("s",), ("t",), 1) == expected
+        assert ideal_capacity(network, ("s",), ("t",), 1) == expected

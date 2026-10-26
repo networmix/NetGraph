@@ -12,6 +12,7 @@ from ngraph import (
     CapacityQuery,
     DemandSet,
     DemandSpec,
+    FlowPolicyPreset,
     Link,
     Network,
     Node,
@@ -62,12 +63,14 @@ def oracle(variant):
     network = Network(
         nodes={
             name: Node(name)
-            for name in (("a", "b", "t") if variant == "split" else ("s", "t"))
+            for name in (
+                ("a", "b", "t") if variant in ("split", "weighted") else ("s", "t")
+            )
         }
     )
     precision = 1e-18 if variant == "range" else 0.125
-    volume = 1 if variant == "split" else 0.25
-    if variant == "split":
+    volume = 1 if variant in ("split", "weighted") else 0.25
+    if variant in ("split", "weighted"):
         network.add_link(Link("a", "t", 4, 1))
         network.add_link(Link("b", "t", 4, 3))
     else:
@@ -76,9 +79,17 @@ def oracle(variant):
         "load",
         (
             DemandSpec(
-                Selector("^[ab]$" if variant == "split" else "^s$"),
+                Selector("^[ab]$" if variant in ("split", "weighted") else "^s$"),
                 Selector("^t$"),
                 volume,
+                ngc.FlowPolicyConfig(
+                    routing=ngc.CentralizedTE(
+                        source_allocation=ngc.SourceAllocation.WEIGHTED,
+                        source_weights=[1, 1, 0],
+                    )
+                )
+                if variant == "weighted"
+                else FlowPolicyPreset.SHORTEST_PATHS_ECMP,
             ),
         ),
     )
@@ -104,7 +115,9 @@ def oracle(variant):
         input_bound(demand_label, 1 if variant == "rounding" else volume, precision)
     ]
     nominal_splits = []
-    nominal_examples = [sample(demand_label, "demand")] if variant != "split" else []
+    nominal_examples = (
+        [sample(demand_label, "demand")] if variant not in ("split", "weighted") else []
+    )
     observed_examples = []
     if variant == "rounding":
         label = "link.s|t|0.capacity"
@@ -112,7 +125,7 @@ def oracle(variant):
         observed_constraints.append(input_bound(label, 0.25, precision))
         nominal_examples.append(sample(label, "capacity"))
         observed_examples.append(sample(label, "capacity"))
-    if variant == "split":
+    if variant in ("split", "weighted"):
         # Each capacity4 binds at q1: 2*p*4=1 meets q1, fails q2.
         nominal_constraints.extend(
             input_bound(f"link.{source}|t|0.capacity", 4, precision)
@@ -159,17 +172,20 @@ def oracle(variant):
             "library_demand_sets": ["load"],
         },
         "binding_constraints": nominal_constraints,
-        "input_count": 3 if variant == "split" else 2,
+        "input_count": 3 if variant in ("split", "weighted") else 2,
         "inexact_inputs": len(nominal_examples),
         "zeroed_inputs": len(nominal_examples),
         "inexact_examples": nominal_examples,
         "zeroed_examples": nominal_examples,
         "max_absolute_input_error": fraction(Fraction(1, 4) if nominal_examples else 0),
         "max_relative_input_error": fraction(1 if nominal_examples else 0),
-        "augmented_capacity_sum_units": {"rounding": 0, "split": 16, "range": 2**61}[
-            variant
-        ],
-        "augmented_cost_sum": 8 if variant == "split" else 6,
+        "augmented_capacity_sum_units": {
+            "rounding": 0,
+            "split": 16,
+            "weighted": 16,
+            "range": 2**61,
+        }[variant],
+        "augmented_cost_sum": 8 if variant in ("split", "weighted") else 6,
         "nominal_split_count": len(nominal_splits),
         "nominal_splits": nominal_splits,
         "misses": [
@@ -249,12 +265,16 @@ def opaque_oracle():
     exact(project(result)["units_report"], expected)
 
 
-@pytest.mark.parametrize("variant", ["rounding", "split", "range", "opaque"])
+@pytest.mark.parametrize(
+    "variant", ["rounding", "split", "weighted", "range", "opaque"]
+)
 def test_nonempty_units_report_is_exact(variant):
     oracle(variant)
 
 
-@pytest.mark.parametrize("variant", ["rounding", "split", "range", "opaque"])
+@pytest.mark.parametrize(
+    "variant", ["rounding", "split", "weighted", "range", "opaque"]
+)
 def test_units_miss_helper_field_plants_are_caught(monkeypatch, variant):
     original = exporting.project
     observed = []

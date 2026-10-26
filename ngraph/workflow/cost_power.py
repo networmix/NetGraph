@@ -13,7 +13,7 @@ from ngraph.results import (
     StepOutput,
     _CostPowerLevels,
 )
-from ngraph.utils.values import flag, integer, own, shared_copy
+from ngraph.utils.values import flag, integer, own, physical, shared_copy
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 
@@ -58,15 +58,31 @@ class CostPower(WorkflowStep):
             offset = 0 if use.link is None else 2
             for level, paths in levels.items():
                 bucket = paths.setdefault("/".join(parts[:level]), [0.0] * 4)
-                bucket[offset] += use.capex
-                bucket[offset + 1] += use.power_watts
+                label = f"hardware path {'/'.join(parts[:level]) or '<root>'} node {use.node}"
+                bucket[offset] = physical(bucket[offset] + use.capex, f"{label}.capex")
+                bucket[offset + 1] = physical(
+                    bucket[offset + 1] + use.power_watts, f"{label}.power_watts"
+                )
         result = CostPowerResult(
             self.include_disabled,
             self.aggregation_level,
             _CostPowerLevels(
                 tuple(
                     tuple(
-                        HardwareRow(path, pc, pp, oc, op, pc + oc, pp + op)
+                        HardwareRow(
+                            path,
+                            pc,
+                            pp,
+                            oc,
+                            op,
+                            physical(
+                                pc + oc, f"hardware path {path or '<root>'}.capex_total"
+                            ),
+                            physical(
+                                pp + op,
+                                f"hardware path {path or '<root>'}.power_total_watts",
+                            ),
+                        )
                         for path, (pc, pp, oc, op) in sorted(mapping.items())
                     )
                     for mapping in levels.values()

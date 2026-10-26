@@ -1965,8 +1965,9 @@ A link end counts only where its endpoint node has a platform.
 
 Raises:
     ValueError: If any node, link or link end has a ``hardware`` value
-        that is not a mapping or a count that is not a finite positive
-        number; the message starts with the entity
+        that is not a mapping, a count that is not a finite positive
+        number, an ``exclusive`` that is not a boolean, or a total that
+        exceeds the finite float range; the message starts with the entity
         (``node <name>``, ``link <key>``, ``link <key> source end``).
 
 ### ngraph.hardware.HardwareInventory
@@ -2036,8 +2037,8 @@ Returns:
     (component or None when the name is absent or unknown, count, exclusive).
 
 Raises:
-    ValueError: If ``spec`` is not a mapping or ``count`` is not a finite
-        positive number.
+    ValueError: If ``spec`` is not a mapping, ``count`` is not a finite
+        positive number, or ``exclusive`` is not a boolean.
 
 ---
 

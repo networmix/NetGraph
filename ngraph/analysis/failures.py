@@ -189,6 +189,10 @@ def _prepare(
                     value = attrs[name].get(rule.weight_by)
                     try:
                         value = float(value) if value is not None else 0.0
+                    except OverflowError as exc:
+                        raise ValueError(
+                            f"{label}: nonfinite weight for {name}"
+                        ) from exc
                     except (ValueError, TypeError):
                         value = 0.0
                     if not math.isfinite(value):

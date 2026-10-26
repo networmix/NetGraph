@@ -13,6 +13,7 @@ import netgraph_core as ngc
 
 from ngraph.analysis.topology import NamedRoutes, PreparedTopology
 from ngraph.analysis.units import quantize, scaled_units, split_units
+from ngraph.analysis.validation import validate_model
 from ngraph.model.demand import (
     PRESETS,
     DemandSet,
@@ -486,6 +487,19 @@ def bind_plans(
         )
     by_name = dict(tables)
     parents, resolved = [], []
+    # Retain references with identity keys: model subclasses need not be hashable,
+    # and their equality must not suppress validation of a different configuration.
+    checked_models = {}
+
+    def check(config, plan):
+        key = id(config)
+        if key not in checked_models:
+            try:
+                validate_model(topology, config)
+            except (ValueError, TypeError) as exc:
+                raise type(exc)(f"{_plan_label(plan, name)}: {exc}") from exc
+            checked_models[key] = config
+
     for plan in plans:
         error_label = plan.spec.yaml_label
         first_config = None
@@ -514,6 +528,7 @@ def bind_plans(
                     raise
                 raise type(exc)(f"{error_label}: {exc}") from exc
             first_config = first_config or config
+            check(config, plan)
             pool = None
             if leaf.id in topology.pool_heads:
                 pool = PoolMetadata(
@@ -550,6 +565,8 @@ def bind_plans(
             if error_label is None:
                 raise
             raise type(exc)(f"{error_label}: {exc}") from exc
+        if first_config is not None:
+            check(first_config, plan)
         parents.append(
             ExpansionParent(
                 plan.spec.source,

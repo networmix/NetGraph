@@ -17,7 +17,12 @@ from ngraph.analysis.failures import Workers, checked_workers, resolve_workers
 from ngraph.analysis.metadata import analysis_metadata
 from ngraph.analysis.precision import query_inputs, query_miss
 from ngraph.model.selectors import Selector
-from ngraph.results import OutputSelection, ReportLocation, SensitivityAnalysis
+from ngraph.results import (
+    Endpoints,
+    OutputSelection,
+    ReportLocation,
+    SensitivityAnalysis,
+)
 from ngraph.utils.values import flag, own, physical
 
 if TYPE_CHECKING:
@@ -107,7 +112,9 @@ def edge_sensitivity(
     )
     baseline = result.baseline
     entries = result.entries
-    observations = [(pair, baseline.delivered, mask, "sensitivity.baseline", None)]
+    observations: list[
+        tuple[Endpoints, int, ngc.Eligibility, str, None, ngc.PlacementResult | None]
+    ] = [(pair, baseline.delivered, mask, "sensitivity.baseline", None, baseline)]
     observations.extend(
         (
             pair,
@@ -117,6 +124,7 @@ def edge_sensitivity(
             ),
             f"sensitivity.edge[{entry.edge}]",
             None,
+            None,  # The native sensitivity entry exposes a reduction, not its plan.
         )
         for entry in entries
     )

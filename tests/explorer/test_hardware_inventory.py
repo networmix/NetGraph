@@ -24,13 +24,11 @@ import pytest
 
 from ngraph import cli
 from ngraph.explorer import NetworkExplorer
-from ngraph.export import write_json
 from ngraph.hardware import hardware_inventory, link_active
 from ngraph.model.components import (
     Component,
     ComponentsLibrary,
     resolve_link_end,
-    resolve_link_end_components,
     resolve_node_hardware,
 )
 from ngraph.model.network import Link, Network, Node
@@ -823,21 +821,17 @@ def test_inspect_reports_invalid_hardware_and_exits_zero(tmp_path):
     ]
 
 
-def test_capacity_overflow_reaches_the_export_refusal():
-    """H22: two capex-1e308 platforms sum to inf; the JSON export refuses it."""
+def test_capex_overflow_is_refused_before_a_result_is_published():
+    """Individually finite uses must also have a finite aggregate."""
     lib = ComponentsLibrary({"Max": Component("Max", capex=1e308)})
     net = Network()
     net.add_node(Node("p/a", attrs=_hw("Max")))
     net.add_node(Node("p/b", attrs=_hw("Max")))
     step = CostPower(name="cp", include_disabled=True, aggregation_level=0)
-    result = run(prepare(Scenario(net, (step,), components_library=lib)))
-    assert result.steps[0].result.levels[0][0].platform_capex == float("inf")
-    # Python 3.12 and later append the value (": inf") to this message.
-    with pytest.raises(
-        ValueError, match="Out of range float values are not JSON compliant"
-    ):
-        write_json(result, io.StringIO())
-    assert _explore(net, lib).root_node.stats.total_capex == float("inf")
+    with pytest.raises(ValueError, match=r"hardware path <root> node p/b.capex"):
+        run(prepare(Scenario(net, (step,), components_library=lib)))
+    with pytest.raises(ValueError, match=r"node p/b.total_capex"):
+        _explore(net, lib)
 
 
 @pytest.mark.parametrize(
@@ -903,19 +897,11 @@ def test_the_resolvers_refuse_non_mappings_and_take_null_as_absent():
     for call, value in (
         (lambda: resolve_node_hardware({"hardware": "C"}, P_LIB), "'C'"),
         (lambda: resolve_link_end("O", P_LIB), "'O'"),
-        (lambda: resolve_link_end_components({"hardware": "C"}, P_LIB), "'C'"),
-        (
-            lambda: resolve_link_end_components({"hardware": {"target": "O"}}, P_LIB),
-            "'O'",
-        ),
     ):
         with pytest.raises(ValueError) as exc:
             call()
         assert str(exc.value) == f"hardware must be a mapping, got {value}"
     assert resolve_node_hardware({"hardware": None}, P_LIB) == (None, 1.0)
-    assert resolve_link_end_components(
-        {"hardware": {"source": None, "target": {"component": "O", "count": 2}}}, P_LIB
-    ) == ((None, 1.0, False), (P_LIB.components["O"], 2.0, False))
     assert resolve_link_end({"component": "O", "exclusive": True}, P_LIB) == (
         P_LIB.components["O"],
         1.0,

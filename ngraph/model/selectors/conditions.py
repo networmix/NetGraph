@@ -87,12 +87,15 @@ def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
     if op == "!=":
         return attr_value != expected
 
-    # Ordering compares as floats; non-numeric operands never match.
+    # JSON integers and floats compare directly, preserving wide integer values.
+    # Other operands retain numeric-string coercion; non-numeric ones never match.
     if op in ("<", "<=", ">", ">="):
         try:
-            left = float(attr_value)
-            right = float(expected)
-        except (TypeError, ValueError):
+            left, right = (
+                value if isinstance(value, (int, float)) else float(value)
+                for value in (attr_value, expected)
+            )
+        except (TypeError, ValueError, OverflowError):
             return False
         if op == "<":
             return left < right

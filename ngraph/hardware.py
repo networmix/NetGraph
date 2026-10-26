@@ -91,7 +91,11 @@ class HardwareInventory:
 
 
 def _use(node, link, end, component, count, bom_count, active) -> HardwareUse:
-    capex, power, capacity = totals_with_multiplier(component, count)
+    try:
+        capex, power, capacity = totals_with_multiplier(component, count)
+    except ValueError as exc:
+        label = f"node {node}" if link is None else f"link {link} {end} end"
+        raise ValueError(f"{label}: {exc}") from exc
     return HardwareUse(
         node, link, end, component, count, bom_count, capex, power, capacity, active
     )
@@ -106,8 +110,9 @@ def hardware_inventory(
 
     Raises:
         ValueError: If any node, link or link end has a ``hardware`` value
-            that is not a mapping or a count that is not a finite positive
-            number; the message starts with the entity
+            that is not a mapping, a count that is not a finite positive
+            number, an ``exclusive`` that is not a boolean, or a total that
+            exceeds the finite float range; the message starts with the entity
             (``node <name>``, ``link <key>``, ``link <key> source end``).
     """
     uses: list[HardwareUse] = []

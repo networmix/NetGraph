@@ -20,20 +20,33 @@ from ngraph import (
 
 @pytest.mark.parametrize("costs", [False, True])
 @pytest.mark.parametrize(
-    "kind", ["split", "optimized_spf", "residual", "t1", "t2", "equal", "optimized"]
+    "kind",
+    [
+        "split",
+        "optimized_spf",
+        "residual",
+        "t1",
+        "t2",
+        "equal",
+        "weighted",
+        "optimized",
+    ],
 )
 def test_report_record_selection_has_numerical_and_getter_controls(
     kind, costs, monkeypatch
 ):
     if kind == "t1":
         model = ngc.DistributedTE(ngc.TunnelCount(1))
-    elif kind in ("t2", "equal", "optimized"):
+    elif kind in ("t2", "equal", "weighted", "optimized"):
         model = ngc.CentralizedTE(
             source_allocation=(
                 ngc.SourceAllocation.OPTIMIZED
                 if kind == "optimized"
+                else ngc.SourceAllocation.WEIGHTED
+                if kind == "weighted"
                 else ngc.SourceAllocation.EQUAL
             ),
+            source_weights=[1, 0, 0] if kind == "weighted" else None,
             tunnel_count=ngc.TunnelCount(1) if kind == "t2" else None,
         )
     else:
@@ -90,7 +103,8 @@ def test_report_record_selection_has_numerical_and_getter_controls(
     assert row.result.delivered == row.reference_request_units == 4
     assert row.result.source_drops == 0 and not row.result.edge_drops
     assert len(calls) == int(
-        kind in ("split", "residual", "equal") or (kind == "optimized_spf" and costs)
+        kind in ("split", "residual", "equal", "weighted")
+        or (kind == "optimized_spf" and costs)
     )
     report = row.cost_distribution
     if not costs:

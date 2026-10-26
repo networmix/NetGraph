@@ -157,8 +157,7 @@ def _summarize_selector(selector: Selector, net: Any) -> Dict[str, Any]:
         Dict with ``label``, ``groups``, ``nodes`` (all matches), ``enabled_nodes``
         (the enabled ones among them) and ``labels`` (first five group labels), or
         ``label`` and ``error`` when the selector engine refuses it (for example
-        a group key too long to write as text, or a compared
-        number too large for a float).
+        a group key too long to write as text).
     """
     from ngraph.model.selectors import select_nodes
 
