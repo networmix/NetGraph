@@ -46,8 +46,7 @@ For development, or to install from the repository:
 git clone https://github.com/networmix/NetGraph-Core
 git clone https://github.com/networmix/NetGraph
 
-# Install NetGraph-Core first (an editable build also carries the Core's private
-# test hooks; `pip install .` builds it as the published wheel is built)
+# Install NetGraph-Core first
 cd NetGraph-Core
 pip install -e .
 

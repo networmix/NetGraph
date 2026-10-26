@@ -36,9 +36,10 @@ def test_mixed_exclusion_reason_and_empty_branch_rules_are_documented():
         in text
     )
     assert "an empty branch keeps its discarded share" in text
+    # The expansion rule's home is the concepts page; the YAML reference links it.
     assert (
         "Branches whose only pairs are node-to-itself or same-label group pairs are removed recursively"
-        in text
+        in (ROOT / "docs/concepts.md").read_text()
     )
     assert (
         "A selection that matches no active node keeps its share as an `empty_selection` discard"

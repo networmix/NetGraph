@@ -1,12 +1,4 @@
-# Command Line Interface
-
-Quick links:
-
-- [Design](design.md) - architecture, model, algorithms, workflow
-- [DSL Reference](dsl.md) - YAML syntax for scenario definition
-- [Workflow Reference](workflow.md) - analysis workflow configuration and execution
-- [API Reference](api.md) - Python API for programmatic scenario creation
-- [Auto-Generated API Reference](api-full.md) - complete class and method documentation
+# Command Line
 
 The `ngraph` command inspects and runs scenarios from the terminal.
 
@@ -66,7 +58,7 @@ After loading and validating the scenario file, `inspect` reports:
 - **Demand sets**: demand patterns and volumes, capacity-vs-demand summary
 - **Workflow steps**: the steps that would run, in order, with their parameters in detail mode
 
-A link counts as enabled when it and both of its end nodes are enabled, in every figure. A selector preview reads `<label>: G groups, N nodes (E enabled)`: the label is the selector's path (`*` without one) followed by its other parts, for example `^A [match: role == edge or tier == 1]`, `* [group_by: role]` or `^A [active_only: false]`; N counts every node the selector matches with its `active_only` filter lifted, E the enabled ones among them, and G the groups of those N nodes. Each distinct selector is listed on its own, also when two share a path. A selection error during preview (for example a group key too large to write as text) prints `ERROR` with the reason, and invalid hardware prints under the hierarchy as `Unable to analyze (...)`; `inspect` still finishes. An invalid demand or workflow selector pattern is refused at load, names the field and value, and makes `inspect` exit 1.
+A link counts as enabled when it and both of its end nodes are enabled, in every figure ([Links, directions and what is enabled](../concepts.md#links-directions-and-what-is-enabled)). A selector preview reads `<label>: G groups, N nodes (E enabled)`: the label is the selector's path (`*` without one) followed by its other parts, for example `^A [match: role == edge or tier == 1]`, `* [group_by: role]` or `^A [active_only: false]`; N counts every node the selector matches with its `active_only` filter lifted, E the enabled ones among them, and G the groups of those N nodes. Each distinct selector is listed on its own, also when two share a path. A selection error during preview (for example a group key too large to write as text) prints `ERROR` with the reason, and invalid hardware prints under the hierarchy as `Unable to analyze (...)`; `inspect` still finishes. An invalid demand or workflow selector pattern is refused at load, names the field and value, and makes `inspect` exit 1.
 
 **Examples:**
 
@@ -165,12 +157,9 @@ The top-level fields are `metadata`, `units_report` and ordered `steps`. Each st
 jq '{q: .units_report.q, steps: [.steps[] | {name, execution_order, question}]}' results.json
 ```
 
-- **BuildGraph** returns node-link data under `result.graph`.
-- **MaxFlow** and **TrafficMatrixPlacement** return `result.cases`, baseline first. Each case contains physical pattern metadata, sampled `occurrences` and a `states` mapping: `converged` rows for capacity, the requested failure states for placement, which also has exact totals and expansion accounting.
-- **MaximumSupportedDemand** returns `alpha_feasible`, probe history, search status and any proved upper certificate.
-- **NetworkStats** returns its physical counts/statistics directly under `result`.
+Each step's result is described with the step in [Workflow Steps](workflow.md), and every field in [Results](results.md). Native bandwidth amounts are integer units of the run's `q`, which the units report records; [Results and their units](../concepts.md#results-and-their-units) lists the other kinds of numbers. Optional costs, cuts and edge arrays appear only when requested and applicable.
 
-Numerical values are integer units and the report records their quantum. Optional costs, cuts and edge arrays appear only when requested and applicable. See [workflow results](workflow.md) and the packaged `results.json` schema. The results file and `--stdout` carry the same compact JSON: one line with no indentation, then a newline (`jq .` prints it indented). Encoding completes before a results file is atomically replaced.
+The results file and `--stdout` carry the same compact JSON: one line with no indentation or spaces after separators, non-ASCII characters kept, then a newline (`jq .` prints it indented). NaN is refused. Encoding completes before a results file is atomically replaced.
 
 ## Output Behavior
 

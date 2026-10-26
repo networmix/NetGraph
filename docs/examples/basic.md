@@ -32,7 +32,7 @@ prepared = prepare(Scenario(network, units=UnitsSettings(resolution=1)))
 source, target = Selector("^A$"), Selector("^C$")
 ```
 
-The explicit quantum is 1, so the returned native units equal physical bandwidth units in this example. The prepared scenario keeps a read-only view of the network; later edits of the network require a new preparation.
+`UnitsSettings(resolution=1)` sets the bandwidth unit `q` to 1, so result units equal physical bandwidth here ([Units and the resolution q](../concepts.md#units-and-the-resolution-q)). `netgraph_core`, imported as `ngc`, is the engine; its native objects configure the models below ([Native models and capacity](../reference/api.md#native-models-and-capacity)). The prepared scenario keeps a read-only view of the network; later edits of the network require a new preparation ([Scenario, preparation and run](../concepts.md#scenario-preparation-and-run)).
 
 ## Ask distinct capacity questions
 
@@ -51,7 +51,7 @@ assert shortest.cases[0].states["converged"].rows[0].result.delivered == 3
 assert equal.cases[0].states["converged"].rows[0].result.delivered == 2
 ```
 
-The ideal controller uses both routes: 3 cheap units and 3 expensive units. The shortest-support controller uses only the cheap route, whose parallel capacities sum to 3. Equal splitting admits 2, because each capacity-1 parallel member receives half the traffic. A capacity-weighted shortest-path model can use the full 3 while retaining that shortest support.
+The ideal controller uses both routes: 3 cheap units and 3 expensive units. The shortest-support controller uses only the cheap route, whose parallel capacities sum to 3. Equal splitting admits 2, because each capacity-1 parallel member receives half the traffic. A capacity-weighted shortest-path model can use the full 3 while retaining that shortest support. Each `ngc.FlowPolicyConfig` names one model ([Routing models and admission](../concepts.md#routing-models-and-admission)).
 
 ## Request cost information
 
@@ -68,7 +68,7 @@ assert row.result.delivered == 6
 assert len(row.result.min_cut) == 3
 ```
 
-The minimum-cost objective is 3×2 + 3×4 = 18. The cut contains the two A→B members and A→D, capacity 1 + 2 + 3 = 6. These native marginal pieces describe the optimized question. Determined shortest-path or tunnel delivery reports instead use tagged path-cost bins. Cost work and optional native arrays/cuts are requested explicitly.
+The minimum-cost objective is 3×2 + 3×4 = 18. The cut contains the two A→B members and A→D, capacity 1 + 2 + 3 = 6. `export_cost_distribution=True` asks for the cost report, here the optimized question's marginal cost pieces, and `ngc.OutputOptions(min_cut=True)` for the cut; both are requested explicitly ([Results and their units](../concepts.md#results-and-their-units); [Results and export](../reference/api.md#results-and-export)).
 
 ## Sample failures on the same prepared graph
 
@@ -88,7 +88,7 @@ assert failed.case.pattern.excluded_nodes == ("B",)
 assert failed.case.occurrences == 3
 ```
 
-All three draws give one physical pattern, evaluated once. The baseline has zero sampled occurrences. The graph and quantum stay fixed; the failed case uses its own eligibility.
+`FailureRequest(policy, iterations=3, seed=42)` draws the policy three times. All three draws give one physical pattern, evaluated once, and the baseline has zero sampled occurrences ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)).
 
 ## Read native paths
 
@@ -104,7 +104,7 @@ alternatives = paths(prepared, PathQuery(
 assert [path.cost() for path in alternatives.rows[0].paths] == [2, 4]
 ```
 
-Paths retain native hop/edge identities. `prepared.topology.edge_refs` maps those edge IDs to physical links and directions. Native options control parallel-edge choices, cost ceilings, residuals and masks.
+Paths retain native hop/edge identities. `prepared.topology.edge_refs` maps those edge IDs to physical links and directions. Native options control parallel-edge choices, cost ceilings, residuals and masks: `ngc.KspOptions(3, parallel_edges=False)` asks for up to three paths that differ in their nodes ([Paths and sensitivity](../reference/api.md#paths-and-sensitivity)).
 
 ## Place declared traffic and export
 
@@ -127,4 +127,4 @@ output = StringIO()
 write_json(placed, output)
 ```
 
-The default demand model is lossless shortest-path ECMP. The remaining 4 units are unadmitted. Exact integer accounting distinguishes unadmitted traffic, source losses and edge losses. See the [tutorial](../getting-started/tutorial.md) for workflow execution and the [API](../reference/api.md) for the other native models.
+A `PlacementQuery` places a resolved demand set ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters); [Demands and placement](../reference/api.md#demands-and-placement)). The default demand model is lossless shortest-path ECMP. The remaining 4 units are unadmitted: lossless admission refuses them before they enter the network ([Routing models and admission](../concepts.md#routing-models-and-admission)). See the [tutorial](../getting-started/tutorial.md) for workflow execution and the [API](../reference/api.md) for the other native models.

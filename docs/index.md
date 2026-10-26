@@ -11,7 +11,16 @@ Model network topologies, traffic matrices and failure scenarios declaratively. 
 Two layers:
 
 - **Python layer (NetGraph)**: scenario DSL, workflow execution, results, the Python API and CLI.
-- **C++ layer (NetGraph-Core)**: shortest paths, k-shortest paths and max-flow, run with the GIL released.
+- **C++ layer (NetGraph-Core)**: shortest and k-shortest paths, maximum flow, demand placement, tunnels, forwarding programs and their replay under failures, run with the GIL released.
+
+## How it works
+
+1. **Scenario:** a YAML file or Python objects declare the network, demands, failure policies and an ordered workflow.
+2. **Prepare:** NetGraph builds one read-only graph and chooses one bandwidth unit for the whole run.
+3. **Run:** each workflow step asks its question on that graph, under each failure case it draws.
+4. **Results:** typed Python results, or one JSON file of exact numbers.
+
+[How NetGraph computes](concepts.md) explains each step's rules.
 
 ## Features
 
@@ -19,7 +28,6 @@ Two layers:
 
 - **Declarative Scenarios**: Define topology, traffic, and workflows in validated YAML.
 - **Blueprints**: Reusable topology templates (e.g., Clos fabrics, regions) with parameterized expansion.
-- **Strict Multigraph**: Deterministic graph representation with stable edge IDs.
 
 ### Failure Analysis
 
@@ -30,32 +38,17 @@ Two layers:
 ### Traffic Engineering
 
 - **Routing Modes**: IP routing (cost-only, fixed paths) and traffic engineering (capacity-aware) in one model.
-- **Traffic Placement**: Strategies for ECMP (Equal-Cost Multi-Path) and WCMP (Weighted Cost Multi-Path).
+- **Traffic Placement:** ECMP splits equally among equal-cost next hops at each router; WCMP uses weights ([Routing models and admission](concepts.md#routing-models-and-admission)).
 - **Capacity Analysis**: Max-flow between node groups and traffic-matrix placement with selectable placement policies.
 
 ### Workflow & Integration
 
-- **Structured Results**: JSON export with a fixed shape.
 - **CLI**: Validate, inspect, and run scenarios from the command line.
 - **Python API**: The same modeling and analysis entry points from Python.
 
-## Getting Started
+## Where to start
 
-- **[Installation Guide](getting-started/installation.md)** - Install from PyPI or from source
-- **[Tutorial](getting-started/tutorial.md)** - Run a scenario from the CLI and from Python
-
-## Examples
-
-- **[Bundled Scenarios](examples/bundled-scenarios.md)** - Ready-to-run scenarios (`square_mesh`, `backbone_clos`, `nsfnet`)
-- **[Basic Example](examples/basic.md)** - The analysis API on a four-node network
-- **[Clos Fabric Analysis](examples/clos-fabric.md)** - Analyze a 3-tier Clos network
-
-## Reference Documentation
-
-- **[Design](reference/design.md)** - Architecture, model, algorithms, and workflow
-- **[DSL Reference](reference/dsl.md)** - YAML syntax guide
-- **[Workflow Reference](reference/workflow.md)** - Analysis workflow configuration
-- **[CLI Reference](reference/cli.md)** - Command-line interface
-- **[Schema Reference](reference/schemas.md)** - JSON Schema and validation
-- **[API Reference](reference/api.md)** - Python API documentation
-- **[Auto-Generated API Reference](reference/api-full.md)** - Every public module, generated from docstrings
+- **YAML and CLI:** [Tutorial](getting-started/tutorial.md) → [How NetGraph computes](concepts.md) → [Clos Fabric](examples/clos-fabric.md) → [Bundled Scenarios](examples/bundled-scenarios.md) → [Scenario YAML](reference/dsl.md), [Workflow Steps](reference/workflow.md), [Command Line](reference/cli.md), [Results](reference/results.md).
+- **Python:** [Tutorial](getting-started/tutorial.md#use-python) → [How NetGraph computes](concepts.md) → [Basic Example](examples/basic.md) → [Python API](reference/api.md) → [Python API (generated)](reference/api-full.md), [Results](reference/results.md).
+- **Reading JSON results:** [Tutorial](getting-started/tutorial.md#read-results) → [Results and their units](concepts.md#results-and-their-units) → [Results](reference/results.md).
+- **Contributor:** [Installation](getting-started/installation.md#from-source) → [Architecture](reference/design.md) → [Schemas](reference/schemas.md#for-contributors).

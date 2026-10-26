@@ -707,7 +707,7 @@ class PlacementTotals(_ResultRecord):
     source_drop_units: int
     """LOSSY units lost at sources over the rows."""
     edge_drop_units: int
-    """LOSSY units dropped on links over the rows."""
+    """LOSSY units dropped on physical links and TE ingress pool attachments over the rows."""
     reference_shortfall_units: int
     """The reference request minus the delivery (integer units of q)."""
     delivery_ratio: Fraction
@@ -744,7 +744,10 @@ class DeadCap(_ResultRecord):
 
 @_record
 class ForwardingFailure(_ResultRecord):
-    """Native lossy forwarding found no fixed point for this case and state."""
+    """The case and state's bounded lossy forwarding cycled or reached its round limit.
+
+    This does not prove that no stable answer exists.
+    """
 
     kind: ClassVar[Literal["loss_iteration"]] = "loss_iteration"
     """The record kind, a fixed tag."""

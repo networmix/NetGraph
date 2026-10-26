@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Generate the NetGraph API reference from docstrings.
 
-Run from the project root. Prints to stdout by default; ``--write-file``
-writes docs/reference/api-full.md instead.
+The page documents the ``__all__`` of the public modules and nothing else. Run
+from the project root. Prints to stdout by default; ``--write-file`` writes
+docs/reference/api-full.md instead.
 """
 
 import argparse
+import ast
 import dataclasses
-import glob
+import enum
 import importlib
 import inspect
 import os
@@ -201,41 +203,104 @@ if os.path.exists("ngraph"):
     sys.path.insert(0, ".")
 
 
-def discover_modules():
-    """Return ngraph module names to document, in documentation order.
+# The public API: each module's __all__, in page order. Nothing else is documented.
+PUBLIC_MODULES = ("ngraph", "ngraph.workflow", "ngraph.hardware", "ngraph.logging")
 
-    Skips ``__init__.py`` and ``__main__.py``.
+
+def _defined_value(module_name, name):
+    """The source of the module-level assignment that defines ``name``, and its docstring.
+
+    Follows ``from X import name`` (also under ``if TYPE_CHECKING:``) to the module
+    that assigns it. The docstring is the string literal right after the assignment,
+    the convention record fields use. Returns None when no assignment is found.
     """
-    modules = []
-
-    for py_file in glob.glob("ngraph/**/*.py", recursive=True):
-        filename = os.path.basename(py_file)
-        if filename in ["__init__.py", "__main__.py"]:
+    module = importlib.import_module(module_name)
+    source = inspect.getsource(module)
+    tree = ast.parse(source)
+    body = list(tree.body)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If):
+            body.extend(node.body)
+    for index, node in enumerate(body):
+        if isinstance(node, ast.Assign):
+            targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            targets = [node.target.id] if node.value is not None else []
+        else:
             continue
+        if name in targets:
+            text = ast.get_source_segment(source, node.value)
+            following = body[index + 1] if index + 1 < len(body) else None
+            doc = None
+            if (
+                isinstance(following, ast.Expr)
+                and isinstance(following.value, ast.Constant)
+                and isinstance(following.value.value, str)
+            ):
+                doc = inspect.cleandoc(following.value.value)
+            return text, doc
+    for node in body:
+        if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            if any(alias.name == name for alias in node.names):
+                return _defined_value(node.module, name)
+        if isinstance(node, ast.ImportFrom) and node.level > 0:
+            if any(alias.name == name for alias in node.names):
+                package = (
+                    module_name
+                    if hasattr(module, "__path__")
+                    else (module_name.rpartition(".")[0])
+                )
+                for _ in range(node.level - 1):
+                    package = package.rpartition(".")[0]
+                target = f"{package}.{node.module}" if node.module else package
+                return _defined_value(target, name)
+    return None
 
-        module_path = py_file.replace("/", ".").replace(".py", "")
-        modules.append(module_path)
 
-    def module_sort_key(module_name):
-        """Put top-level modules first, then subpackages in the listed order."""
-        parts = module_name.split(".")
-        if len(parts) == 2:
-            return (0, parts[1])
-        # Subpackages not listed here sort last.
-        order = [
-            "model",
-            "workflow",
-            "dsl",
-            "profiling",
-            "utils",
-            "analysis",
-        ]
-        if len(parts) >= 3 and parts[1] in order:
-            return (1 + order.index(parts[1]), ".".join(parts[2:]))
-        return (99, module_name)
+def _entry_kind(name, obj):
+    """``class``, ``enum``, ``function``, ``version`` or ``alias`` for a public name.
 
-    modules.sort(key=module_sort_key)
-    return modules
+    A class or function is documented as itself only under its own name; any other
+    public value (``PhysicalAmount = float``, a union, a literal) is a type alias.
+    """
+    if name == "__version__":
+        return "version"
+    if getattr(obj, "__name__", None) == name and inspect.isclass(obj):
+        return "enum" if issubclass(obj, enum.Enum) else "class"
+    if getattr(obj, "__name__", None) == name and inspect.isfunction(obj):
+        return "function"
+    return "alias"
+
+
+def public_entries(modules=PUBLIC_MODULES):
+    """One list of entries per module, in ``__all__`` order.
+
+    An object exported by several modules has one entry, under the first module
+    that lists it, naming every import path.
+    """
+    sections = []
+    seen = {}
+    for module_name in modules:
+        module = importlib.import_module(module_name)
+        entries = []
+        for name in module.__all__:
+            obj = getattr(module, name)
+            path = f"{module_name}.{name}"
+            kind = _entry_kind(name, obj)
+            key = (name, id(obj)) if kind != "alias" else (name, path)
+            if kind != "alias" and key in seen:
+                seen[key]["paths"].append(path)
+                continue
+            entry = {"name": name, "object": obj, "kind": kind, "paths": [path]}
+            if kind == "alias":
+                found = _defined_value(module_name, name)
+                if found is None:
+                    raise ValueError(f"{path}: no assignment defines this public name")
+                entry["definition"], entry["doc"] = found
+            seen[key] = entry
+            entries.append(entry)
+        sections.append((module_name, entries))
+    return sections
 
 
 class _Shown:
@@ -324,6 +389,8 @@ def get_class_info(cls):
 
     if hasattr(cls, "__dataclass_fields__"):
         for field_name, field in cls.__dataclass_fields__.items():
+            if field_name.startswith("_"):
+                continue
             field_type = _union_text(field.type) or getattr(
                 field.type, "__name__", str(field.type)
             )
@@ -379,127 +446,100 @@ def get_function_info(func):
     }
 
 
-def document_module(module_name):
-    """Render one module's section: docstring, public classes, and functions.
+def document_entry(entry):
+    """Render one public name: its import paths, then what its kind shows."""
+    paths, obj, kind = entry["paths"], entry["object"], entry["kind"]
+    doc = f"### {paths[0]}\n\n"
+    if len(paths) > 1:
+        also = ", ".join(f"`{path}`" for path in paths[1:])
+        doc += f"Also importable as {also}.\n\n"
 
-    An import failure yields a section that reports the error.
-    """
-    try:
-        module = importlib.import_module(module_name)
-    except ImportError as e:
-        return f"## {module_name}\n\n**Error importing module:** {e}\n\n---\n"
+    if kind == "version":
+        return doc + "The installed package version, a string.\n\n"
 
-    doc = f"## {module_name}\n\n"
+    if kind == "alias":
+        doc += f"```python\n{entry['name']} = {entry['definition']}\n```\n\n"
+        if entry["doc"]:
+            doc += f"{_normalize_markdown_lists(entry['doc'])}\n\n"
+        return doc
 
-    if module.__doc__:
-        docstring = _normalize_markdown_lists(module.__doc__.strip())
-        doc += f"{docstring}\n\n"
+    if kind == "function":
+        info = get_function_info(obj)
+        doc += f"`{info['name']}{info['signature']}`\n\n"
+        return doc + f"{_normalize_markdown_lists(info['doc'])}\n\n"
 
-    # Skip names imported from other modules.
-    classes = []
-    functions = []
+    info = get_class_info(obj)
+    doc += f"{_normalize_markdown_lists(info['doc'])}\n\n"
 
-    for name, obj in inspect.getmembers(module):
-        if not name.startswith("_"):
-            if inspect.isclass(obj) and obj.__module__ == module_name:
-                classes.append(get_class_info(obj))
-            elif inspect.isfunction(obj) and obj.__module__ == module_name:
-                functions.append(get_function_info(obj))
+    if kind == "enum":
+        doc += "**Members:**\n\n"
+        for member in obj:
+            doc += f"- `{member.name}` = {member.value!r}\n"
+        doc += "\n"
 
-    for cls_info in classes:
-        doc += f"### {cls_info['name']}\n\n"
-        doc += f"{_normalize_markdown_lists(cls_info['doc'])}\n\n"
+    if info["attributes"]:
+        doc += "**Attributes:**\n\n"
+        for attr in info["attributes"]:
+            type_info = f" ({attr['type']})" if attr["type"] != "typing.Any" else ""
+            default_info = f" = {attr['default']}" if attr["default"] else ""
+            when = attr.get("none_when")
+            none_info = (
+                ""
+                if not when
+                else ": always None"
+                if when == "always"
+                else f": None when {when}"
+            )
+            # Keep attributes as a single-level list line to satisfy Markdown linters
+            doc += f"- `{attr['name']}`{type_info}{default_info}{none_info}\n"
+        doc += "\n"
 
-        if cls_info["attributes"]:
-            doc += "**Attributes:**\n\n"
-            for attr in cls_info["attributes"]:
-                type_info = f" ({attr['type']})" if attr["type"] != "typing.Any" else ""
-                default_info = f" = {attr['default']}" if attr["default"] else ""
-                when = attr.get("none_when")
-                none_info = (
-                    ""
-                    if not when
-                    else ": always None"
-                    if when == "always"
-                    else f": None when {when}"
-                )
-                # Keep attributes as a single-level list line to satisfy Markdown linters
-                doc += f"- `{attr['name']}`{type_info}{default_info}{none_info}\n"
-            doc += "\n"
+    if info["methods"]:
+        doc += "**Methods:**\n\n"
+        for method in info["methods"]:
+            # Avoid nested list items to satisfy Markdown linters (MD007)
+            if method["doc"] and method["doc"] != "No documentation available.":
+                doc += f"- `{method['name']}{method['signature']}` - {method['doc']}\n"
+            else:
+                doc += f"- `{method['name']}{method['signature']}`\n"
+        doc += "\n"
 
-        if cls_info["methods"]:
-            doc += "**Methods:**\n\n"
-            for method in cls_info["methods"]:
-                # Avoid nested list items to satisfy Markdown linters (MD007)
-                if method["doc"] and method["doc"] != "No documentation available.":
-                    doc += (
-                        f"- `{method['name']}{method['signature']}` - {method['doc']}\n"
-                    )
-                else:
-                    doc += f"- `{method['name']}{method['signature']}`\n"
-            doc += "\n"
-
-    for func_info in functions:
-        doc += f"### {func_info['name']}{func_info['signature']}\n\n"
-        doc += f"{_normalize_markdown_lists(func_info['doc'])}\n\n"
-
-    doc += "---\n\n"
     return doc
 
 
-def generate_api_documentation(output_to_file=False):
-    """Render the API reference for every discovered module.
+def generate_api_documentation(output_to_file=False, modules=PUBLIC_MODULES):
+    """Render the API reference for the public names of ``modules``.
 
     Args:
         output_to_file (bool): If True, write to docs/reference/api-full.md.
             If False, return the documentation string.
+        modules: The modules whose ``__all__`` the page documents, in page order.
 
     Returns:
         str: The generated documentation when ``output_to_file`` is False;
             otherwise None.
     """
-    modules = discover_modules()
+    sections = public_entries(modules)
+    count = sum(len(entries) for _, entries in sections)
+    print(f"🔍 Documenting {count} public names of {len(modules)} modules...")
 
-    print(f"🔍 Auto-discovered {len(modules)} modules to document...")
+    doc = """<!-- markdownlint-disable MD007 MD032 MD029 MD050 MD004 MD052 MD012 -->
 
-    header = f"""<!-- markdownlint-disable MD007 MD032 MD029 MD050 MD004 MD052 MD012 -->
+# Python API (generated)
 
-# NetGraph API Reference (Auto-Generated)
-
-Every public module, class and function, generated from the docstrings.
-The [API guide](api.md) covers the same API with examples.
-
-Quick links:
-
-- [API Guide](api.md)
-- [CLI Reference](cli.md)
-- [DSL Reference](dsl.md)
-
-Modules auto-discovered: {len(modules)}
-
----
+Every public name of NetGraph, generated from the docstrings: the `__all__` of `ngraph`, `ngraph.workflow`, `ngraph.hardware` and `ngraph.logging`, and nothing else. The [Python API](api.md) guide shows the same API by task, with examples.
 
 """
+    for module_name, entries in sections:
+        doc += f"## {module_name}\n\n"
+        for entry in entries:
+            doc += document_entry(entry)
+        doc += "---\n\n"
 
-    print("📝 Generating API documentation...")
-    doc = header
+    doc += """## Errors
 
-    for module_name in modules:
-        print(f"  📝 Documenting {module_name}")
-        try:
-            module_doc = document_module(module_name)
-            doc += module_doc
-        except Exception as e:
-            print(f"  ⚠️  Error documenting {module_name}: {e}")
-            doc += f"## {module_name}\n\n**Error:** Could not generate documentation for this module: {e}\n\n---\n\n"
-
-    footer = """
-## Errors
-
-Invalid input mostly raises `ValueError`; a scenario that fails schema validation raises `jsonschema.ValidationError`. Each entry's Raises section lists its cases.
+`Scenario.from_yaml` refuses invalid input with `ValueError`, whose message starts with the field's path and value. A constructor refuses an invalid field with `ValueError` naming the field. Each entry's Raises section lists its other cases.
 """
-
-    doc += footer
 
     if output_to_file:
         output_path = Path("docs/reference/api-full.md")
@@ -511,7 +551,6 @@ Invalid input mostly raises `ValueError`; a scenario that fails schema validatio
         print("✅ API documentation generated successfully!")
         print(f"📄 Written to: {output_path}")
         print(f"📊 Size: {len(doc):,} characters")
-        print(f"📚 Modules documented: {len(modules)}")
     else:
         return doc
 

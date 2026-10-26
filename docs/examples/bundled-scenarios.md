@@ -1,6 +1,6 @@
 # Bundled Scenarios
 
-Four scenarios under `scenarios/` exercise the DSL, workflow steps and results export. They are starting points for your own models; `readme_example.yml` is the smallest.
+Four scenarios under `scenarios/` exercise the DSL, workflow steps and results export. They are starting points for your own models; `square_mesh.yaml` is the smallest.
 
 ## How to run
 
@@ -14,7 +14,7 @@ ngraph inspect scenarios/backbone_clos.yml --detail
 ngraph run scenarios/backbone_clos.yml --output out
 ```
 
-You can filter output by workflow step names with `--keys` (see each scenario section for step names).
+`--detail` adds full node and link tables and step parameters to `inspect`. `--keys` exports only the named steps ([Filtering Results by Step Names](../reference/cli.md#filtering-results-by-step-names)); each scenario section lists its step names.
 
 ## `scenarios/square_mesh.yaml`
 
@@ -25,6 +25,8 @@ You can filter output by workflow step names with `--keys` (see each scenario se
   - Demand set: pairwise demands across all nodes (`baseline_traffic_matrix`)
   - Workflow steps: `msd_baseline`, `tm_placement`, `node_to_node_capacity_matrix`
 
+Maximum supported demand (MSD) searches for the largest tested feasible demand multiplier; traffic-matrix placement sends the declared demands at a chosen multiplier ([Maximum supported demand](../concepts.md#maximum-supported-demand); [Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
+
 Run:
 
 ```bash
@@ -33,6 +35,22 @@ ngraph run scenarios/square_mesh.yaml --output out
 
 # Filter to MSD only and print to stdout
 ngraph run scenarios/square_mesh.yaml --keys msd_baseline --stdout
+```
+
+## `scenarios/readme_example.yml`
+
+- **Purpose**: The README's scenario: two Clos sites built from one blueprint, with capacity, MSD and placement under failures.
+- **Contents**:
+
+  - Failure policy: one random link per draw (`failures.random_link`)
+  - Demand set: site-to-site leaf traffic with ECMP (`global_traffic`)
+  - Workflow steps: `stats`, `site_capacity`, `max_demand`, `placement_at_max`
+
+Run:
+
+```bash
+ngraph inspect scenarios/readme_example.yml --detail
+ngraph run scenarios/readme_example.yml --output out
 ```
 
 ## `scenarios/backbone_clos.yml`
@@ -79,7 +97,7 @@ ngraph run scenarios/nsfnet.yaml --keys node_to_node_capacity_matrix_1 --stdout
 `--stdout` prints only the JSON, so it pipes into `jq`:
 
 ```bash
-# The largest traffic multiplier actually tested feasible, with its probe history
+# The largest traffic multiplier actually tested feasible, its search status and probe history
 ngraph run scenarios/square_mesh.yaml --no-results --stdout --keys msd_baseline \
   | jq '.steps[] | select(.name == "msd_baseline") | .result | {alpha_feasible, search_status, history}'
 
@@ -98,8 +116,4 @@ ngraph run scenarios/backbone_clos.yml --no-results --stdout --keys cost_power \
   | jq -c '.steps[] | select(.name == "cost_power") | .result.levels[] | select(.level == 1) | .rows[] | {path, capex_total, power_total_watts}'
 ```
 
-## Notes on results
-
-Every run exports producer metadata, the units report and an ordered `steps` array. Each step records its normalized question and actual execution order. `--keys` filters that array after execution; retained orders may have gaps.
-
-Capacity and placement results contain a baseline case followed by distinct sampled physical failure patterns. Each case records occurrences and a `states` mapping: `converged` for capacity, the requested failure states (by default `converged`) for placement. Without sampling there is only the baseline. Demand totals and delivery ratios remain exact integers and rational pairs. Native flow arrays, cuts and tagged cost distributions appear only when requested. MSD reports the largest tested feasible alpha and the complete compact probe history. The [Workflow Reference](../reference/workflow.md) describes the settings and the [API guide](../reference/api.md) shows typed access.
+`alpha_feasible` is the largest tested feasible demand multiplier, `search_status` names the search outcome and `history` lists every probe ([Maximum supported demand](../concepts.md#maximum-supported-demand)). `delivery_ratio` is delivered traffic divided by the scaled declared request ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)); `capex_total` is capital cost and `power_total_watts` is power in watts ([CostPower](../reference/workflow.md#costpower)). Every field is in [Results](../reference/results.md); cases and their occurrences in [Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states), and the kinds of numbers in [Results and their units](../concepts.md#results-and-their-units).

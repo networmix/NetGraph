@@ -23,20 +23,21 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: getting-started/installation.md
-      - Quickstart: getting-started/tutorial.md
+      - Tutorial: getting-started/tutorial.md
+  - How NetGraph computes: concepts.md
   - Examples:
-      - Bundled Scenarios: examples/bundled-scenarios.md
       - Basic Example: examples/basic.md
       - Clos Fabric: examples/clos-fabric.md
+      - Bundled Scenarios: examples/bundled-scenarios.md
   - Reference:
-      - Design: reference/design.md
-      - DSL: reference/dsl.md
-      - Workflow: reference/workflow.md
-      - CLI: reference/cli.md
-      - Schemas: reference/schemas.md
+      - Scenario YAML: reference/dsl.md
+      - Workflow Steps: reference/workflow.md
+      - Command Line: reference/cli.md
       - Results: reference/results.md
-      - API: reference/api.md
-      - API Full: reference/api-full.md
+      - Python API: reference/api.md
+      - Python API (generated): reference/api-full.md
+      - Schemas: reference/schemas.md
+      - Architecture: reference/design.md
 plugins:
   - search
 strict: true

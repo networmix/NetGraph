@@ -1,6 +1,6 @@
 # Tutorial
 
-A scenario describes an editable network, traffic, failure policies and an ordered workflow. Preparation chooses one bandwidth quantum and makes owned numerical inputs; execution returns typed results.
+A scenario describes a network, its traffic, failure policies and an ordered workflow. Preparation turns it into one read-only graph with one bandwidth unit `q`, and a run returns typed results ([Scenario, preparation and run](../concepts.md#scenario-preparation-and-run)).
 
 ## Write a scenario
 
@@ -47,7 +47,18 @@ workflow:
     failure_trace: true
 ```
 
-Each physical link carries traffic in both directions. Costs must be positive integers. Volumes and capacities are physical quantities; results use integer units and retain their quantum for display.
+Each physical link carries traffic in both directions, each with its full capacity ([Links, directions and what is enabled](../concepts.md#links-directions-and-what-is-enabled)). Costs are positive integers ([link keys](../reference/dsl.md#network-topology)). Volumes and capacities are physical amounts; native bandwidth results are whole units of `q` ([Units and the resolution q](../concepts.md#units-and-the-resolution-q)).
+
+What the other keys mean:
+
+- `units` sets the bandwidth unit `q` (`auto`: preparation chooses it) and the precision target ([Precision and the choice of q](../concepts.md#precision-and-the-choice-of-q)).
+- `failures` declares a failure policy: here, one random link fails per draw ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states); [`failures`](../reference/dsl.md#failures-failure-policies)).
+- A `preset` names a model: `SHORTEST_PATHS_ECMP` splits whole units equally among equal-cost next hops at each router; `TE_MAXFLOW_UNLIM` asks for the largest flow ([Routing models and admission](../concepts.md#routing-models-and-admission)).
+- `BuildGraph` and `NetworkStats` export the graph and its statistics ([Workflow Steps](../reference/workflow.md)).
+- `outputs` asks for optional results: here the minimum cut and the cost report ([Output selection](../reference/workflow.md#output-selection)).
+- `MaximumSupportedDemand` searches for the largest multiplier alpha of the demand volumes that the network carries in full, to the relative tolerance `alpha_tolerance` ([Maximum supported demand](../concepts.md#maximum-supported-demand); [MaximumSupportedDemand](../reference/workflow.md#maximumsupporteddemand)).
+- `alpha_from_step` places the demands at the multiplier an earlier MSD step found ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters); [TrafficMatrixPlacement](../reference/workflow.md#trafficmatrixplacement)).
+- `failure_policy`, `iterations`, `workers` and `failure_trace` run that placement over 20 failure draws, on every CPU, recording the first draw of each failure pattern ([Keys common to analysis steps](../reference/workflow.md#keys-common-to-analysis-steps)).
 
 ## Run and inspect
 
@@ -58,22 +69,22 @@ ngraph run example.yaml --stdout --no-results
 ngraph run example.yaml --profile --output results/
 ```
 
-`run` writes `results/example.results.json`. `--stdout` emits pure JSON; diagnostic and step-profile reports go to stderr. The output file is replaced after complete encoding succeeds.
+`run` writes `results/example.results.json`. `--stdout` emits pure JSON, and `--profile` reports where the run spends its time; diagnostic and step-profile reports go to stderr. The output file is replaced after complete encoding succeeds ([Command Line](../reference/cli.md#run)).
 
 ## Read results
 
-The document has `metadata`, `units_report` and an ordered `steps` array. Each step records its normalized `question` and typed `result`.
+The document has `metadata`, `units_report` and an ordered `steps` array. Each step records its normalized `question` (what it asked) and typed `result`. The `units_report` holds `q` and the run's precision ([Results and their units](../concepts.md#results-and-their-units)); each failure case's `states.converged.totals` holds the placement's totals in the converged state ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states), [Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 
 ```bash
 jq '.steps[] | select(.name == "supported_load") | .result.alpha_feasible' results/example.results.json
 jq '.steps[] | select(.name == "under_failures") | .result.cases[].states.converged.totals' results/example.results.json
 ```
 
-The intact chain has physical capacity 10, cut at A→B, and route cost 3. Either single-link failure disconnects A from C. The 20 draws therefore collapse into at most two failure patterns, plus the baseline. `occurrences` sum to 20; the baseline is not an extra trial.
+The intact chain has physical capacity 10, cut at A→B, and route cost 3. Either single-link failure disconnects A from C. The 20 draws therefore collapse into at most two failure patterns, plus the baseline. `occurrences` sum to 20; the baseline is not an extra trial ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)).
 
-MSD reports its largest tested feasible factor and complete probe history. Its result distinguishes search bounds, iteration limits, stagnation and numeric range refusal. An upper certificate is present only for a proved monotone class. The placement step records that it used the earlier step's feasible factor.
+MSD reports its largest tested feasible factor and every probe it made; the placement step records that it used that factor ([Maximum supported demand](../concepts.md#maximum-supported-demand)).
 
-To export one step, add `--keys under_failures`. The complete workflow still executes; the selected step retains its actual execution order 4. Filtered exports can have gaps, while the full run is contiguous.
+To export one step, add `--keys under_failures`: the whole workflow still runs, and the step keeps its execution order 4 ([Filtering Results by Step Names](../reference/cli.md#filtering-results-by-step-names)).
 
 ## Use Python
 
@@ -90,6 +101,6 @@ with open("python-results.json", "w") as destination:
     write_json(result, destination)
 ```
 
-Results belong to the returned run. `Scenario` keeps declarations; later topology edits require another preparation. Library users can prepare selected demand sets and call `capacity`, `place`, `paths`, `edge_sensitivity` or `maximum_supported_demand` directly with typed queries.
+Results belong to the returned run; topology edits after `prepare` need a new preparation ([Scenario, preparation and run](../concepts.md#scenario-preparation-and-run)). Library users can prepare selected demand sets and call `capacity`, `place`, `paths`, `edge_sensitivity` or `maximum_supported_demand` directly with typed queries ([Python API](../reference/api.md)).
 
-Continue with the [basic API example](../examples/basic.md), [Clos topology](../examples/clos-fabric.md), [DSL reference](../reference/dsl.md) and [workflow reference](../reference/workflow.md).
+Continue with [How NetGraph computes](../concepts.md), then the examples: [Basic Example](../examples/basic.md), [Clos Fabric](../examples/clos-fabric.md) and [Bundled Scenarios](../examples/bundled-scenarios.md).

@@ -1,12 +1,4 @@
-# Domain-Specific Language (DSL)
-
-Quick links:
-
-- [Design](design.md) - architecture, model, algorithms, workflow
-- [Workflow Reference](workflow.md) - analysis workflow configuration and execution
-- [CLI Reference](cli.md) - command-line tools for running scenarios
-- [API Reference](api.md) - Python API for programmatic scenario creation
-- [Auto-Generated API Reference](api-full.md) - complete class and method documentation
+# Scenario YAML
 
 A scenario is a YAML file describing the network topology (nodes, links, risk groups), the analysis configuration (traffic demands, failure policies, workflow) and reusable parts (blueprints, hardware components). Every structure can be written out directly or generated from templates and parameters.
 
@@ -18,9 +10,14 @@ units:
   precision: 0.001
 ```
 
-Capacities, demand volumes, finite offers/designs and minimum unreserved bandwidth are physical quantities. A legal explicit resolution is one power of two from 2^-32 through 2^32. Preparation promotes each input to binary64, selects one quantum q and converts quantities with exact half-up rounding. Costs are positive integers; counts and weights are integers. Each finite native bandwidth input and each directed graph capacity/cost aggregate must stay below 2^62, including reverse and synthetic edges. Exact result totals can exceed 64 bits.
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `resolution` | `auto` | The bandwidth unit `q`: `auto`, or one power of two from 2^-32 through 2^32 |
+| `precision` | `0.001` | The relative precision target; the units report states whether it is met |
 
-The units report is always returned. It records input and local-split constraints, rounding counts, missed targets and unverified supplied programs. Failures and MSD probes keep q and report observation-specific misses. Unknown keys refuse at their configuration boundary; arbitrary user metadata belongs under `attrs`. Every load refusal is a `ValueError` naming its field and raw value; a schema error is retained as the cause. An optional field accepts explicit `null` wherever its Python constructor accepts `None`.
+Capacities, demand volumes, finite offers and designs and minimum unreserved bandwidth are physical amounts, converted to whole units of `q` at preparation ([Units and the resolution q](../concepts.md#units-and-the-resolution-q)); [Precision and the choice of q](../concepts.md#precision-and-the-choice-of-q) says how `q` is chosen and what the units report records. Costs are positive integers ([link keys](#direct-node-and-link-definitions)); counts and weights are integers.
+
+Unknown keys refuse at their configuration boundary; arbitrary user metadata belongs under `attrs`. Every load refusal is a `ValueError` naming its field and raw value; a schema error is retained as the cause. An optional field accepts explicit `null` wherever its Python constructor accepts `None`.
 
 ## Template Syntaxes
 
@@ -32,7 +29,7 @@ Three template syntaxes, each valid only in its own context:
 | `$var` / `${var}` | `pod${p}/leaf` | Links, rules, demands | Substituted from the `vars` of an `expand` block |
 | `{n}` | `srv-{n}` | `template` field | 1-indexed counter up to `count` |
 
-## Selection Models
+## Selecting nodes
 
 The DSL has two ways of selecting entities. Which one applies is fixed by the operation, not chosen by the author.
 
@@ -51,57 +48,100 @@ The DSL has two ways of selecting entities. Which one applies is fixed by the op
 
 Both build on the same primitives (condition evaluation, match specification), but they are not interchangeable.
 
-### Link Creation Flow
+### Selector forms
 
-A link definition is processed in five steps:
+Selectors can be specified as:
 
-1. **Path Selection**: Regex pattern matches nodes by hierarchical name
-   - Capture groups create initial grouping
-   - If no path specified, selects all nodes
-2. **Attribute Filtering**: Optional `match` conditions filter nodes
-   - Uses `logic: "and"` or `"or"` (default: `"or"`)
-   - Operators are listed under Shared Evaluation Primitives below
-3. **Active Filtering**: Filters disabled nodes based on context
-   - Links default: `active_only=false` (creates links to disabled nodes)
-4. **Attribute Grouping**: Optional `group_by` overrides regex capture grouping
-5. **Pattern Application**: Creates links between selected node groups
-   - `mesh`: Every source to every target
-   - `one_to_one`: Pairwise with wrap-around
+1. **String pattern**: A regular expression matched against node names from the start (Python `re.match`)
+2. **Selector object**: A dict with `path`, `group_by`, and/or `match` fields
 
-### Traffic Demand Creation Flow
+At least one of `path`, `group_by`, or `match` must be specified in a selector object.
 
-Traffic demands select nodes the same way as links, with these differences:
+### String patterns
 
-1. `active_only` defaults to `true`: only active nodes participate
-2. Two selections, source nodes first and then target nodes, each with `path`, `match` and `group_by`
-3. `mode` expands the selection: `pairwise` creates one demand per distinct source/target node pair and divides the declared volume among those pairs; `combine` declares one native source-set/destination-set demand
-4. `group_mode` (`flatten`, `per_group`, `group_pairwise`) decides how grouped selections produce demands
+<!-- example: fragment #/properties/demands/additionalProperties/items -->
 
-### Risk Group Creation Flow
+```yaml
+# Exact match
+- source: "spine-1"
 
-Risk groups use the condition-based model and are populated in three ways:
+# Prefix match
+- source: "dc1/spine/"
 
-1. **Direct definition**: the group is named and entities reference it
-2. **Membership rules**: entities whose attributes match are assigned to the group
-3. **Generate blocks**: one group per distinct value of an attribute
+# Wildcard patterns
+- source: "dc1/leaf.*"
 
-Membership rules and generate blocks scan every entity of their `scope`; an optional `path` regex narrows candidates by name (links match against their `source|target` form), `conditions` filter by attribute, and membership `logic` defaults to `and`.
+# Anchored patterns
+- source: "^dc1/spine/switch-[1-3]$"
 
-### Comparison
+# Alternation
+- source: "^dc1/(spine|leaf)/.*$"
+```
 
-| Feature | Links | Traffic Demands | Risk Groups |
-|---------|-------|-----------------|-------------|
-| Selection Type | Path-based | Path-based | Condition-based |
-| Regex Patterns | Yes | Yes | Yes (optional) |
-| Capture Groups | Yes | Yes | No |
-| `group_by` | Yes | Yes | Yes (generate only) |
-| `match` Conditions | Yes | Yes | Yes (membership only) |
-| `active_only` Default | False | True | N/A |
-| `match.logic` Default | "or" | "or" | "and" (membership) |
-| Variable Expansion | Yes | Yes | No |
-| Entity Scope | Nodes only | Nodes only | Nodes, links, risk_groups |
+### Capturing groups
 
-### Shared Evaluation Primitives
+Regex capturing groups create node groupings for analysis:
+
+```text
+# Single group: (dc\d+)
+# Creates groups: "dc1", "dc2", etc.
+
+# Multiple groups: (dc\d+)/(spine|leaf)/switch-(\d+)
+# Creates groups: "dc1|spine|1", "dc1|leaf|2", etc.
+```
+
+**Group Behavior:**
+
+- Single capturing group: Group by captured value
+- Multiple capturing groups: Join with `|` separator
+- No capturing groups: Group by original pattern string
+
+### Attribute-based grouping
+
+Use the `group_by` field to group nodes by an attribute value:
+
+<!-- example: fragment #/properties/demands/additionalProperties/items -->
+
+```yaml
+# Group by metro attribute
+- source:
+    group_by: "metro"
+
+# Combine with path filtering
+- source:
+    path: "^dc1/.*"
+    group_by: "role"
+```
+
+Notes:
+
+- `group_by` refers to a top-level field (`name`, `disabled`, `risk_groups`) or a key in `node.attrs`. Nested (dot-notation) keys are not supported.
+- Nodes without the specified attribute are omitted.
+- Group labels are the string form of the attribute value.
+
+### Attribute-based filtering
+
+Use the `match` field to filter nodes by attribute conditions:
+
+<!-- example: fragment #/properties/demands/additionalProperties/items -->
+
+```yaml
+source:
+  path: "^dc1/.*"
+  match:
+    logic: "and"           # "and" or "or" (default: "or")
+    conditions:
+      - attr: "role"
+        op: "=="
+        value: "leaf"
+      - attr: "tier"
+        op: ">="
+        value: 2
+```
+
+See [Conditions](#conditions) for the operators and the condition syntax.
+
+### Conditions
 
 Every selection mechanism evaluates conditions the same way.
 
@@ -139,7 +179,7 @@ Operator semantics:
 
 - Ordering operators (`<`, `<=`, `>`, `>=`) coerce both sides to float when possible, so `"10" > 5` is true; equality (`==`, `!=`) does **not** coerce, so `"10" == 10` is false. Keep attribute and condition value types consistent.
 - For a missing or null attribute, every operator except `not_exists` returns false, including the negative ones (`!=`, `not_contains`, `not_in`). Use `not_exists` to match absent attributes.
-- `in`/`not_in` require a list value. Link selectors, node/link rules, failure rules, and membership rules reject a scalar at scenario load; demand selectors reject it when the demand is first evaluated.
+- `in`/`not_in` require a list value; a scalar is refused where the condition is given (YAML at load, Python when the `Condition` is built).
 
 **3. Condition Combining (`logic`)**
 
@@ -181,21 +221,108 @@ conditions:
 
 Template expansion (`$var`, `${var}`) is processed before condition evaluation (see [Variable Expansion](#variable-expansion)).
 
-### Context-Aware Defaults
+### Active-only filtering and context defaults
 
-Defaults differ by context, chosen for the common case in each:
+Use `active_only` to control whether disabled nodes are included:
 
-| Context | Selection Type | Active Only | Match Logic | Rationale |
-|---------|---------------|-------------|-------------|-----------|
-| Links | Path-based | False | "or" | Create links to all nodes, including disabled |
-| Demands | Path-based | True | "or" | Only route traffic through active nodes |
-| Node Rules | Path-based | False | "or" | Modify all matching nodes |
-| Workflow Steps | Path-based | True | "or" | Analyze only active topology |
-| Membership Rules | Condition-based | N/A | "and" | Precise matching for risk assignment |
-| Failure Rules | Condition-based | N/A | "or" | Inclusive matching for failure scenarios |
-| Generate Blocks | Condition-based | N/A | N/A | No conditions, groups by values |
+<!-- example: fragment #/properties/demands/additionalProperties/items -->
 
-The `active_only` and `match.logic` defaults can be set explicitly per selector.
+```yaml
+# Override default to include disabled nodes in demands
+- source:
+    path: "^dc1/.*"
+    active_only: false    # Include disabled nodes (overrides demand default of true)
+
+# Override default to exclude disabled nodes in links
+- source:
+    path: "^dc1/.*"
+    active_only: true     # Exclude disabled nodes (overrides link default of false)
+```
+
+Defaults differ by context and can be set explicitly per selector:
+
+| Context | Selection | `active_only` default | `match.logic` default |
+|---------|-----------|----------------------|----------------------|
+| Links | Path-based | `false` (links to disabled nodes are created) | `"or"` |
+| Demands | Path-based | `true` (only active nodes take traffic) | `"or"` |
+| Node rules | Path-based | `false` | `"or"` |
+| Workflow steps | Path-based | `true` (only the active topology is analyzed) | `"or"` |
+| Membership rules | Condition-based | N/A | `"and"` |
+| Failure rules | Condition-based | N/A | `"or"` |
+| Generate blocks | Condition-based | N/A | N/A (no conditions; groups by values) |
+
+Path-based selection supports capture groups, `group_by`, `match` and variable expansion, over nodes only. Condition-based selection scans nodes, links or risk groups with an optional `path` regex and no capture groups or variable expansion; `match` applies to membership and failure rules, and `group_by` to generate blocks.
+
+### How each context selects
+
+#### Links
+
+A link definition is processed in five steps:
+
+1. **Path Selection**: Regex pattern matches nodes by hierarchical name
+   - Capture groups create initial grouping
+   - If no path specified, selects all nodes
+2. **Attribute Filtering**: Optional `match` conditions filter nodes
+   - Uses `logic: "and"` or `"or"` (default: `"or"`)
+   - Operators are listed under [Conditions](#conditions)
+3. **Active Filtering**: Filters disabled nodes based on context
+   - Links default: `active_only=false` (creates links to disabled nodes)
+4. **Attribute Grouping**: Optional `group_by` overrides regex capture grouping
+5. **Pattern Application**: Creates links between selected node groups
+   - `mesh`: Every source to every target
+   - `one_to_one`: Pairwise with wrap-around
+
+#### Demands
+
+Traffic demands select nodes the same way as links, with these differences:
+
+1. `active_only` defaults to `true`: only active nodes participate
+2. Two selections, source nodes first and then target nodes, each with `path`, `match` and `group_by`
+3. `mode` and `group_mode` decide how the selections produce demands ([Traffic Modes](#traffic-modes-mode), [Group Modes](#group-modes-group_mode))
+
+#### Risk groups
+
+Risk groups use the condition-based model and are populated in three ways:
+
+1. **Direct definition**: the group is named and entities reference it
+2. **Membership rules**: entities whose attributes match are assigned to the group
+3. **Generate blocks**: one group per distinct value of an attribute
+
+Membership rules and generate blocks scan every entity of their `scope`; an optional `path` regex narrows candidates by name (links match against their `source|target` form), `conditions` filter by attribute, and membership `logic` defaults to `and`.
+
+### Examples
+
+A workflow step's selectors:
+
+<!-- example: unprepared -->
+
+```yaml
+workflow:
+  - type: MaxFlow
+    source:
+      group_by: "metro"      # Group by metro attribute
+    target: "^metro2/.*"     # String pattern
+    mode: "pairwise"
+```
+
+A link definition's selectors:
+
+```yaml
+network:
+  nodes:
+    dc1:
+      nodes:
+        spine: {count: 2, attrs: {role: spine}}
+    dc2:
+      nodes:
+        leaf: {count: 2, attrs: {role: leaf}}
+  links:
+    - source:
+        group_by: "role"
+      target:
+        path: "^dc2/leaf/.*"
+      pattern: mesh
+```
 
 ## Top-Level Keys
 
@@ -243,7 +370,10 @@ forwarding_groups: {}    # Fixed group shares at programmed routers
 
 All sections are optional. A scenario that omits `network` entirely, or sets it to an empty mapping (`network: {}`), builds with an empty topology. A bare `network:` with no value is a YAML null and fails schema validation. Any unrecognized top-level key is rejected during JSON Schema validation with a `ValueError` whose cause is the schema's `ValidationError` (the schema sets `additionalProperties: false`).
 
-**Seed:** YAML policy `name` derives its seed from SHA-256 of the UTF-8 string `<master>:failure_policy:failure_policy:<name>`. Read the first four bytes as a big-endian integer and mask with `0x7fffffff`. The repeated component preserves existing seeded draws: master `42` and policy `random_link` yield `2099469712`. An absent workflow step seed uses the same hash/truncation on `<master>:workflow_step:<effective-step-name>`. An explicit step seed wins. Failure draw `i` creates `random.Random(base_seed + i)`; an absent base creates an unseeded generator for that draw. Random rules draw one Bernoulli trial per matched entity in sorted identifier order on every supported Python runtime. Without a seed, results vary between runs.
+
+### Seeds
+
+A YAML failure policy `name` derives its seed from SHA-256 of the UTF-8 string `<master>:failure_policy:failure_policy:<name>`. Read the first four bytes as a big-endian integer and mask with `0x7fffffff`: master `42` and policy `random_link` yield `2099469712`. An absent workflow step seed uses the same hash/truncation on `<master>:workflow_step:<effective-step-name>`. An explicit step seed wins, and a query seed overrides the policy seed. Failure draw `i` creates `random.Random(base_seed + i)`; an absent base creates an unseeded generator for that draw. Random rules draw one Bernoulli trial per matched entity in sorted identifier order on every supported Python runtime. Without a seed, results vary between runs. Results record the seed source, runtime, generator and draw order.
 
 ## `network` - Topology
 
@@ -315,9 +445,9 @@ Recognized keys for each link entry:
 - `attrs`: mapping of attributes (optional)
 - `count`: integer number of parallel links to create (optional; default 1); loading takes time linear in it
 
-### Node Groups
+A link entry whose source or target matches no node is refused at load, naming its position and endpoints. Node and link rules that match nothing remain silent. Each physical link carries traffic in both directions ([Links, directions and what is enabled](../concepts.md#links-directions-and-what-is-enabled)).
 
-A link entry whose source or target matches no node is refused at load, naming its position and endpoints. Node and link rules that match nothing remain silent.
+### Node Groups
 
 **Node Groups with Count/Template:**
 
@@ -768,7 +898,7 @@ network:
 - `source`, `target`: Regex patterns or selector objects for endpoint matching (both required on every rule)
 - `bidirectional`: Match links in both directions (default: `true`)
 - `link_match`: Filter by link's own attributes (not endpoint attributes)
-- `capacity`, `cost`, `disabled`: Override link properties, by the same rules as a link declaration (`cost` an integer from 1 to below 2^62)
+- `capacity`, `cost`, `disabled`: Override link properties, by the same rules as a link declaration
 - `attrs`: Attributes to merge into matched links
 - `risk_groups`: Risk groups for matched links; **replaces** the link's existing `risk_groups` set (it does not add to it)
 - `expand`: Variable expansion block for templated rules
@@ -875,11 +1005,11 @@ for child in region.children:
 
 **Top-level-only keys:** `membership`, `disabled`, and `generate` are honored only on top-level `risk_groups` entries. Nested `children` entries allow only `name`, `attrs`, and `children`; placing any other key on a child is rejected by the JSON schema at scenario load and by the parser with `ValueError`. Define such groups at top level and reference them by name as children.
 
-**Entity references:** Nodes and links reference risk groups by name. To reference a group, it must be defined at top level (children alone are not sufficient):
+**Entity references:** Nodes and links reference risk groups by name, a top-level group or a child at any depth:
 
 ```yaml
 risk_groups:
-  - name: "Site_Seattle"      # Top-level definition enables references
+  - name: "Site_Seattle"      # Also declared at top level
   - name: "Region_West"
     children:
       - name: "Site_Seattle"  # Also a child for hierarchy
@@ -1079,7 +1209,7 @@ risk_groups:
       - name: "GroupA"  # Error: circular reference
 ```
 
-Cycle detection runs over top-level groups (whose children are followed by name), including parent-child links added by membership rules with `scope: risk_group`. Detection walks only names that are registered as top-level risk groups: a direct child entry repeating its own parent's name is a self-cycle and *is* rejected, whereas a name repeated deeper than a direct child (nested under a child that is not itself a top-level group) is never followed and is not detected.
+Membership follows nested descendants at any depth, including groups with no top-level entry and parent-child links added by membership rules with `scope: risk_group`, and a cycle among them is refused. A loop through groups declared only inline (A → B → C → B) is refused too, as a conflicting declaration of the repeated name. A group's node members and link members are kept apart, so a node name and a link id that happen to be equal never stand for each other.
 
 Error messages name the affected entities and the undefined groups.
 
@@ -1202,8 +1332,8 @@ demands:
 | `mode` | string | Node pairing mode: `combine` or `pairwise` (default: `combine`) |
 | `group_mode` | string | How grouped nodes produce demands (default: `flatten`) |
 | `id` | string | Optional nonempty run-unique identity |
-| `preset` | string | Declared preset name; omission selects `SHORTEST_PATHS_ECMP`. Exclusive with `model` |
-| `model` | object | Explicit routing/admission declaration; see below |
+| `preset` | string | Declared preset name ([Presets](#presets)); omission selects `SHORTEST_PATHS_ECMP`. Exclusive with `model` |
+| `model` | object | Explicit routing and admission declaration ([Routing models and admission](../concepts.md#routing-models-and-admission)); see below |
 | `attrs` | object | Arbitrary metadata |
 | `expand` | object | Variable expansion block |
 
@@ -1276,7 +1406,14 @@ model:
     parallel_edges: true
 ```
 
-`distributed_te` requires `tunnel_count: {per_head: N}` and accepts `min_unreserved_bandwidth` in physical units plus `cost_ceiling: {type: absolute, value: C}` or `{type: stretch, value: "3/2"}`. Stretch values are exact: integers, fraction strings (`"3/2"`) or decimal strings (`"1.16"`), never rounded to a binary64 value; the ceiling is inclusive. `centralized_te` requires `source_allocation: optimized` or `equal`, accepts an optional `tunnel_count` with `up_to`, and `prefer_headroom`. Native model applicability and integer/range restrictions are enforced at preparation.
+| `routing.type` | Keys |
+|----------------|------|
+| `shortest_paths` | `allocation` (`equal` by default, `weighted` or `optimized`), `source_allocation` (`equal` or `optimized`), `weight_basis` (`capacity`, `explicit` or `residual_snapshot`), `edge_weights` (a name in `weights`), `tie_break`, `multipath`, `parallel_edges` |
+| `distributed_te` | `tunnel_count: {per_head: N}` (required), `min_unreserved_bandwidth` (a physical amount), `cost_ceiling`, `tie_break`, `parallel_edges` |
+| `centralized_te` | `source_allocation` (`optimized` or `equal`, required), `tunnel_count: {per_head: N}` with optional `up_to: true`, `prefer_headroom` |
+| `pinned` | `routes`, and for a DAG `allocation`, `weight_basis` and `edge_weights` (above) |
+
+`admission` is `lossless` (the default) or `lossy`. `cost_ceiling` is `{type: absolute, value: C}` or `{type: stretch, value: "3/2"}`; stretch values are exact: integers, fraction strings (`"3/2"`) or decimal strings (`"1.16"`), never rounded to a binary64 value, and the ceiling is inclusive. Native model applicability and integer/range restrictions are enforced at preparation. What each model does: [Routing models and admission](../concepts.md#routing-models-and-admission) and [Tunnels and TE ingress pools](../concepts.md#tunnels-and-te-ingress-pools).
 
 ### Routing domains and the WCMP controller
 
@@ -1299,39 +1436,30 @@ forwarding_groups:
         children: [{edge: {link: 'DC_A|A2|0', direction: forward}}]
 ```
 
-`routing` constrains the controller only; ECMP and TE demands keep their native models. Both populations are
-required, nonempty and disjoint (selected like demand endpoints, so disabled nodes are outside them). Toward a
-destination t the routes are one DAG: one reverse shortest-path search inside the IGP domain from the exits (domain
-nodes with an eligible link to t), every eligible exit link, and every eligible uplink from another BGP-edge router
-into a domain node that reaches an exit. Nothing enters a BGP-edge router but t, so no other one carries transit. With
-no exit the DAG is empty and the demand finds no route.
+Both populations are required, nonempty and disjoint (selected like demand endpoints, so disabled nodes are outside
+them). A programmed demand has one destination, in `bgp_edge`, and its sources lie in either population.
+`wcmp_controller.scope` is `next_hop` (the default), `group` or `all_routers`. The routes the controller uses and what
+each scope programs: [Routing domains and the WCMP controller](../concepts.md#routing-domains-and-the-wcmp-controller)
+and [Forwarding groups and their caps](../concepts.md#forwarding-groups-and-their-caps).
 
-A programmed demand has one destination, in `bgp_edge`, and its sources lie in either population. The scopes:
+Under `group`, every programmed router needs a tree whose leaves are exactly its members toward t, and every declared
+tree must be used, so a tree at a router the controller never programs is refused, while a source with no route (an
+empty DAG) is not programmed and needs none; under `next_hop` and `all_routers` trees are validated and unused. Shares
+are exact: an integer, a `"p/q"` or decimal string (YAML floats are refused); a positive share whose children all have
+share 0 is refused.
 
-- `next_hop`: the source routers of demands with a positive volume split over their next hops by progressive
-  filling: each next hop grows in proportion to what it carries alone, and stops when a link it uses fills. Routers
-  are processed downstream first, so a programmed router's integer weights shape the loads of routers above it.
-- `group`: each programmed source router splits by its declared tree. Root shares are fixed caps, normalized once;
-  child shares split within their parent. A member that can carry nothing alone (it meets a zero-capacity link or a
-  dead branch) gets 0 and its group re-flattens over its live members within its cap. A root group with no live
-  member is refused: the preset's lossless admission would stop the demand at the first unit sent into it. Every
-  programmed router needs a tree whose leaves are exactly its members toward t. Under `group` every declared tree
-  must be used, so a tree at a router the controller never programs is refused, while a source with no route (an
-  empty DAG) is not programmed and needs none; under `next_hop` and `all_routers` trees are validated and unused.
-- `all_routers`: every router on the sources' walks is programmed from one native flow over the DAG whose sources
-  send in proportion to the demands' exact nominal volumes (a multi-source demand divides its volume over its sources
-  that reach t). The table is fixed for every alpha and the whole MSD series.
+Placement and maximum supported demand (MSD) results report the tables under `controller`; a router not listed there splits by ECMP. These are
+the nominal tables: a failure case forwards on its own tables, which are not exported ([Failures: patterns, cases and
+states](../concepts.md#failures-patterns-cases-and-states)).
 
-Every other router splits equally over its members, zero-capacity ones included (ECMP). Shares are exact: an integer,
-a `"p/q"` or decimal string (YAML floats are refused); a positive share whose children all have share 0 is refused.
+#### Weight approximation
+
 Weights whose exact reduced integers reach 2^62 are apportioned over 2^62 - 1 (one unit for each positive member, then
 highest averages, earlier member on ties) and reported in `units_report.weight_approximations` with the exact largest
 relative error: one entry per router (`controller.<set>.<t>.router.<r>`) and, under `all_routers`, one per source
 vector, naming the source with the largest error (`controller.<set>.<t>.source.<s>`). Source weights are the volumes'
 exact binary values reduced to integers, so volumes 1000 and 0.1 (whose binary value has a 2^55 denominator) are
-apportioned and reported, while 1e6 and 1.0 stay exact. Placement and MSD results report the tables under
-`controller`; a router not listed there splits by ECMP. These are the nominal tables: a failure case forwards on
-its own tables, which are not exported (see TrafficMatrixPlacement failure states in the workflow reference).
+apportioned and reported, while 1e6 and 1.0 stay exact.
 
 ### Selector Fields
 
@@ -1340,14 +1468,16 @@ The `source` and `target` fields accept either:
 - A string regex pattern matched against node names
 - A selector object with `path`, `group_by`, and/or `match` fields
 
+[Selecting nodes](#selecting-nodes) describes both.
+
 ### Traffic Modes (`mode`)
 
 Controls how source and target node sets are paired:
 
-- `combine`: One source-set/destination-set demand. Equal/weighted shortest-path routing injects equal integer shares at reachable source heads and pools traffic at shared routers. Optimized routing can choose source injections. At q = 1, source capacities 100/10 permit the integer equal-source prefix 21 (11/10), rather than the fluid 20; the same question at a finer q can give a different final fractional prefix.
+- `combine`: One source-set/destination-set demand, with one ordered roster of sources ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 - `pairwise`: Create one demand for each distinct selected source/target node pair. Node-to-itself pairs receive no share.
 
-Non-diagonal overlapping resolved endpoint groups refuse in demands, capacity and paths; no target is silently trimmed. Capacity and path queries retain their zero-valued singleton diagonal rows. A declaration whose every pair is a node-to-itself pair or a same-label group pair is reported whole as discarded, with its reason. If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason. A selection that matches no active node keeps its share as an `empty_selection` discard; a group whose nodes are all filtered out is not selected and takes no share.
+Non-diagonal overlapping resolved endpoint groups refuse in demands, capacity and paths; no target is silently trimmed. Capacity and path queries retain their zero-valued singleton diagonal rows. A declaration whose every pair is a node-to-itself pair or a same-label group pair is reported whole as discarded, with its reason. If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason. A selection that matches no active node keeps its share as an `empty_selection` discard; a group whose nodes are all filtered out is not selected and takes no share ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 
 ### Group Modes (`group_mode`)
 
@@ -1381,21 +1511,23 @@ demands:
 | `pairwise` | `per_group` | Distinct node pairs within each shared label |
 | `pairwise` | `group_pairwise` | Distinct node pairs within each distinct-label group pair |
 
-Each declared physical total is quantized once, then split by integer quotient and remainder in canonical group and node order, after excluding self pairs and same-label group pairs. Branches whose only pairs are node-to-itself or same-label group pairs are removed recursively; the remaining hierarchy keeps its shape. Empty selections keep their reported discarded shares, which are never redistributed. A declaration with no eligible pair is reported whole as discarded with its reason. Declared units equal resolved plus discarded units; eligible zero-volume leaves remain. At q = 1, a parent of 10 split into two groups and the second into three produces 5 and (2, 2, 1), retaining the total 10.
+Each declared physical total is quantized once, then split over its eligible pairs by integer quotient and remainder; declared units equal resolved plus discarded units ([Demands: how traffic enters](../concepts.md#demands-how-traffic-enters)).
 
-### Flow Policies
+### Presets
 
-Demands that omit both `preset` and `model` use `SHORTEST_PATHS_ECMP`. A `MaxFlow` step that omits both asks unrestricted optimized lossless maximum flow (`TE_MAXFLOW_UNLIM`), in YAML and Python.
+Demands that omit both `preset` and `model` use `SHORTEST_PATHS_ECMP`. A `MaxFlow` step that omits both asks unrestricted optimized lossless maximum flow (`TE_MAXFLOW_UNLIM`), in YAML and Python. Each preset is one explicit `model`:
 
-- `SHORTEST_PATHS_ECMP`: IP/IGP routing with hash-based ECMP; equal split across equal-cost paths, admitted without loss. `placed` is what the network carries with no drops; a next hop filled by an earlier demand blocks later demands hashed onto it
-- `SHORTEST_PATHS_ECMP_LOSSY`: the same routing with best-effort forwarding; native results retain delivered traffic, source losses and losses at each edge
-- `SHORTEST_PATHS_WCMP`: capacity-weighted static shortest-path routing with lossless equal source allocation; with a `wcmp_controller`, the controller's table instead (a MaxFlow step then refuses this preset)
-- `SHORTEST_PATHS_MAXFLOW`: optimized capacity on the union of the selected shortest-path supports
-- `TE_MAXFLOW_UNLIM`: unrestricted optimized lossless traffic engineering
-- `TE_ECMP_16_LSP`: MPLS-TE with exactly 16 ECMP LSPs per demand
-- `TE_ECMP_UP_TO_256_LSP`: MPLS-TE with up to 256 ECMP LSPs per demand
+| Preset | `model` equivalent | Question |
+|--------|--------------------|----------|
+| `SHORTEST_PATHS_ECMP` | `{routing: {type: shortest_paths}, admission: lossless}` | IP/IGP routing with equal splits among equal-cost next hops at each router; what does not fit is not admitted, and a filled next hop can block later demands assigned to it |
+| `SHORTEST_PATHS_ECMP_LOSSY` | `{routing: {type: shortest_paths}, admission: lossy}` | The same routing with best-effort forwarding: traffic is sent and lost at sources and on edges |
+| `SHORTEST_PATHS_WCMP` | `{routing: {type: shortest_paths, allocation: weighted, weight_basis: capacity}}` | Capacity-weighted static shortest-path routing with lossless equal source allocation; with a `wcmp_controller`, the controller's table instead (a MaxFlow step then refuses this preset) |
+| `SHORTEST_PATHS_MAXFLOW` | `{routing: {type: shortest_paths, allocation: optimized, source_allocation: optimized}}` | Optimized capacity on the union of the selected shortest-path supports |
+| `TE_MAXFLOW_UNLIM` | `{routing: {type: centralized_te, source_allocation: optimized}}` | Unrestricted optimized lossless traffic engineering |
+| `TE_ECMP_16_LSP` | `{routing: {type: centralized_te, source_allocation: optimized, tunnel_count: {per_head: 16}, prefer_headroom: true}}` | Controller tunnels (T2), exactly 16 per head |
+| `TE_ECMP_UP_TO_256_LSP` | `{routing: {type: centralized_te, source_allocation: optimized, tunnel_count: {per_head: 256, up_to: true}, prefer_headroom: true}}` | Controller tunnels (T2), up to 256 per head |
 
-See [traffic models](design.md#traffic-models) for their distinct questions. Tunnel counts are per head; a configured count is a layout, not a delivery guarantee.
+What each model does: [Routing models and admission](../concepts.md#routing-models-and-admission); tunnel counts: [Tunnels and TE ingress pools](../concepts.md#tunnels-and-te-ingress-pools).
 
 ## `failures` - Failure Policies
 
@@ -1506,7 +1638,7 @@ failures:
 |-------|------|-------------|
 | `scope` | string | Entity type: `node`, `link`, or `risk_group` (required) |
 | `mode` | string | Selection mode: `all`, `choice`, or `random` (default: `all`) |
-| `count` | integer | Number of entities to select (for `choice` mode) |
+| `count` | integer | Number of entities to select (for `choice` mode), at least 1 |
 | `probability` | number | Selection probability 0-1 (for `random` mode) |
 | `path` | string | Regex filter on entity name (links match against their `source\|target` form) |
 | `match` | object | Attribute conditions block with `logic` and `conditions` |
@@ -1515,8 +1647,8 @@ failures:
 ### Notes
 
 - Policies are mode-based. Each mode has a non-negative `weight`. One mode is chosen per iteration with probability proportional to weights, then all rules in that mode are applied and their selections are unioned.
-- At least one mode must have `weight > 0`; a policy whose modes all have zero weight is rejected at scenario load. Modes with zero weight are never selected.
-- Condition syntax uses the same operators as link/demand selectors. See [Condition Operators](#shared-evaluation-primitives) for the full reference.
+- At least one mode must have `weight > 0`; a policy whose modes all have zero weight is refused where the policy is built, in Python and YAML. Modes with zero weight are never selected.
+- Condition syntax uses the same operators as link/demand selectors. See [Conditions](#conditions) for the full reference.
 
 ## `workflow` - Analysis Steps
 
@@ -1544,179 +1676,8 @@ workflow:
 - `NetworkStats`: Node, link, capacity and degree statistics
 - `MaxFlow`: Monte Carlo capacity analysis between node groups
 - `TrafficMatrixPlacement`: Monte Carlo demand placement for a named demand set
-- `MaximumSupportedDemand`: Search for the largest tested feasible alpha for a named demand set
+- `MaximumSupportedDemand`: Search for the largest tested feasible alpha (the demand multiplier) for a named demand set ([Maximum supported demand](../concepts.md#maximum-supported-demand))
 - `CostPower`: Aggregate capex and power by network hierarchy level
+- `TunnelCountAnalysis`: Rows per tunnel count for the tunnelled TE demands of a named demand set
 
-See [Workflow Reference](workflow.md) for detailed configuration.
-
-## Node Selection
-
-One selector syntax selects and groups nodes for links, demands, and workflow steps alike.
-
-### Selector Forms
-
-Selectors can be specified as:
-
-1. **String pattern**: A regex matched against node names (anchored at start via `re.match()`)
-2. **Selector object**: A dict with `path`, `group_by`, and/or `match` fields
-
-At least one of `path`, `group_by`, or `match` must be specified in a selector object.
-
-### String Pattern Examples
-
-<!-- example: fragment #/properties/demands/additionalProperties/items -->
-
-```yaml
-# Exact match
-- source: "spine-1"
-
-# Prefix match
-- source: "dc1/spine/"
-
-# Wildcard patterns
-- source: "dc1/leaf.*"
-
-# Anchored patterns
-- source: "^dc1/spine/switch-[1-3]$"
-
-# Alternation
-- source: "^dc1/(spine|leaf)/.*$"
-```
-
-### Capturing Groups for Node Grouping
-
-Regex capturing groups create node groupings for analysis:
-
-```text
-# Single group: (dc\d+)
-# Creates groups: "dc1", "dc2", etc.
-
-# Multiple groups: (dc\d+)/(spine|leaf)/switch-(\d+)
-# Creates groups: "dc1|spine|1", "dc1|leaf|2", etc.
-```
-
-**Group Behavior:**
-
-- Single capturing group: Group by captured value
-- Multiple capturing groups: Join with `|` separator
-- No capturing groups: Group by original pattern string
-
-### Attribute-based Grouping
-
-Use the `group_by` field to group nodes by an attribute value:
-
-<!-- example: fragment #/properties/demands/additionalProperties/items -->
-
-```yaml
-# Group by metro attribute
-- source:
-    group_by: "metro"
-
-# Combine with path filtering
-- source:
-    path: "^dc1/.*"
-    group_by: "role"
-```
-
-Notes:
-
-- `group_by` refers to a top-level field (`name`, `disabled`, `risk_groups`) or a key in `node.attrs`. Nested (dot-notation) keys are not supported.
-- Nodes without the specified attribute are omitted.
-- Group labels are the string form of the attribute value.
-
-### Attribute-based Filtering
-
-Use the `match` field to filter nodes by attribute conditions:
-
-<!-- example: fragment #/properties/demands/additionalProperties/items -->
-
-```yaml
-source:
-  path: "^dc1/.*"
-  match:
-    logic: "and"           # "and" or "or" (default: "or")
-    conditions:
-      - attr: "role"
-        op: "=="
-        value: "leaf"
-      - attr: "tier"
-        op: ">="
-        value: 2
-```
-
-See [Condition Operators](#shared-evaluation-primitives) for the full list of supported operators and condition syntax.
-
-### Active-Only Filtering
-
-Use `active_only` to control whether disabled nodes are included:
-
-<!-- example: fragment #/properties/demands/additionalProperties/items -->
-
-```yaml
-# Override default to include disabled nodes in demands
-- source:
-    path: "^dc1/.*"
-    active_only: false    # Include disabled nodes (overrides demand default of true)
-
-# Override default to exclude disabled nodes in links
-- source:
-    path: "^dc1/.*"
-    active_only: true     # Exclude disabled nodes (overrides link default of false)
-```
-
-**Context defaults** (see [Context-Aware Defaults](#context-aware-defaults)):
-
-| Context | Default `active_only` | Rationale |
-|---------|----------------------|-----------|
-| Links | `false` | Create links to disabled nodes |
-| Demands | `true` | Only route traffic through active nodes |
-| Workflow | `true` | Analyze only active topology |
-
-### Workflow Examples
-
-<!-- example: unprepared -->
-
-```yaml
-workflow:
-  - type: MaxFlow
-    source:
-      group_by: "metro"      # Group by metro attribute
-    target: "^metro2/.*"     # String pattern
-    mode: "pairwise"
-```
-
-### Link Examples
-
-```yaml
-network:
-  nodes:
-    dc1:
-      nodes:
-        spine: {count: 2, attrs: {role: spine}}
-    dc2:
-      nodes:
-        leaf: {count: 2, attrs: {role: leaf}}
-  links:
-    - source:
-        group_by: "role"
-      target:
-        path: "^dc2/leaf/.*"
-      pattern: mesh
-```
-
-Capacity split precision uses the finite native delivery at each candidate unit
-size for an uncapped lossless question or a Core-derived first-hop experiment.
-The units report labels these split constraints `basis: observed` and records
-the exact physical incoming amount. Finite declared offers and designs use
-`basis: declared`. Input rounding is checked independently, and later failures
-or probes keep the prepared unit size while reporting missed local targets.
-
-The CLI `--keys` option selects exported steps after the full workflow executes.
-It preserves declaration order and each step's actual `execution_order` value:
-exporting only the second step keeps order `1`. A filtered export may have gaps;
-the complete run has contiguous execution order.
-
-
-### Analysis output details
-
-Numerical workflow rows export compact exact summaries by default. `MaxFlow` and `TrafficMatrixPlacement` support `outputs.details: true` to add native call, per-source, per-tunnel and plan fields; their cost, cut and array flags stay independent. `MaximumSupportedDemand` accepts only `details` in its outputs object. Omitted outputs, `{}`, or `details: false` select compact output. Details accepts only a boolean. Pool metadata remains available in either mode, preserving the synthetic-ingress cost domain. Python callers retain full native results regardless of export selection.
+See [Workflow Steps](workflow.md) for detailed configuration.

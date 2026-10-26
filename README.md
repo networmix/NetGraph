@@ -30,16 +30,18 @@ network.add_node(Node("C"))
 network.add_link(Link("A", "B", capacity=10.0, cost=1.0))
 network.add_link(Link("B", "C", capacity=10.0, cost=1.0))
 
-# Prepare an owned graph with one physical unit per native integer unit.
+# Prepare the graph once, with a bandwidth unit q of 1.
 prepared = prepare(Scenario(network, units=UnitsSettings(resolution=1)))
 result = capacity(prepared, CapacityQuery(Selector("^A$"), Selector("^C$")))
 row = result.cases[0].states["converged"].rows[0]
 print(row.result.delivered)  # 10 integer units
 ```
 
+Native bandwidth results are whole units of one bandwidth unit `q`; `UnitsSettings(resolution=1)` sets `q` to 1 ([Units and the resolution q](https://networmix.github.io/NetGraph/concepts/#units-and-the-resolution-q)).
+
 ## Scenario DSL
 
-For reproducible analysis workflows, define topology, demands, and failure policies in YAML:
+For reproducible analysis workflows, define topology, demands, and failure policies in YAML (this is `scenarios/readme_example.yml`):
 
 ```yaml
 seed: 42
@@ -109,21 +111,15 @@ workflow:
 ```
 
 ```bash
-ngraph run scenario.yml --output results/
-jq '.steps[] | select(.name == "max_demand") | .result.alpha_feasible' results/scenario.results.json
+ngraph run scenarios/readme_example.yml --output results/
+jq '.steps[] | select(.name == "max_demand") | .result.alpha_feasible' results/readme_example.results.json
 ```
 
-The scenario builds two Clos sites from one blueprint, searches for a feasible demand multiplier, then places the largest tested feasible multiplier under 100 random single-link failures. MSD records every probe and its status; an upper certificate is reported only for a proved monotone model.
-
-Python workflows use `result = run(prepare(scenario))`; results belong to the returned `RunResult`. Each ordered step records its question and typed result. Each failure case has a `states` mapping (`converged`, plus `stale` or `repair` for placement when requested). `write_json(result, file)` performs the explicit JSON projection. JSON rows default to compact exact summaries, retaining pool metadata so pooled costs keep their domain. Request `outputs: {details: true}` for per-source, per-tunnel, plan and call details. Python native results remain complete. Cost reports (`outputs.cost_distribution`) and cuts (`outputs.min_cut`) have independent selectors; details alone enables neither.
-
-Capacities and volumes are physical input quantities. Preparation selects one power-of-two quantum `q`, or accepts a declared legal resolution, and reports its rounding and split precision. Numerical results are exact integer units; multiply by `q` only for display. The default `MaxFlow` question is unrestricted optimized capacity. Static ECMP, capacity-weighted shortest paths and tunnel models are separate declared questions.
-
-See [DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/) and [Examples](https://networmix.github.io/NetGraph/examples/clos-fabric/) for more.
+A preset chooses routing and admission; `SHORTEST_PATHS_ECMP` splits whole units equally among equal-cost next hops at each router ([Routing models and admission](https://networmix.github.io/NetGraph/concepts/#routing-models-and-admission)). The scenario builds two Clos sites from one blueprint, searches for the largest tested feasible demand multiplier (alpha), then places the demands at that multiplier under 100 random single-link failures. [How NetGraph computes](https://networmix.github.io/NetGraph/concepts/) explains the presets such as `SHORTEST_PATHS_ECMP`, maximum supported demand and the numbers in the results; `run(prepare(scenario))` returns the same results in Python.
 
 ## Capabilities
 
-- **Declarative scenarios**: schema-validated YAML, reusable blueprints, a strict multigraph model
+- **Declarative scenarios**: schema-validated YAML and reusable blueprints
 - **Failure analysis**: weighted failure modes, risk groups, and analysis-time exclusions that leave the base topology untouched
 - **Routing models**: cost-only IP routing and capacity-aware traffic engineering
 - **Traffic placement**: ECMP and WCMP splits, maximum flow and demand placement
@@ -133,9 +129,10 @@ See [DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/) and [Ex
 ## Documentation
 
 - [**Tutorial**](https://networmix.github.io/NetGraph/getting-started/tutorial/) - Running a scenario from the CLI and from Python
-- [**Examples**](https://networmix.github.io/NetGraph/examples/clos-fabric/) - Clos fabric capacity and failure analysis
-- [**DSL Reference**](https://networmix.github.io/NetGraph/reference/dsl/) - YAML scenario syntax
-- [**API Reference**](https://networmix.github.io/NetGraph/reference/api/) - Python API
+- [**How NetGraph computes**](https://networmix.github.io/NetGraph/concepts/) - How a scenario becomes numbers
+- [**Examples**](https://networmix.github.io/NetGraph/examples/basic/) - From a four-node network to the bundled scenarios
+- [**Scenario YAML**](https://networmix.github.io/NetGraph/reference/dsl/) - Every scenario key
+- [**Python API**](https://networmix.github.io/NetGraph/reference/api/) - The library by task
 
 ## License
 

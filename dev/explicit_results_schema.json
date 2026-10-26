@@ -161,7 +161,7 @@
           "type": "integer"
         },
         "total_edge_drop_units": {
-          "description": "LOSSY: this row's units dropped on links; 0 when LOSSLESS.",
+          "description": "LOSSY: this source's units dropped on physical links and TE ingress pool attachments; 0 when LOSSLESS.",
           "type": "integer"
         }
       },
@@ -205,7 +205,7 @@
           "type": "integer"
         },
         "total_edge_drop_units": {
-          "description": "LOSSY: this row's units dropped on links; 0 when LOSSLESS.",
+          "description": "LOSSY: this tunnel's units dropped on physical links and TE ingress pool attachments; 0 when LOSSLESS.",
           "type": "integer"
         }
       },
@@ -432,7 +432,7 @@
           "absent_when": "it was not requested"
         },
         "residual": {
-          "description": "Each pool attachment's residual capacity (integer units of q).",
+          "description": "Each pool attachment's residual capacity (integer units of q): after this row, or, in simultaneous placement, the one final residual every row shares.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SyntheticAmountJSON"
@@ -530,7 +530,7 @@
           "type": "integer"
         },
         "edge_drop_units": {
-          "description": "LOSSY: units dropped on links, in all; 0 when LOSSLESS.",
+          "description": "LOSSY: units dropped on physical links and TE ingress pool attachments, in all; 0 when LOSSLESS.",
           "type": "integer"
         },
         "termination": {
@@ -641,7 +641,7 @@
           "absent_when": "it was not requested"
         },
         "residual": {
-          "description": "Each directed physical link's residual capacity (integer units of q).",
+          "description": "Each directed physical link's residual capacity (integer units of q): after this row, or, in simultaneous placement, the one final residual every row shares.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/EdgeAmountJSON"
@@ -921,12 +921,12 @@
               "type": "null"
             }
           ],
-          "null_when": "the state's lossy forwarding found no fixed point (see failure)"
+          "null_when": "the state's forwarding calculation cycled or reached its round limit (see failure)"
         },
         "failure": {
-          "description": "The case's lossy forwarding without a fixed point.",
+          "description": "The state's bounded lossy forwarding calculation cycled or reached its round limit. This does not prove that no stable answer exists.",
           "$ref": "#/$defs/ForwardingFailureJSON",
-          "absent_when": "forwarding reached a fixed point"
+          "absent_when": "the forwarding calculation finished"
         },
         "dead_caps": {
           "description": "Declared root groups with no live member in this case, with their fixed caps.",
@@ -1823,7 +1823,7 @@
           ]
         },
         "offer_source": {
-          "description": "Where the offer comes from: unlimited, explicit, the design demand, or the first hop.",
+          "description": "Where the offer comes from: unlimited, explicit or the design demand.",
           "enum": [
             "unlimited",
             "explicit",
