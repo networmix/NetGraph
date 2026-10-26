@@ -74,7 +74,7 @@ Traffic demands select nodes the same way as links, with these differences:
 
 1. `active_only` defaults to `true`: only active nodes participate
 2. Two selections, source nodes first and then target nodes, each with `path`, `match` and `group_by`
-3. `mode` expands the selection: `pairwise` creates one demand per (source, target) pair with the volume split evenly; `combine` declares one native source-set/destination-set demand
+3. `mode` expands the selection: `pairwise` creates one demand per distinct source/target node pair and divides the declared volume among those pairs; `combine` declares one native source-set/destination-set demand
 4. `group_mode` (`flatten`, `per_group`, `group_pairwise`) decides how grouped selections produce demands
 
 ### Risk Group Creation Flow
@@ -1345,17 +1345,17 @@ The `source` and `target` fields accept either:
 Controls how source and target node sets are paired:
 
 - `combine`: One source-set/destination-set demand. Equal/weighted shortest-path routing injects equal integer shares at reachable source heads and pools traffic at shared routers. Optimized routing can choose source injections. At q = 1, source capacities 100/10 permit the integer equal-source prefix 21 (11/10), rather than the fluid 20; the same question at a finer q can give a different final fractional prefix.
-- `pairwise`: Create one demand for each selected source/target node pair, distributing the parent units across the fixed expansion leaves.
+- `pairwise`: Create one demand for each distinct selected source/target node pair. Node-to-itself pairs receive no share.
 
-Non-diagonal overlapping resolved endpoint groups refuse in demands, capacity and paths; no target is silently trimmed. A singleton self pair remains a legal diagonal. Intentionally filtered, self and empty-selection expansion shares are reported as discarded units.
+Non-diagonal overlapping resolved endpoint groups refuse in demands, capacity and paths; no target is silently trimmed. Capacity and path queries retain their zero-valued singleton diagonal rows. A declaration whose every pair is a node-to-itself pair or a same-label group pair is reported whole as discarded, with its reason. If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason. A selection that matches no active node keeps its share as an `empty_selection` discard; a group whose nodes are all filtered out is not selected and takes no share.
 
 ### Group Modes (`group_mode`)
 
 When using `group_by` selectors, controls how grouped nodes produce demands:
 
 - `flatten` (default): Flatten all groups into a single source/target set, then apply `mode`
-- `per_group`: Create one branch per source group with combined targets, or pairwise node branches within labels shared by both selectors. Non-diagonal overlap refuses; genuinely empty branches retain their accounted discarded share.
-- `group_pairwise`: Create demands between each ordered (source_group, target_group) label pair; pairs with identical labels are skipped
+- `per_group`: Create one branch per source group with combined targets, or pairwise node branches within labels shared by both selectors. Branches whose only pairs are node-to-itself pairs receive no share; non-diagonal overlap refuses, and an empty branch keeps its discarded share.
+- `group_pairwise`: Split across ordered source/target group pairs with distinct labels; identical labels receive no share. Apply the selected node mode within each remaining group pair
 
 **Example with `group_mode`:**
 
@@ -1377,11 +1377,11 @@ demands:
 | `combine` | `flatten` | Single aggregated demand across all nodes |
 | `combine` | `per_group` | One demand per source group (targets combined) |
 | `combine` | `group_pairwise` | One demand per (source_group, target_group) pair with distinct labels |
-| `pairwise` | `flatten` | Individual demands for each (src_node, tgt_node) pair |
-| `pairwise` | `per_group` | Pairwise within each group |
-| `pairwise` | `group_pairwise` | Pairwise for each group pair combination |
+| `pairwise` | `flatten` | Individual demands for distinct node pairs |
+| `pairwise` | `per_group` | Distinct node pairs within each shared label |
+| `pairwise` | `group_pairwise` | Distinct node pairs within each distinct-label group pair |
 
-Each physical parent total is quantized once, then split across the stored expansion tree using integer quotient/remainder order. Declared units equal resolved plus discarded units, including zero leaves. Discarded shares are never redistributed. At q = 1, a parent of 10 split into two groups and the second into three produces 5 and (2, 2, 1), retaining the total 10.
+Each declared physical total is quantized once, then split by integer quotient and remainder in canonical group and node order, after excluding self pairs and same-label group pairs. Branches whose only pairs are node-to-itself or same-label group pairs are removed recursively; the remaining hierarchy keeps its shape. Empty selections keep their reported discarded shares, which are never redistributed. A declaration with no eligible pair is reported whole as discarded with its reason. Declared units equal resolved plus discarded units; eligible zero-volume leaves remain. At q = 1, a parent of 10 split into two groups and the second into three produces 5 and (2, 2, 1), retaining the total 10.
 
 ### Flow Policies
 

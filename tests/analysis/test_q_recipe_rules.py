@@ -322,5 +322,6 @@ def test_candidates_above_the_declared_split_bounds_are_never_compiled(monkeypat
     monkeypatch.setattr(preparation, "compile_topology", counted)
     text = Path("scenarios/square_mesh.yaml").read_text()
     prepared = prepare(Scenario.from_yaml(text))
-    # The splits declared on square_mesh already rule out 2^-9 and 2^-10.
-    assert compiled == [prepared.topology.q] == [2**-11]
+    # Twelve eligible pairs give q <= p * 12 / 11: 2^-9 is too coarse;
+    # 2^-10 is the coarsest legal candidate and is compiled just once.
+    assert compiled == [prepared.topology.q] == [2**-10]

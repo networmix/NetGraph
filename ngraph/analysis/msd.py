@@ -89,8 +89,13 @@ class MSDQuery:
 
 
 def _proof(demands: ResolvedDemandSet):
-    if all(parent.physical_volume == 0 for parent in demands.expansion_template):
-        return "declared_zero"
+    positive_parents = {
+        parent.base_id
+        for parent in demands.expansion_template
+        if parent.physical_volume > 0
+    }
+    if not any(demand.base_id in positive_parents for demand in demands.demands):
+        return "nothing_offered"
     fixed = True
     for demand in demands.demands:
         model = demand.config.routing
@@ -239,9 +244,11 @@ def maximum_supported_demand(
 
     status, reason = "limit", "bracket_limit"
     try:
-        if proof == "declared_zero":
-            probe(query.alpha_max)
-            status, reason = "trivial", "declared_zero"
+        if proof == "nothing_offered":
+            if probe(query.alpha_max) == "range":
+                status, reason = "range", "offer_range"
+            else:
+                status, reason = "trivial", "nothing_offered"
         else:
             alpha = float(query.alpha_start)
             lower = upper = None

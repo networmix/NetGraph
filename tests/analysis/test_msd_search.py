@@ -59,7 +59,7 @@ from tests.analysis.test_persistent_msd import prepared
             ["feasible", "feasible"],
             1,
         ),
-        (0, {"alpha_max": 4}, "trivial", "declared_zero", [4], ["feasible"], 0),
+        (0, {"alpha_max": 4}, "trivial", "nothing_offered", [4], ["feasible"], 0),
         (
             1,
             {

@@ -2158,7 +2158,7 @@
           "type": "boolean"
         },
         "proof": {
-          "description": "The kind of proof behind the status (declared zero, fixed program, single controller, or unproved).",
+          "description": "The kind of proof behind the status (nothing offered, fixed program, single controller, or unproved).",
           "$ref": "#/$defs/MSDProofJSON"
         },
         "upper_certificate": {
@@ -2174,7 +2174,7 @@
           "null_when": "no bracket is proved"
         },
         "search_status": {
-          "description": "How the search ended.",
+          "description": "How the search ended. When nothing is offered, trivial requires a successful probe; a probe refused as out of range is reported as range.",
           "$ref": "#/$defs/MSDStatusJSON"
         },
         "stop_reason": {

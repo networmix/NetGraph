@@ -3402,7 +3402,7 @@ No documentation available.
 
 ### expansion_plans(network: 'Network', specs: 'DemandSet') -> 'tuple[_Expansion, ...]'
 
-Resolve physical endpoints once; zero and discarded leaves remain in the tree.
+Resolve endpoints once; split only among eligible or genuinely empty branches.
 
 ### leaf_amounts(root, volume: 'float') -> 'dict[str, Fraction]'
 

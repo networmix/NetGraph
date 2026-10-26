@@ -80,8 +80,10 @@ def test_fixed_path_bracket_is_tested_and_not_a_global_rounded_float_optimum(
 def test_zero_declared_and_zero_rounded_are_distinct_and_probe_rows_are_opt_in():
     context, demands = prepared(0)
     trivial = maximum_supported_demand(context, MSDQuery(demands, alpha_max=4))
-    assert trivial.search_status == "trivial" and trivial.stop_reason == "declared_zero"
-    assert trivial.proof == "declared_zero" and trivial.monotone_proven
+    assert (
+        trivial.search_status == "trivial" and trivial.stop_reason == "nothing_offered"
+    )
+    assert trivial.proof == "nothing_offered" and trivial.monotone_proven
     assert trivial.alpha_feasible.value == 4
     assert len(trivial.history) == 1 and trivial.history[
         0

@@ -139,16 +139,14 @@ class TestCombineOverlapRefusal:
             policy=preset,
         )
         resolved = prepared.demand_sets["load"]
-        assert [row.nominal_units for row in resolved.demands] == [25, 25]
+        assert [row.nominal_units for row in resolved.demands] == [50, 50]
         (accounting,) = resolved.accounting
         assert (
             accounting.declared_units == 100
-            and accounting.resolved_units == accounting.discarded_units == 50
+            and accounting.resolved_units == 100
+            and accounting.discarded_units == 0
         )
-        assert [(share.reason, share.units) for share in accounting.discards] == [
-            ("filtered", 25),
-            ("filtered", 25),
-        ]
+        assert accounting.discards == ()
         state = (
             place(prepared, PlacementQuery(resolved, workers=1))
             .cases[0]
@@ -156,7 +154,7 @@ class TestCombineOverlapRefusal:
         )
         assert [row.result.delivered for row in state.rows] == [1, 1]
         assert (
-            state.totals.reference_request_units == 50
+            state.totals.reference_request_units == 100
             and state.totals.delivered_units == 2
         )
 

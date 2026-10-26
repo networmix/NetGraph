@@ -351,7 +351,7 @@ def test_every_leaf_uses_the_query_design_and_offer():
     ] == [("small", 100, 100, 50, 100), ("large", 100, 100, 50, 100)]
 
 
-def test_discarded_shares_have_no_rows():
+def test_excluded_pairs_have_no_count_rows_or_volume_share():
     spec = DemandSpec(
         Selector("^(A|B)$"), Selector("^(A|B)$"), 10, t2(2), id="pw", mode="pairwise"
     )
@@ -364,10 +364,17 @@ def test_discarded_shares_have_no_rows():
         (("B",), ("A",)),
     ]
     (accounting,) = prep.demand_sets["d"].accounting
-    assert [(d.label, d.units, d.reason) for d in accounting.discards] == [
-        ("pw|0", 3, "self_pair"),
-        ("pw|3", 2, "self_pair"),
+    assert accounting.discards == ()
+    assert (
+        accounting.declared_units,
+        accounting.resolved_units,
+        accounting.discarded_units,
+    ) == (10, 10, 0)
+    assert [(d.id, d.nominal_units) for d in prep.demand_sets["d"].demands] == [
+        ("pw|0", 5),
+        ("pw|1", 5),
     ]
+    assert all(r.result.requested == r.result.delivered == 1 for r in rows)
 
 
 def test_a_non_tunnelled_set_is_refused_at_preparation():

@@ -10,6 +10,9 @@ import pytest
 
 from ngraph import (
     CapacityQuery,
+    DemandSet,
+    DemandSpec,
+    FlowPolicyPreset,
     Link,
     Network,
     Node,
@@ -25,7 +28,7 @@ SCHEMA = json.loads(files("ngraph.schemas").joinpath("results.json").read_text()
 VALIDATOR = jsonschema.Draft202012Validator(SCHEMA)
 
 
-def prepared():
+def prepared(pooled=False):
     # Two sources into T: S1 directly (100) and over X (50, cost 2), S2 directly (10).
     network = Network()
     for name in ("S1", "S2", "X", "T"):
@@ -37,7 +40,20 @@ def prepared():
         ("S2", "T", 10, 1),
     ):
         network.add_link(Link(source, target, cap, cost))
-    return prepare(Scenario(network, units=UnitsSettings(resolution=1)))
+    sets = {}
+    if pooled:
+        sets["pool"] = DemandSet(
+            "pool",
+            (
+                DemandSpec(
+                    Selector("^S"), Selector("^T$"), 4, FlowPolicyPreset.TE_ECMP_16_LSP
+                ),
+            ),
+        )
+    return prepare(
+        Scenario(network, demand_sets=sets, units=UnitsSettings(resolution=1)),
+        demand_sets=tuple(sets),
+    )
 
 
 def models(prep):
@@ -85,15 +101,18 @@ def models(prep):
                     continue
                 if source == ngc.SourceAllocation.WEIGHTED:
                     # one weight per graph node: S1 and S2 send 1:1, X and T nothing
-                    kwargs["source_weights"] = [1, 1, 0, 0]
+                    kwargs["source_weights"] = [1, 1] + [0] * (
+                        prep.topology.graph.num_nodes() - 2
+                    )
                 yield (
                     f"centralized_te {kwargs}",
                     lambda kw=kwargs: ngc.CentralizedTE(**kw),
                 )
 
 
-def test_every_exportable_model_validates_against_the_results_schema():
-    prep = prepared()
+@pytest.mark.parametrize("pooled", [False, True])
+def test_every_exportable_model_validates_against_the_results_schema(pooled):
+    prep = prepared(pooled)
     exported, refused = {}, []
     for label, make in models(prep):
         try:

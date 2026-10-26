@@ -115,7 +115,7 @@ def selected_pairs(
 
 
 def expansion_plans(network: Network, specs: DemandSet) -> tuple[_Expansion, ...]:
-    """Resolve physical endpoints once; zero and discarded leaves remain in the tree."""
+    """Resolve endpoints once; split only among eligible or genuinely empty branches."""
     plans = []
     for index, spec in enumerate(specs.demands):
         ordinal = (
@@ -129,6 +129,15 @@ def expansion_plans(network: Network, specs: DemandSet) -> tuple[_Expansion, ...
         sources = selected_groups(network, spec.source, label + ".source")
         targets = selected_groups(network, spec.target, label + ".target")
         order = 0
+        excluded = []
+
+        def exclude(reason, *, excluded=excluded):
+            excluded.append(reason)
+            return None
+
+        def split(branch, children):
+            eligible = tuple(child for child in children if child is not None)
+            return ExpansionSplit(branch, eligible) if eligible else None
 
         def leaf(src=(), dst=(), reason=None, *, base_id=base_id, label=label):
             nonlocal order
@@ -139,7 +148,7 @@ def expansion_plans(network: Network, specs: DemandSet) -> tuple[_Expansion, ...
                 else:
                     refuse_overlap(src, dst, label)
                     if len(src) == len(dst) == 1 and src == dst:
-                        reason = "self_pair"
+                        return exclude("self_pair")
             item = ExpansionLeaf(
                 identity,
                 order,
@@ -162,7 +171,7 @@ def expansion_plans(network: Network, specs: DemandSet) -> tuple[_Expansion, ...
                 refuse_overlap(src[slabel], dst[tlabel], f"{label}.{slabel}->{tlabel}")
             src_names = sorted({n for group in src.values() for n in group})
             dst_names = sorted({n for group in dst.values() for n in group})
-            return ExpansionSplit(
+            return split(
                 branch,
                 tuple(leaf((s,), (t,)) for s, t in product(src_names, dst_names)),
             )
@@ -184,7 +193,7 @@ def expansion_plans(network: Network, specs: DemandSet) -> tuple[_Expansion, ...
                 for name in labels
             ]
             root = (
-                ExpansionSplit(label + ".groups", tuple(children))
+                split(label + ".groups", children)
                 if children
                 else leaf(reason="empty_selection")
             )
@@ -192,7 +201,7 @@ def expansion_plans(network: Network, specs: DemandSet) -> tuple[_Expansion, ...
             children = []
             for slabel, tlabel in product(sources, targets):
                 children.append(
-                    leaf(reason="filtered")
+                    exclude("filtered")
                     if slabel == tlabel
                     else expand_groups(
                         {slabel: sources[slabel]},
@@ -201,10 +210,14 @@ def expansion_plans(network: Network, specs: DemandSet) -> tuple[_Expansion, ...
                     )
                 )
             root = (
-                ExpansionSplit(label + ".group_pairs", tuple(children))
+                split(label + ".group_pairs", children)
                 if children
                 else leaf(reason="empty_selection")
             )
+        # An excluded-only declaration owns its full volume. Use the first
+        # exclusion in canonical traversal as its reason, with one dense root ID.
+        if root is None:
+            root = ExpansionLeaf(f"{base_id}|0", 0, None, excluded[0])
         plans.append(_Expansion(spec, base_id, ordinal, expand_index, root))
     seen = {}
     for plan in plans:

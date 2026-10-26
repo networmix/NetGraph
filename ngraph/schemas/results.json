@@ -938,7 +938,7 @@
           "type": "integer"
         },
         "reason": {
-          "description": "Why it was discarded: a self pair, filtered, or an empty selection.",
+          "description": "Why it was discarded: an empty selection, or an entirely excluded declaration (a self pair or identical group labels). If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason.",
           "enum": [
             "self_pair",
             "filtered",
@@ -1091,7 +1091,7 @@
           "type": "integer"
         },
         "resolved_units": {
-          "description": "Units of its resolved leaves.",
+          "description": "Units split among eligible leaves, after excluding self and same-label group pairs.",
           "type": "integer"
         },
         "discarded_units": {
@@ -1099,7 +1099,7 @@
           "type": "integer"
         },
         "discards": {
-          "description": "Each discarded leaf with its reason.",
+          "description": "Empty-selection shares, or the whole declaration when all pairs are excluded, with their reasons.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/DiscardedShareJSON"
@@ -1620,7 +1620,7 @@
           "type": "boolean"
         },
         "proof": {
-          "description": "The kind of proof behind the status (declared zero, fixed program, single controller, or unproved).",
+          "description": "The kind of proof behind the status (nothing offered, fixed program, single controller, or unproved).",
           "$ref": "#/$defs/MSDProofJSON"
         },
         "upper_certificate": {
@@ -1635,7 +1635,7 @@
           ]
         },
         "search_status": {
-          "description": "How the search ended.",
+          "description": "How the search ended. When nothing is offered, trivial requires a successful probe; a probe refused as out of range is reported as range.",
           "$ref": "#/$defs/MSDStatusJSON"
         },
         "stop_reason": {
@@ -2069,7 +2069,7 @@
       "enum": [
         "fixed_program",
         "single_controller",
-        "declared_zero",
+        "nothing_offered",
         "unproved"
       ]
     },
@@ -2159,7 +2159,7 @@
         "bisect_limit",
         "offer_range",
         "representable_limit",
-        "declared_zero",
+        "nothing_offered",
         "unit_resolution"
       ]
     },

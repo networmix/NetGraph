@@ -73,11 +73,18 @@ def graph(pooled):
     network.add_link(Link("B", "T", 8, 1))
 
     def one(name, source, preset):
-        spec = DemandSpec(Selector(source), Selector("^T$"), 4, preset, id=name)
+        spec = DemandSpec(
+            Selector(source),
+            Selector("^T$"),
+            4,
+            preset,
+            id=name,
+            mode="pairwise" if name == "load" else "combine",
+        )
         return DemandSet(name, (spec,))
 
     sets = {
-        "load": one("load", "^A$", FlowPolicyPreset.SHORTEST_PATHS_ECMP),
+        "load": one("load", "^(A|T)$", FlowPolicyPreset.SHORTEST_PATHS_ECMP),
         # T2 as a native model: a preset's finite demand would add a pool head here too
         "te": one(
             "te",

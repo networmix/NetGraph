@@ -110,3 +110,80 @@ def test_square_mesh_cost_bins_follow_each_pair_route():
     for (sources, destinations), (found, units) in bins(failed).items():
         cost = 2 if {sources, destinations} == {("N1",), ("N3",)} else 1
         assert found == [(cost, cost, units)], (sources, destinations)
+
+
+@pytest.mark.slow
+def test_square_mesh_divides_the_declared_total_among_twelve_pairs():
+    from fractions import Fraction
+
+    prepared = prepare(
+        Scenario.from_yaml(Path("scenarios/square_mesh.yaml").read_text())
+    )
+    assert prepared.topology.q == 1 / 1024
+    (demands,) = prepared.demand_sets.values()
+    pairs = [
+        (s, t)
+        for s in ("N1", "N2", "N3", "N4")
+        for t in ("N1", "N2", "N3", "N4")
+        if s != t
+    ]
+    assert [
+        (r.id, r.order, r.endpoints.sources, r.endpoints.destinations, r.nominal_units)
+        for r in demands.demands
+    ] == [
+        (f"baseline_traffic_matrix|0|{i}", i, (s,), (t,), 1024)
+        for i, (s, t) in enumerate(pairs)
+    ]
+    (accounting,) = demands.accounting
+    assert (
+        accounting.declared_units,
+        accounting.resolved_units,
+        accounting.discarded_units,
+        accounting.discards,
+    ) == (12288, 12288, 0, ())
+    report = prepared.units_report
+    assert (
+        report.exponent,
+        report.target_met,
+        report.augmented_capacity_sum_units,
+    ) == (-10, True, 20480)
+    (split,) = [s for s in report.nominal_splits if s.kind == "expansion"]
+    assert (split.members, split.incoming_physical, split.q_upper_bound, split.met) == (
+        12,
+        Fraction(12),
+        Fraction(float(0.001)) * 12 / 11,
+        True,
+    )
+    value = run(prepared)
+    msd = next(s.result for s in value.steps if s.name == "msd_baseline")
+    assert msd.alpha_feasible.value == 1
+    assert msd.upper_certificate.upper.value == 33 / 32
+    assert msd.best_probe_index == 0
+    assert [(p.alpha.value, p.outcome) for p in msd.history] == [
+        (1.0, "feasible"),
+        (2.0, "infeasible"),
+        (1.5, "infeasible"),
+        (1.25, "infeasible"),
+        (1.125, "infeasible"),
+        (1.0625, "infeasible"),
+        (1.03125, "infeasible"),
+    ]
+    placement = next(s.result for s in value.steps if s.name == "tm_placement")
+    assert placement.alpha.value == 1
+    for case in placement.cases:
+        state = case.states["converged"]
+        assert [(r.id, r.reference_request_units) for r in state.rows] == [
+            (r.id, 1024) for r in demands.demands
+        ]
+        impaired = bool(set(case.case.pattern.excluded_links) - {"N1|N3|0", "N2|N4|0"})
+        expected = (12288, 10240, 2048, 2048) if impaired else (12288, 12288, 0, 0)
+        assert (
+            state.totals.reference_request_units,
+            state.totals.delivered_units,
+            state.totals.unadmitted_units,
+            state.totals.reference_shortfall_units,
+        ) == expected
+        assert state.totals.delivery_ratio == (
+            Fraction(5, 6) if impaired else Fraction(1)
+        )
+        assert state.totals.source_drop_units == state.totals.edge_drop_units == 0

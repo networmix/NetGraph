@@ -322,9 +322,9 @@ def test_trivial_and_range_statuses_on_a_controlled_set():
     zero = scope("next_hop", volume=0)
     result = maximum_supported_demand(zero, MSDQuery(zero.demand_sets["d"]))
     assert (result.proof, result.search_status, result.stop_reason) == (
-        "declared_zero",
+        "nothing_offered",
         "trivial",
-        "declared_zero",
+        "nothing_offered",
     )
     assert [p.outcome for p in result.history] == ["feasible"]
     big = scope("next_hop")

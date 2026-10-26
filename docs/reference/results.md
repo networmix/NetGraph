@@ -204,7 +204,7 @@ One of: `"mixed_cost_dag"` \| `"unsupported_model"` \| `"controller_table"`.
 | --- | --- | --- |
 | `label` | string | The discarded expansion leaf. |
 | `units` | integer | Its discarded units. |
-| `reason` | `"self_pair"` \| `"filtered"` \| `"empty_selection"` | Why it was discarded: a self pair, filtered, or an empty selection. |
+| `reason` | `"self_pair"` \| `"filtered"` \| `"empty_selection"` | Why it was discarded: an empty selection, or an entirely excluded declaration (a self pair or identical group labels). If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason. |
 
 ## DomainQuestionJSON
 
@@ -249,9 +249,9 @@ One of: [BuildGraphResultJSON](#buildgraphresultjson) or [NetworkStatsResultJSON
 | --- | --- | --- |
 | `base_id` | string | The declared demand's identifier, before expansion. |
 | `declared_units` | integer | The declared demand's units after one quantization of its scaled total. |
-| `resolved_units` | integer | Units of its resolved leaves. |
+| `resolved_units` | integer | Units split among eligible leaves, after excluding self and same-label group pairs. |
 | `discarded_units` | integer | Units of its discarded leaves. |
-| `discards` | list of [DiscardedShareJSON](#discardedsharejson) | Each discarded leaf with its reason. |
+| `discards` | list of [DiscardedShareJSON](#discardedsharejson) | Empty-selection shares, or the whole declaration when all pairs are excluded, with their reasons. |
 
 ## FailureCaseJSON
 
@@ -374,9 +374,9 @@ One of: null or boolean or integer or number or string or list of [JSONValue](#j
 | `alpha_feasible` | [ExactAlphaJSON](#exactalphajson) or null | The largest tested feasible alpha. Null when no tested alpha was feasible. |
 | `best_probe_index` | integer or null | The history index of the probe at alpha_feasible. Null when no tested alpha was feasible. |
 | `monotone_proven` | boolean | Whether feasibility (every demand fits) is proven downward closed in alpha for this question class: an alpha below a feasible one is feasible, so the search's bracket is sound. Delivery itself need not be monotone in alpha. |
-| `proof` | [MSDProofJSON](#msdproofjson) | The kind of proof behind the status (declared zero, fixed program, single controller, or unproved). |
+| `proof` | [MSDProofJSON](#msdproofjson) | The kind of proof behind the status (nothing offered, fixed program, single controller, or unproved). |
 | `upper_certificate` | [UpperCertificateJSON](#uppercertificatejson) or null | A proved bracket around the largest feasible alpha. Null when no bracket is proved. |
-| `search_status` | [MSDStatusJSON](#msdstatusjson) | How the search ended. |
+| `search_status` | [MSDStatusJSON](#msdstatusjson) | How the search ended. When nothing is offered, trivial requires a successful probe; a probe refused as out of range is reported as range. |
 | `stop_reason` | [MSDStopReasonJSON](#msdstopreasonjson) | Why the search stopped. |
 | `history` | list of [MSDProbeJSON](#msdprobejson) | Every probe in the order tested. |
 | `best_rows` | list of [PlacementRowJSON](#placementrowjson) or null | The rows at alpha_feasible. Null when no tested alpha was feasible. |
@@ -397,7 +397,7 @@ One of: null or boolean or integer or number or string or list of [JSONValue](#j
 
 ## MSDProofJSON
 
-One of: `"fixed_program"` \| `"single_controller"` \| `"declared_zero"` \| `"unproved"`.
+One of: `"fixed_program"` \| `"single_controller"` \| `"nothing_offered"` \| `"unproved"`.
 
 ## MSDQueryJSON
 
@@ -421,7 +421,7 @@ One of: `"feasible"` \| `"none_feasible"` \| `"range"` \| `"stagnation"` \| `"li
 
 ## MSDStopReasonJSON
 
-One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"` \| `"offer_range"` \| `"representable_limit"` \| `"declared_zero"` \| `"unit_resolution"`.
+One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"` \| `"offer_range"` \| `"representable_limit"` \| `"nothing_offered"` \| `"unit_resolution"`.
 
 ## MarginalCostBinJSON
 

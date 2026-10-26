@@ -195,7 +195,7 @@ class DiscardedShare(_ResultRecord):
     units: int
     """Its discarded units."""
     reason: Literal["self_pair", "filtered", "empty_selection"]
-    """Why it was discarded: a self pair, filtered, or an empty selection."""
+    """Why it was discarded: an empty selection, or an entirely excluded declaration (a self pair or identical group labels). If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason."""
 
 
 @_record
@@ -205,11 +205,11 @@ class ExpansionAccounting(_ResultRecord):
     declared_units: int
     """The declared demand's units after one quantization of its scaled total."""
     resolved_units: int
-    """Units of its resolved leaves."""
+    """Units split among eligible leaves, after excluding self and same-label group pairs."""
     discarded_units: int
     """Units of its discarded leaves."""
     discards: tuple[DiscardedShare, ...]
-    """Each discarded leaf with its reason."""
+    """Empty-selection shares, or the whole declaration when all pairs are excluded, with their reasons."""
 
 
 @_record
@@ -869,11 +869,11 @@ MSDStopReason: TypeAlias = Literal[
     "bisect_limit",
     "offer_range",
     "representable_limit",
-    "declared_zero",
+    "nothing_offered",
     "unit_resolution",
 ]
 MSDProof: TypeAlias = Literal[
-    "fixed_program", "single_controller", "declared_zero", "unproved"
+    "fixed_program", "single_controller", "nothing_offered", "unproved"
 ]
 
 

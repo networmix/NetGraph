@@ -125,6 +125,8 @@ workflow:
 
 The search uses one persistent ledger, removes all owners before every probe and checks exact native-unit feasibility. It retains all probes and the best tested feasible rows. `alpha_feasible` is null if no probe was feasible. `search_status` distinguishes `feasible`, `none_feasible`, `range`, `stagnation`, `limit` and `trivial`; `stop_reason` records the precise boundary. A range refusal is not an infeasible congestion sample.
 
+When a demand set offers no traffic because all declared volumes are zero or every positive volume is discarded, MSD makes one probe at `alpha_max`. If that probe succeeds, it reports `trivial`, with `proof` and `stop_reason` both `nothing_offered`, and retains discard accounting. If scaling the discarded volume exceeds the native integer-unit range or binary64, the probe is refused and MSD reports `range` with `stop_reason` `offer_range`. A positive demand that merely rounds to zero is still searched as `below_resolution`.
+
 Only a proved downward-closed class receives an upper certificate. The bounded search on an unproved composition is a heuristic. The result does not claim an untested global maximum. YAML has no full-probe-row export input; Python's `MSDQuery.export_probe_rows` is an explicit opt-in.
 
 ## TunnelCountAnalysis
@@ -160,7 +162,7 @@ workflow:
     outputs: {details: false}
 ```
 
-Evaluates every demand of the set once per listed tunnel count, then once "up to" the `up_to` limit, each row a fresh native evaluation of the demand's centralized-TE model with that count, lossy at `offer` and planned for `design_demand`. Every demand of the set uses the same `design_demand` and `offer`; the rows read no declared volume. The set must hold tunnelled centralized-TE demands only (`centralized_te` with a `tunnel_count`, or the `TE_ECMP_16_LSP` and `TE_ECMP_UP_TO_256_LSP` presets); any other model is refused at preparation. Discarded shares (self pairs, filtered selections) have no rows.
+Evaluates every demand of the set once per listed tunnel count, then once "up to" the `up_to` limit, each row a fresh native evaluation of the demand's centralized-TE model with that count, lossy at `offer` and planned for `design_demand`. Every demand of the set uses the same `design_demand` and `offer`; the rows read no declared volume. The set must hold tunnelled centralized-TE demands only (`centralized_te` with a `tunnel_count`, or the `TE_ECMP_16_LSP` and `TE_ECMP_UP_TO_256_LSP` presets); any other model is refused at preparation. Self pairs and same-label group pairs do not create demands; empty selections and entirely excluded declarations have no tunnel-count rows.
 
 Rows follow the set's demands, then the listed counts in order, then the `up_to` row. A row's `count` is the requested count per head (for the `up_to` row, its limit); the chosen count is `plan.tunnels_per_head`. The `plan` (fluid and whole-unit tunnel size, planned bandwidth, tunnel cost, headroom penalty, the largest lossless offer and `insufficient_resolution`) is written in every row; `result` holds what the offer delivers and loses. `lossless_at_design_units` is the lossless delivery at the design, min(design, largest lossless offer). Rows are not monotone in the count, and "up to" picks the smallest count that carries the live heads' design shares, not the count that delivers most of the offer.
 

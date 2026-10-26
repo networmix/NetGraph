@@ -66,7 +66,7 @@ CASES = [
         0,
     ),
     (1, {"alpha_max": 2}, "limit", "alpha_bound", (1, 2), 1),
-    (0, {"alpha_max": 4}, "trivial", "declared_zero", (4,), 0),
+    (0, {"alpha_max": 4}, "trivial", "nothing_offered", (4,), 0),
     (
         1,
         {
@@ -276,7 +276,7 @@ def oracle(case, monkeypatch):
         "alpha_feasible": None if best is None else alpha(alphas[best]),
         "best_probe_index": best,
         "monotone_proven": True,
-        "proof": "declared_zero" if volume == 0 else "fixed_program",
+        "proof": "nothing_offered" if volume == 0 else "fixed_program",
         "upper_certificate": certificate,
         "search_status": status,
         "stop_reason": reason,

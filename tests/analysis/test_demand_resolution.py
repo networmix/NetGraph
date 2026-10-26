@@ -69,7 +69,7 @@ class TestResolvedPairwise:
             (("B",), ("D",), 25),
         ]
 
-    def test_pairwise_self_shares_are_discarded(self, simple_network):
+    def test_pairwise_volume_excludes_self_pairs(self, simple_network):
         # Singleton groups make the diagonal intentional; overlapping multi-node
         # groups are refused before expansion by the common endpoint rule.
         value = _resolved(
@@ -84,14 +84,11 @@ class TestResolvedPairwise:
         assert [
             (row.endpoints.sources, row.endpoints.destinations, row.nominal_units)
             for row in value.demands
-        ] == [(("A",), ("B",), 25), (("B",), ("A",), 25)]
+        ] == [(("A",), ("B",), 50), (("B",), ("A",), 50)]
         (accounting,) = value.accounting
-        assert accounting.declared_units == 100 and accounting.resolved_units == 50
-        assert accounting.discarded_units == 50
-        assert [(share.reason, share.units) for share in accounting.discards] == [
-            ("self_pair", 25),
-            ("self_pair", 25),
-        ]
+        assert accounting.declared_units == 100 and accounting.resolved_units == 100
+        assert accounting.discarded_units == 0
+        assert accounting.discards == ()
         with pytest.raises(ValueError, match="overlap"):
             _resolved(
                 simple_network,

@@ -72,7 +72,9 @@ def test_each_matrix_is_its_own_table():
 
 def test_the_vector_is_aggregated_before_rounding():
     prep = merge_at_m(
-        demand("^A$", "^t$", 0.25, id="a"), demand("^B$", "^t$", 0.5, id="b"), q=1
+        demand("^(A|t)$", "^t$", 0.25, id="a", mode="pairwise"),
+        demand("^B$", "^t$", 0.5, id="b"),
+        q=1,
     )
     # At q=1 the units would be 0 and 1; the exact amounts give 1:2.
     assert source_weights(prep) == {"A": (Fraction(1, 4), 1), "B": (Fraction(1, 2), 2)}
@@ -97,12 +99,21 @@ def test_a_multi_source_leaf_divides_over_its_sources_that_reach_t():
     assert source_weights(repeated) == {"A": (1, 1), "B": (1, 1)}
 
 
-def test_discarded_self_shares_are_excluded():
+def test_self_pairs_take_no_nominal_source_share():
     prep = merge_at_m(demand("^(A|t)$", "^t$", 4, id="at", mode="pairwise"), B1)
-    # Leaves A->t (2) and t->t (2, a discarded self pair).
-    assert source_weights(prep) == {"A": (2, 2), "B": (1, 1)}
+    # A->t receives the whole 4; t->t takes no share.
+    assert source_weights(prep) == {"A": (4, 4), "B": (1, 1)}
     accounting = prep.demand_sets["d"].accounting[0]
-    assert [d.reason for d in accounting.discards] == ["self_pair"]
+    assert accounting.discards == ()
+    assert weights(prep, "M") == {"M|X|0": 5, "M|Y|0": 8}
+    assert weights(prep, "A") == {"A|M|0": 13}
+    assert weights(prep, "B") == {"B|M|0": 0, "B|X|0": 3}
+    assert delivered(prep)[0] == {"at|0": 13, "b|0": 3}
+    assert (
+        accounting.declared_units,
+        accounting.resolved_units,
+        accounting.discarded_units,
+    ) == (32, 32, 0)
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -295,3 +306,35 @@ def test_the_weighted_solve_has_complete_flows_and_stale_replays_it_unchanged():
     a_stale = next(r for r in stale if r.id == "a|0").result
     assert flows(a_stale) == {"A|M|0": 11, "M|X|0": 3, "X|t|0": 3}
     assert sum(units for _, units in a_stale.edge_drops) == 8
+
+
+@pytest.mark.parametrize(
+    "volume,extra,q,expected",
+    [
+        (4, 1, 1 / 8, {"A": (2, 2), "B": (3, 3)}),
+        (0.25, 0.125, 1, {"A": (Fraction(1, 8), 1), "B": (Fraction(1, 4), 2)}),
+    ],
+)
+def test_multi_leaf_declaration_source_weights_use_each_continuous_share(
+    volume, extra, q, expected
+):
+    prep = merge_at_m(
+        demand("^(A|B|t)$", "^t$", volume, id="matrix", mode="pairwise"),
+        demand("^B$", "^t$", extra, id="extra", priority=1),
+        q=q,
+    )
+    assert source_weights(prep) == expected
+    ds = prep.demand_sets["d"]
+    assert [
+        (d.id, d.endpoints.sources, d.endpoints.destinations) for d in ds.demands
+    ] == [
+        ("matrix|0", ("A",), ("t",)),
+        ("matrix|1", ("B",), ("t",)),
+        ("extra|0", ("B",), ("t",)),
+    ]
+    assert ds.accounting[0].discards == ()
+    assert (
+        ds.accounting[0].declared_units
+        == ds.accounting[0].resolved_units
+        == (32 if q == 1 / 8 else 0)
+    )
