@@ -21,7 +21,7 @@ def test_changelog_explains_redistribution_from_self_only_groups():
         "node-to-itself pairs and same-label group pairs get no share",
         "group or group pair",
         "gives its share to the others",
-        "for a group or group pair containing only node-to-itself pairs, 0.24 dropped that share",
+        "for one with only node-to-itself pairs, 0.24 dropped that share",
         "reported whole as discarded",
         "an empty selection keeps its discarded share",
     ):

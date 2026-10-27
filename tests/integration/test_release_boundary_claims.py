@@ -36,11 +36,11 @@ def test_equal_sources_report_only_the_traffic_their_shares_carry(q, caps, units
         .split("## [0.24.1]")[0]
     )
     assert (
-        "Combined-source shortest-path ECMP now reports delivery from the traffic its equal source shares actually carry"
+        "ECMP shortest-path demands in `combine` mode, which split their volume equally over several source nodes, now report what those equal shares actually deliver"
         in release
     )
     assert (
-        "a selected source with a zero-capacity route can stop lossless admission"
+        "a selected source whose route has zero capacity keeps its share, so it can stop admission for the whole demand"
         in release
     )
     n = Network(nodes={s: Node(s) for s in ("a", "b", "t")})

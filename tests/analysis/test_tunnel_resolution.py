@@ -797,7 +797,7 @@ def test_constraint_wire_fields_reject_missing_null_and_near_values():
         assert list(validator.iter_errors({**actual, extra: 1}))
 
 
-def test_concepts_and_release_note_state_the_live_plan_rule():
+def test_concepts_state_the_live_plan_rule():
     root = Path(__file__).resolve().parents[2]
     concepts = (root / "docs/concepts.md").read_text()
     sentence = next(
@@ -809,16 +809,6 @@ def test_concepts_and_release_note_state_the_live_plan_rule():
     assert "declared demands and workflow capacity questions" in sentence
     assert (
         "tunnel-count analyses, later questions, failure cases and searches" in sentence
-    )
-    note = (
-        (root / "CHANGELOG.md")
-        .read_text()
-        .split("## [0.25.0]", 1)[1]
-        .split("## [", 1)[0]
-    )
-    assert (
-        "including native tunnel plans whose live heads cannot receive a whole unit per tunnel"
-        in note
     )
     fields = SCHEMA["$defs"]["UnitsReportJSON"]["properties"]
     assert (

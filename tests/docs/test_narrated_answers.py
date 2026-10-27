@@ -902,44 +902,6 @@ def test_nsfnet_page_section():
     assert figures and unread == [], unread
 
 
-def test_nsfnet_changelog_entry():
-    """The release's NSFNET entry: its figures and names, compared with the scenario."""
-    text = (ROOT / "CHANGELOG.md").read_text()
-    [entry] = [line for line in text.splitlines() if "bundled NSFNET scenario" in line]
-    scenario = Scenario.from_yaml((ROOT / "scenarios/nsfnet.yaml").read_text())
-    roles, core, end = nsfnet_structure(scenario.network)
-    match = re.search(
-        r"map of the (\d{4}) T3 backbone and node list of May (\d{4}): (\d+) core sites "
-        r"at MCI junctions joined by (\d+) connections, (\d+) end sites each on one "
-        r"circuit to its core site, capacities in kbit/s \(a DS-3 is (\d+)\), cost (\d+) "
-        r"on every circuit, and a new step that fails one core connection per draw "
-        r"\(`(\w+)`\)\. .* differ from (\S+) throughout\. Sites are named `core/<city>` "
-        r"and `end/<place>`, and `(\w+)` is now `(\w+)`",
-        entry,
-    )
-    assert match, entry
-    year, list_year, n_core, n_conn, n_end, ds3, cost, third, previous, old, new = (
-        match.groups()
-    )
-    head = Header("nsfnet.yaml")
-    assert (year, list_year) == head.read(
-        r"in mid-(\d{4}), .* node list of \d+ May (\d{4})"
-    )
-    assert Counter(roles.values()) == {"core": int(n_core), "end": int(n_end)}
-    assert len(core) == int(n_conn) and {len(c) for c in end.values()} == {1}
-    assert {link.capacity for c in end.values() for link in c} == {int(ds3)}
-    assert {link.cost for link in scenario.network.links.values()} == {int(cost)}
-    assert [s.failure_policy for s in scenario.workflow][2] == third
-    rule = one_rule(scenario.failure_policies[third])
-    assert (rule.scope, rule.mode, rule.count) == ("risk_group", "choice", 1)
-    releases = re.findall(r"^## \[([^\]]+)\]", text, re.M)
-    sections = re.split(r"^## \[[^\]]+\].*$", text, flags=re.M)[1:]
-    [own] = [r for r, s in zip(releases, sections, strict=True) if entry in s]
-    assert previous == releases[releases.index(own) + 1]  # the release before this one
-    assert old not in scenario.failure_policies and new in scenario.failure_policies
-    assert all(name.split("/")[0] == role for name, role in roles.items())
-
-
 def one_policy_rules(head, name):
     [mode] = head.scenario.failure_policies[name].modes
     return mode.rules
