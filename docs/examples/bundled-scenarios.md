@@ -75,12 +75,15 @@ ngraph run scenarios/backbone_clos.yml --keys network_statistics tm_placement --
 
 ## `scenarios/nsfnet.yaml`
 
-- **Purpose**: Historic NSFNET T3 (1992) backbone with parallel circuits and risk groups.
+- **Purpose**: The NSFNET T3 backbone in mid-1992 as its sources show it: the map "New T3 Backbone Service, 1992" (in Merit's final report, [NSFNET: A Partnership for High-Speed Networking](https://www.merit.edu/wp-content/uploads/2024/10/Merit-Network_NSFNET-A-Partnership-for-High-Speed-Networking.pdf)) and Merit's [node list of 22 May 1992](https://lists.nanog.org/archives/list/nanog@lists.nanog.org/thread/KG32YBM5M4DNVD6V4ZQEOVJN7KZBMDLN/). A historic network with parallel circuits, risk groups and failure policies.
 - **Contents**:
 
-  - Explicit nodes and links with capacities and costs; one risk group per circuit pair
-  - Failure policies: one random link per draw (`failures.single_link_failure`) and random failures at 1992 availability (`failures.availability_1992`)
-  - Workflow steps: `node_to_node_capacity_matrix_1`, `node_to_node_capacity_matrix_2`
+  - 12 core sites (`core/<city>`, `site_type: core`) joined by 15 connections, each site standing for the backbone routers at one MCI junction; 16 end sites at regional networks (`end/<place>`, `site_type: end`), each on a single circuit to its core site
+  - Capacities in kbit/s. Every circuit of the time was a DS-3 of 44736 kbit/s, and so is each end site's circuit. Each core connection, one DS-3 in 1992, is modelled as a pair of parallel circuits of 22368 kbit/s, the pair in its own risk group, so every connection carries its 1992 capacity
+  - Cost 1 on every circuit: every T3 circuit then had routing metric 1, whatever its length
+  - Failure policies: one random circuit per draw (`failures.single_link_failure`; on a core connection, half of it), independent random circuit and site failures at assumed rates, since no source gives the rates of the time (`failures.assumed_random_failures`), and one random risk group per draw (`failures.single_connection_failure`: both circuits of a core connection, the loss of its DS-3)
+  - Workflow steps: `node_to_node_capacity_matrix_1`, `node_to_node_capacity_matrix_2`, `node_to_node_capacity_matrix_3`, one per policy in that order
+  - Not modelled: the T1 "Safety Net" between core routers, the backup T1 circuits added to end sites later that year, the FIX-West and FIX-East interchanges and ANS's own sites (in the node list, not on the map), and the routers' forwarding limits and the sites' Ethernet and FDDI access: capacities are line rates
 
 Run:
 
@@ -107,8 +110,8 @@ ngraph run scenarios/square_mesh.yaml --no-results --stdout --keys tm_placement 
   | jq -c '.steps[] | select(.name == "tm_placement") | .result.cases[]
            | {links: .case.pattern.excluded_links, n: .case.occurrences, ratio: .states.converged.totals.delivery_ratio}'
 
-# Pairwise capacity matrix: 676 rows in the no-failure baseline, one per ordered pair
-# of the 26 sites, each site paired with itself included
+# Pairwise capacity matrix: 784 rows in the no-failure baseline, one per ordered pair
+# of the 28 sites, each site paired with itself included
 ngraph run scenarios/nsfnet.yaml --no-results --stdout --keys node_to_node_capacity_matrix_1 \
   | jq '.steps[] | select(.name == "node_to_node_capacity_matrix_1") | .result.cases[0].states.converged.rows | length'
 

@@ -21,6 +21,7 @@ from tests.docs.pages import ROOT, fence, fences, narration, numbers, stated
 CONCEPTS = "docs/concepts.md"
 BASIC = "docs/examples/basic.md"
 CLOS = "docs/examples/clos-fabric.md"
+BUNDLED = "docs/examples/bundled-scenarios.md"
 WORDS = dict(
     zip(
         "zero one two three four five six seven eight nine ten".split(),
@@ -741,50 +742,202 @@ def test_readme_example_header():
     head.every_figure_read()
 
 
-def test_nsfnet_header_site_counts():
-    head = Header("nsfnet.yaml")
-    network, workflow = head.scenario.network, head.scenario.workflow
-    (year,) = head.read(r"The NSFNET T3 backbone of (\d+):")
-    assert f"({year})" in network.attrs["name"]
-    core, paired, own, edge, single = head.read(
-        r"(\d+) core sites joined by (pairs) of parallel circuits, each (pair) in its own "
-        r"risk group, and (\d+) edge sites on (single) circuits\."
-    )
-    kinds = {name: node.attrs["site_type"] for name, node in network.nodes.items()}
-    assert Counter(kinds.values()) == {"core": int(core), "edge": int(edge)}
+def nsfnet_structure(network):
+    """The NSFNET scenario's circuits grouped by connection, and each site's role."""
+    roles = {name: node.attrs["site_type"] for name, node in network.nodes.items()}
     circuits = {}
     for link in network.links.values():
-        circuits.setdefault(tuple(sorted((link.source, link.target))), []).append(link)
-    groups = []
-    for ends, links in circuits.items():
-        if all(kinds[end] == "core" for end in ends):
-            assert len(links) == 2 and paired == "pairs"
-            [[group]] = {
-                tuple(link.risk_groups) for link in links
-            }  # one group, the pair's own
-            groups.append(group)
-        else:
-            assert len(links) == 1 and single == "single" and not links[0].risk_groups
-    assert own == "pair" and len(groups) == len(set(groups)) == len(network.risk_groups)
-    every, policies, failed = head.read(
-        r"capacity between every (pair) of sites under (\w+) failure policies: (\w+) "
-        r"random link per draw, and independent random link and node failures"
+        circuits.setdefault(frozenset((link.source, link.target)), []).append(link)
+    core = {e: c for e, c in circuits.items() if {roles[s] for s in e} == {"core"}}
+    end = {e: c for e, c in circuits.items() if e not in core}
+    return roles, core, end
+
+
+def test_nsfnet_header():
+    head = Header("nsfnet.yaml")
+    scenario, network, workflow = (
+        head.scenario,
+        head.scenario.network,
+        head.scenario.workflow,
     )
-    assert len(head.scenario.failure_policies) == number(policies) == len(workflow)
+    roles, core, end = nsfnet_structure(network)
+    mid, map_year, day, list_year = head.read(
+        r"The NSFNET T3 backbone in mid-(\d{4}), as Merit's map \"New T3 Backbone "
+        r"Service, (\d{4})\" and its node list of (\d+) May (\d{4}) show it:"
+    )
+    assert mid == map_year == list_year and f"({mid})" in network.attrs["name"]
+    assert stated(BUNDLED, r"node list of (\d+) May (\d{4})\]") == (day, list_year)
+    n_core, n_connections, n_end, single = head.read(
+        r"(\d+) core sites at MCI junctions joined by (\d+) connections, and (\d+) end "
+        r"sites, each on a (single) circuit to its core site\."
+    )
+    assert Counter(roles.values()) == {"core": int(n_core), "end": int(n_end)}
+    assert all(name.startswith(role + "/") for name, role in roles.items())
+    assert len(core) == int(n_connections)
+    assert single == "single" and {len(c) for c in end.values()} == {1}
+    assert sorted(s for e in end for s in e if roles[s] == "end") == sorted(
+        s for s, role in roles.items() if role == "end"
+    )  # every end site has exactly one circuit, to a core site
+    year, ds, ds3, cost = head.read(
+        r"Every (\d{4}) circuit was a DS-(3) \((\d+) kbit/s; capacities here are in "
+        r"kbit/s\), and every circuit has cost (\d+), the routing metric all of them had\."
+    )
+    assert year == mid and ds == "3"
+    assert {link.capacity for c in end.values() for link in c} == {int(ds3)}
+    assert {sum(link.capacity for link in c) for c in core.values()} == {int(ds3)}
+    assert {link.cost for link in network.links.values()} == {int(cost)}
+    pair, half_of, own = head.read(
+        r"each core connection is a (pair) of parallel circuits of half a DS-(3) each, "
+        r"the (pair) in its own risk group\."
+    )
+    assert pair == own == "pair" and half_of == ds
+    groups = []
+    for links in core.values():
+        assert len(links) == 2 and {link.capacity for link in links} == {int(ds3) / 2}
+        [[group]] = {tuple(link.risk_groups) for link in links}
+        groups.append(group)
+    assert {tuple(link.risk_groups) for c in end.values() for link in c} == {()}
+    assert len(set(groups)) == len(groups) == len(network.risk_groups)
+    every, circuit, connection, both = head.read(
+        r"capacity between every (pair) of sites under each failure policy: (one) "
+        r"random circuit per draw, (one) random core connection \(both circuits of its "
+        r"(pair)\) per draw, and independent random circuit and site failures at "
+        r"assumed rates\."
+    )
+    assert every == both == "pair"
+    assert len(scenario.failure_policies) == len(workflow)
+    assert {step.failure_policy for step in workflow} == set(scenario.failure_policies)
     for step in workflow:  # every ordered pair of sites, one row each
         assert (
             step.mode == "pairwise" and step.source.path == step.target.path == "^(.+)$"
         )
-    rule = one_rule(head.scenario.failure_policies["single_link_failure"])
-    assert (rule.scope, rule.mode, rule.count) == ("link", "choice", number(failed))
-    assert every == "pair" and {
-        r.mode for r in one_policy_rules(head, "availability_1992")
-    } == {"random"}
-    (sites,) = stated(
-        "docs/examples/bundled-scenarios.md", r"ordered pair\n# of the (\d+) sites"
+    rule = one_rule(scenario.failure_policies["single_link_failure"])
+    assert (rule.scope, rule.mode, rule.count) == ("link", "choice", number(circuit))
+    rule = one_rule(scenario.failure_policies["single_connection_failure"])
+    assert (rule.scope, rule.mode, rule.count) == (
+        "risk_group",
+        "choice",
+        number(connection),
     )
+    random = scenario.failure_policies["assumed_random_failures"]
+    assert {
+        (r.scope, r.mode) for r in one_policy_rules(head, "assumed_random_failures")
+    } == {
+        ("link", "random"),
+        ("node", "random"),
+    }
+    assert random.attrs["description"].startswith(
+        "Assumed rates, not taken from a 1992"
+    )
+    (sites,) = stated(BUNDLED, r"ordered pair\n# of the (\d+) sites")
     assert len(network.nodes) == int(sites)
     head.every_figure_read()
+
+
+def test_nsfnet_page_section():
+    """Bundled Scenarios, `scenarios/nsfnet.yaml`: every figure of the section is read
+    here and compared with the scenario (the date with the header's)."""
+    page = (ROOT / BUNDLED).read_text()
+    start = page.index("## `scenarios/nsfnet.yaml`")
+    section = page[start : page.index("\n## ", start + 1)]
+    # link targets blanked in place, so their digits are not figures and spans still hold
+    section = re.sub(r"\]\([^)]*\)", lambda m: "]" + " " * (len(m[0]) - 1), section)
+    scenario = Scenario.from_yaml((ROOT / "scenarios/nsfnet.yaml").read_text())
+    network, workflow = scenario.network, scenario.workflow
+    roles, core, end = nsfnet_structure(network)
+    read = []
+
+    def one(pattern):
+        matches = list(re.finditer(pattern, section))
+        assert len(matches) == 1, f"{len(matches)} matches of {pattern!r}"
+        read.append(matches[0].span())
+        return matches[0].groups()
+
+    mid, map_year = one(
+        r"backbone in mid-(\d{4}) as its sources show it: the map \"New "
+        r"T3 Backbone Service, (\d{4})\""
+    )
+    day, list_year = one(r"node list of (\d+) May (\d{4})\]")
+    head = Header("nsfnet.yaml")
+    assert (mid, map_year, day, list_year) == head.read(
+        r"in mid-(\d{4}), as Merit's map \"New T3 Backbone Service, (\d{4})\" and its "
+        r"node list of (\d+) May (\d{4})"
+    )
+    n_core, n_connections = one(
+        r"(\d+) core sites \(`core/<city>`, `site_type: core`\) joined by (\d+) connections"
+    )
+    (n_end,) = one(
+        r"(\d+) end sites at regional networks \(`end/<place>`, `site_type: end`\), each "
+        r"on a single circuit to its core site"
+    )
+    assert Counter(roles.values()) == {"core": int(n_core), "end": int(n_end)}
+    assert len(core) == int(n_connections) and {len(c) for c in end.values()} == {1}
+    (ds3,) = one(r"DS-3 of (\d+) kbit/s, and so is each end site's circuit")
+    then, half, carried = one(
+        r"one DS-3 in (\d{4}), is modelled as a pair of parallel circuits of (\d+) kbit/s, "
+        r"the pair in its own risk group, so every connection carries its (\d{4}) capacity"
+    )
+    assert then == carried == mid
+    assert {sum(link.capacity for link in c) for c in core.values()} == {int(ds3)}
+    assert {link.capacity for c in end.values() for link in c} == {int(ds3)}
+    assert {link.capacity for c in core.values() for link in c} == {int(half)}
+    assert {len(c) for c in core.values()} == {2} and 2 * int(half) == int(ds3)
+    cost, metric = one(
+        r"Cost (\d+) on every circuit: every T3 circuit then had routing "
+        r"metric (\d+), whatever its length"
+    )
+    assert cost == metric
+    assert {link.cost for link in network.links.values()} == {int(cost)}
+    listed = re.findall(r"`failures\.(\w+)`", section)
+    steps = re.findall(r"`(node_to_node_capacity_matrix_\d)`", section)
+    one(r"one per policy in that order")
+    assert [step.name for step in workflow] == steps
+    assert [step.failure_policy for step in workflow] == listed
+    figures = list(re.finditer(r"(?<!DS-)\b\d+\b", section))  # DS-3 is a name
+    unread = [
+        m[0]
+        for m in figures
+        if not any(a <= m.start() and m.end() <= b for a, b in read)
+    ]
+    assert figures and unread == [], unread
+
+
+def test_nsfnet_changelog_entry():
+    """The release's NSFNET entry: its figures and names, compared with the scenario."""
+    text = (ROOT / "CHANGELOG.md").read_text()
+    [entry] = [line for line in text.splitlines() if "bundled NSFNET scenario" in line]
+    scenario = Scenario.from_yaml((ROOT / "scenarios/nsfnet.yaml").read_text())
+    roles, core, end = nsfnet_structure(scenario.network)
+    match = re.search(
+        r"map of the (\d{4}) T3 backbone and node list of May (\d{4}): (\d+) core sites "
+        r"at MCI junctions joined by (\d+) connections, (\d+) end sites each on one "
+        r"circuit to its core site, capacities in kbit/s \(a DS-3 is (\d+)\), cost (\d+) "
+        r"on every circuit, and a new step that fails one core connection per draw "
+        r"\(`(\w+)`\)\. .* differ from (\S+) throughout\. Sites are named `core/<city>` "
+        r"and `end/<place>`, and `(\w+)` is now `(\w+)`",
+        entry,
+    )
+    assert match, entry
+    year, list_year, n_core, n_conn, n_end, ds3, cost, third, previous, old, new = (
+        match.groups()
+    )
+    head = Header("nsfnet.yaml")
+    assert (year, list_year) == head.read(
+        r"in mid-(\d{4}), .* node list of \d+ May (\d{4})"
+    )
+    assert Counter(roles.values()) == {"core": int(n_core), "end": int(n_end)}
+    assert len(core) == int(n_conn) and {len(c) for c in end.values()} == {1}
+    assert {link.capacity for c in end.values() for link in c} == {int(ds3)}
+    assert {link.cost for link in scenario.network.links.values()} == {int(cost)}
+    assert [s.failure_policy for s in scenario.workflow][2] == third
+    rule = one_rule(scenario.failure_policies[third])
+    assert (rule.scope, rule.mode, rule.count) == ("risk_group", "choice", 1)
+    releases = re.findall(r"^## \[([^\]]+)\]", text, re.M)
+    sections = re.split(r"^## \[[^\]]+\].*$", text, flags=re.M)[1:]
+    [own] = [r for r, s in zip(releases, sections, strict=True) if entry in s]
+    assert previous == releases[releases.index(own) + 1]  # the release before this one
+    assert old not in scenario.failure_policies and new in scenario.failure_policies
+    assert all(name.split("/")[0] == role for name, role in roles.items())
 
 
 def one_policy_rules(head, name):

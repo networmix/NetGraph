@@ -179,8 +179,16 @@ def test_the_clos_fabric_has_its_stated_links_and_cut_for_every_named_preset():
         ),
         (
             "nsfnet.yaml",
-            ["node_to_node_capacity_matrix_1", "node_to_node_capacity_matrix_2"],
-            ["availability_1992", "single_link_failure"],
+            [
+                "node_to_node_capacity_matrix_1",
+                "node_to_node_capacity_matrix_2",
+                "node_to_node_capacity_matrix_3",
+            ],
+            [
+                "assumed_random_failures",
+                "single_connection_failure",
+                "single_link_failure",
+            ],
             [],
         ),
     ],
@@ -213,7 +221,7 @@ def test_square_mesh_is_the_smallest_bundled_scenario():
 
 def test_the_bundled_scenario_headers_state_their_structure():
     """The opening comments' structure (their figures: test_narrated_answers.py): nsfnet's
-    core sites on circuit pairs, each pair one risk group, edge sites on single circuits;
+    core sites on circuit pairs, each pair one risk group, end sites on single circuits;
     backbone_clos's risk group per adjacency and its CostPower rows per metro and per PoP."""
     nsf = Scenario.from_yaml((ROOT / "scenarios/nsfnet.yaml").read_text()).network
     kinds = {name: node.attrs["site_type"] for name, node in nsf.nodes.items()}

@@ -1,544 +1,476 @@
-# The NSFNET T3 backbone of 1992: 16 core sites joined by pairs of parallel circuits,
-# each pair in its own risk group, and 10 edge sites on single circuits. The workflow
-# computes the capacity between every pair of sites under two failure policies: one
-# random link per draw, and independent random link and node failures at the
-# availability of the time.
+# The NSFNET T3 backbone in mid-1992, as Merit's map "New T3 Backbone Service, 1992"
+# and its node list of 22 May 1992 show it: 12 core sites at MCI junctions joined by 15
+# connections, and 16 end sites, each on a single circuit to its core site. Every 1992
+# circuit was a DS-3 (44736 kbit/s; capacities here are in kbit/s), and every circuit
+# has cost 1, the routing metric all of them had. Modelling choice: each core connection
+# is a pair of parallel circuits of half a DS-3 each, the pair in its own risk group.
+# The workflow computes the capacity between every pair of sites under each failure
+# policy: one random circuit per draw, one random core connection (both circuits of
+# its pair) per draw, and independent random circuit and site failures at assumed rates.
 seed: 5678
 network:
-  name: NSFNET T3 (1992)
-  version: 1.1
+  name: NSFNET T3 backbone (1992)
+  version: 2.0
   nodes:
-    Seattle:
+    core/Seattle:
       attrs:
         site_type: core
-    PaloAlto:
+    core/SanFrancisco:
       attrs:
         site_type: core
-    LosAngeles:
+    core/LosAngeles:
       attrs:
         site_type: core
-    SaltLakeCity:
+    core/Denver:
       attrs:
         site_type: core
-    Denver:
+    core/StLouis:
       attrs:
         site_type: core
-    Lincoln:
+    core/Chicago:
       attrs:
         site_type: core
-    StLouis:
+    core/Houston:
       attrs:
         site_type: core
-    Chicago:
+    core/Cleveland:
       attrs:
         site_type: core
-    Cleveland:
+    core/NewYork:
       attrs:
         site_type: core
-    NewYork:
+    core/Hartford:
       attrs:
         site_type: core
-    WashingtonDC:
+    core/WashingtonDC:
       attrs:
         site_type: core
-    Greensboro:
+    core/Greensboro:
       attrs:
         site_type: core
-    Atlanta:
+    end/Seattle:
       attrs:
-        site_type: core
-    Houston:
+        site_type: end
+    end/PaloAlto:
       attrs:
-        site_type: core
-    AnnArbor:
+        site_type: end
+    end/SanDiego:
       attrs:
-        site_type: core
-    Hartford:
+        site_type: end
+    end/SaltLakeCity:
       attrs:
-        site_type: core
-    Cambridge:
+        site_type: end
+    end/Boulder:
       attrs:
-        site_type: edge
-    Argonne:
+        site_type: end
+    end/Lincoln:
       attrs:
-        site_type: edge
-    SanDiego:
+        site_type: end
+    end/UrbanaChampaign:
       attrs:
-        site_type: edge
-    Boulder:
+        site_type: end
+    end/Argonne:
       attrs:
-        site_type: edge
-    Princeton:
+        site_type: end
+    end/Houston:
       attrs:
-        site_type: edge
-    Ithaca:
+        site_type: end
+    end/AnnArbor:
       attrs:
-        site_type: edge
-    CollegePark:
+        site_type: end
+    end/Pittsburgh:
       attrs:
-        site_type: edge
-    Pittsburgh:
+        site_type: end
+    end/Ithaca:
       attrs:
-        site_type: edge
-    UrbanaChampaign:
+        site_type: end
+    end/Cambridge:
       attrs:
-        site_type: edge
-    MoffettField:
+        site_type: end
+    end/Princeton:
       attrs:
-        site_type: edge
+        site_type: end
+    end/CollegePark:
+      attrs:
+        site_type: end
+    end/Atlanta:
+      attrs:
+        site_type: end
   links:
-    - source: NewYork
-      target: Cleveland
-      capacity: 45000.0
-      cost: 4
+    - source: core/Seattle
+      target: core/SanFrancisco
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Cleveland_NewYork
+        - Seattle-SanFrancisco
       attrs:
         circuit: A
-    - source: NewYork
-      target: Cleveland
-      capacity: 45000.0
-      cost: 4
+    - source: core/Seattle
+      target: core/SanFrancisco
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Cleveland_NewYork
+        - Seattle-SanFrancisco
       attrs:
         circuit: B
-    - source: Cleveland
-      target: Chicago
-      capacity: 45000.0
-      cost: 6
+    - source: core/Seattle
+      target: core/Denver
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Cleveland_Chicago
+        - Seattle-Denver
       attrs:
         circuit: A
-    - source: Cleveland
-      target: Chicago
-      capacity: 45000.0
-      cost: 6
+    - source: core/Seattle
+      target: core/Denver
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Cleveland_Chicago
+        - Seattle-Denver
       attrs:
         circuit: B
-    - source: Chicago
-      target: PaloAlto
-      capacity: 45000.0
-      cost: 12
+    - source: core/Denver
+      target: core/StLouis
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Chicago_PaloAlto
+        - Denver-StLouis
       attrs:
         circuit: A
-    - source: Chicago
-      target: PaloAlto
-      capacity: 45000.0
-      cost: 12
+    - source: core/Denver
+      target: core/StLouis
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Chicago_PaloAlto
+        - Denver-StLouis
       attrs:
         circuit: B
-    - source: NewYork
-      target: WashingtonDC
-      capacity: 45000.0
-      cost: 4
+    - source: core/SanFrancisco
+      target: core/LosAngeles
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_NewYork_WashingtonDC
+        - SanFrancisco-LosAngeles
       attrs:
         circuit: A
-    - source: NewYork
-      target: WashingtonDC
-      capacity: 45000.0
-      cost: 4
+    - source: core/SanFrancisco
+      target: core/LosAngeles
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_NewYork_WashingtonDC
+        - SanFrancisco-LosAngeles
       attrs:
         circuit: B
-    - source: WashingtonDC
-      target: Greensboro
-      capacity: 45000.0
-      cost: 5
+    - source: core/SanFrancisco
+      target: core/Chicago
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_WashingtonDC_Greensboro
+        - SanFrancisco-Chicago
       attrs:
         circuit: A
-    - source: WashingtonDC
-      target: Greensboro
-      capacity: 45000.0
-      cost: 5
+    - source: core/SanFrancisco
+      target: core/Chicago
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_WashingtonDC_Greensboro
+        - SanFrancisco-Chicago
       attrs:
         circuit: B
-    - source: Greensboro
-      target: Atlanta
-      capacity: 45000.0
-      cost: 7
+    - source: core/LosAngeles
+      target: core/Houston
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Greensboro_Atlanta
+        - LosAngeles-Houston
       attrs:
         circuit: A
-    - source: Greensboro
-      target: Atlanta
-      capacity: 45000.0
-      cost: 7
+    - source: core/LosAngeles
+      target: core/Houston
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Greensboro_Atlanta
+        - LosAngeles-Houston
       attrs:
         circuit: B
-    - source: Atlanta
-      target: Houston
-      capacity: 45000.0
-      cost: 10
+    - source: core/Chicago
+      target: core/StLouis
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Atlanta_Houston
+        - Chicago-StLouis
       attrs:
         circuit: A
-    - source: Atlanta
-      target: Houston
-      capacity: 45000.0
-      cost: 10
+    - source: core/Chicago
+      target: core/StLouis
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Atlanta_Houston
+        - Chicago-StLouis
       attrs:
         circuit: B
-    - source: Houston
-      target: LosAngeles
-      capacity: 45000.0
-      cost: 14
+    - source: core/StLouis
+      target: core/Houston
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Houston_LosAngeles
+        - StLouis-Houston
       attrs:
         circuit: A
-    - source: Houston
-      target: LosAngeles
-      capacity: 45000.0
-      cost: 14
+    - source: core/StLouis
+      target: core/Houston
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Houston_LosAngeles
+        - StLouis-Houston
       attrs:
         circuit: B
-    - source: LosAngeles
-      target: PaloAlto
-      capacity: 45000.0
-      cost: 8
+    - source: core/Chicago
+      target: core/Cleveland
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_LosAngeles_PaloAlto
+        - Chicago-Cleveland
       attrs:
         circuit: A
-    - source: LosAngeles
-      target: PaloAlto
-      capacity: 45000.0
-      cost: 8
+    - source: core/Chicago
+      target: core/Cleveland
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_LosAngeles_PaloAlto
+        - Chicago-Cleveland
       attrs:
         circuit: B
-    - source: Seattle
-      target: PaloAlto
-      capacity: 45000.0
-      cost: 9
+    - source: core/Cleveland
+      target: core/NewYork
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_PaloAlto_Seattle
+        - Cleveland-NewYork
       attrs:
         circuit: A
-    - source: Seattle
-      target: PaloAlto
-      capacity: 45000.0
-      cost: 9
+    - source: core/Cleveland
+      target: core/NewYork
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_PaloAlto_Seattle
+        - Cleveland-NewYork
       attrs:
         circuit: B
-    - source: Seattle
-      target: SaltLakeCity
-      capacity: 45000.0
-      cost: 10
+    - source: core/NewYork
+      target: core/Hartford
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Seattle_SaltLakeCity
+        - NewYork-Hartford
       attrs:
         circuit: A
-    - source: Seattle
-      target: SaltLakeCity
-      capacity: 45000.0
-      cost: 10
+    - source: core/NewYork
+      target: core/Hartford
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Seattle_SaltLakeCity
+        - NewYork-Hartford
       attrs:
         circuit: B
-    - source: SaltLakeCity
-      target: Denver
-      capacity: 45000.0
-      cost: 9
+    - source: core/NewYork
+      target: core/WashingtonDC
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_SaltLakeCity_Denver
+        - NewYork-WashingtonDC
       attrs:
         circuit: A
-    - source: SaltLakeCity
-      target: Denver
-      capacity: 45000.0
-      cost: 9
+    - source: core/NewYork
+      target: core/WashingtonDC
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_SaltLakeCity_Denver
+        - NewYork-WashingtonDC
       attrs:
         circuit: B
-    - source: Denver
-      target: Lincoln
-      capacity: 45000.0
-      cost: 8
+    - source: core/Hartford
+      target: core/Greensboro
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Denver_Lincoln
+        - Hartford-Greensboro
       attrs:
         circuit: A
-    - source: Denver
-      target: Lincoln
-      capacity: 45000.0
-      cost: 8
+    - source: core/Hartford
+      target: core/Greensboro
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Denver_Lincoln
+        - Hartford-Greensboro
       attrs:
         circuit: B
-    - source: Lincoln
-      target: StLouis
-      capacity: 45000.0
-      cost: 6
+    - source: core/WashingtonDC
+      target: core/Greensboro
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Lincoln_StLouis
+        - WashingtonDC-Greensboro
       attrs:
         circuit: A
-    - source: Lincoln
-      target: StLouis
-      capacity: 45000.0
-      cost: 6
+    - source: core/WashingtonDC
+      target: core/Greensboro
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_Lincoln_StLouis
+        - WashingtonDC-Greensboro
       attrs:
         circuit: B
-    - source: StLouis
-      target: Chicago
-      capacity: 45000.0
-      cost: 5
+    - source: core/Greensboro
+      target: core/Houston
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_StLouis_Chicago
+        - Greensboro-Houston
       attrs:
         circuit: A
-    - source: StLouis
-      target: Chicago
-      capacity: 45000.0
-      cost: 5
+    - source: core/Greensboro
+      target: core/Houston
+      capacity: 22368
+      cost: 1
       risk_groups:
-        - RG_StLouis_Chicago
+        - Greensboro-Houston
       attrs:
         circuit: B
-    - source: Cleveland
-      target: StLouis
-      capacity: 45000.0
-      cost: 7
-      risk_groups:
-        - RG_Cleveland_StLouis
-      attrs:
-        circuit: A
-    - source: Cleveland
-      target: StLouis
-      capacity: 45000.0
-      cost: 7
-      risk_groups:
-        - RG_Cleveland_StLouis
-      attrs:
-        circuit: B
-    - source: Chicago
-      target: AnnArbor
-      capacity: 45000.0
-      cost: 5
-      risk_groups:
-        - RG_Chicago_AnnArbor
-      attrs:
-        circuit: A
-    - source: Chicago
-      target: AnnArbor
-      capacity: 45000.0
-      cost: 5
-      risk_groups:
-        - RG_Chicago_AnnArbor
-      attrs:
-        circuit: B
-    - source: AnnArbor
-      target: Cleveland
-      capacity: 45000.0
-      cost: 5
-      risk_groups:
-        - RG_AnnArbor_Cleveland
-      attrs:
-        circuit: A
-    - source: AnnArbor
-      target: Cleveland
-      capacity: 45000.0
-      cost: 5
-      risk_groups:
-        - RG_AnnArbor_Cleveland
-      attrs:
-        circuit: B
-    - source: Hartford
-      target: NewYork
-      capacity: 45000.0
-      cost: 5
-      risk_groups:
-        - RG_Hartford_NewYork
-      attrs:
-        circuit: A
-    - source: Hartford
-      target: NewYork
-      capacity: 45000.0
-      cost: 5
-      risk_groups:
-        - RG_Hartford_NewYork
-      attrs:
-        circuit: B
-    - source: Hartford
-      target: WashingtonDC
-      capacity: 45000.0
-      cost: 5
-      risk_groups:
-        - RG_Hartford_WashingtonDC
-      attrs:
-        circuit: A
-    - source: Hartford
-      target: WashingtonDC
-      capacity: 45000.0
-      cost: 5
-      risk_groups:
-        - RG_Hartford_WashingtonDC
-      attrs:
-        circuit: B
-    - source: Princeton
-      target: Ithaca
-      capacity: 45000.0
-      cost: 5
-      attrs:
-        circuit: A
-    - source: Princeton
-      target: WashingtonDC
-      capacity: 45000.0
-      cost: 4
-      attrs:
-        circuit: A
-    - source: CollegePark
-      target: WashingtonDC
-      capacity: 45000.0
-      cost: 3
-      attrs:
-        circuit: A
-    - source: CollegePark
-      target: NewYork
-      capacity: 45000.0
-      cost: 6
-      attrs:
-        circuit: A
-    - source: Cambridge
-      target: NewYork
-      capacity: 45000.0
-      cost: 6
-      attrs:
-        circuit: A
-    - source: Argonne
-      target: Chicago
-      capacity: 45000.0
-      cost: 4
-      attrs:
-        circuit: A
-    - source: SanDiego
-      target: LosAngeles
-      capacity: 45000.0
-      cost: 6
-      attrs:
-        circuit: A
-    - source: Boulder
-      target: Denver
-      capacity: 45000.0
-      cost: 4
-      attrs:
-        circuit: A
-    - source: Pittsburgh
-      target: Cleveland
-      capacity: 45000.0
-      cost: 4
-      attrs:
-        circuit: A
-    - source: UrbanaChampaign
-      target: Chicago
-      capacity: 45000.0
-      cost: 4
-      attrs:
-        circuit: A
-    - source: MoffettField
-      target: PaloAlto
-      capacity: 45000.0
-      cost: 6
-      attrs:
-        circuit: A
+    - source: end/Seattle
+      target: core/Seattle
+      capacity: 44736
+      cost: 1
+    - source: end/PaloAlto
+      target: core/SanFrancisco
+      capacity: 44736
+      cost: 1
+    - source: end/SanDiego
+      target: core/LosAngeles
+      capacity: 44736
+      cost: 1
+    - source: end/SaltLakeCity
+      target: core/Denver
+      capacity: 44736
+      cost: 1
+    - source: end/Boulder
+      target: core/Denver
+      capacity: 44736
+      cost: 1
+    - source: end/Lincoln
+      target: core/StLouis
+      capacity: 44736
+      cost: 1
+    - source: end/UrbanaChampaign
+      target: core/StLouis
+      capacity: 44736
+      cost: 1
+    - source: end/Argonne
+      target: core/Chicago
+      capacity: 44736
+      cost: 1
+    - source: end/Houston
+      target: core/Houston
+      capacity: 44736
+      cost: 1
+    - source: end/AnnArbor
+      target: core/Cleveland
+      capacity: 44736
+      cost: 1
+    - source: end/Pittsburgh
+      target: core/Cleveland
+      capacity: 44736
+      cost: 1
+    - source: end/Ithaca
+      target: core/Hartford
+      capacity: 44736
+      cost: 1
+    - source: end/Cambridge
+      target: core/Hartford
+      capacity: 44736
+      cost: 1
+    - source: end/Princeton
+      target: core/NewYork
+      capacity: 44736
+      cost: 1
+    - source: end/CollegePark
+      target: core/WashingtonDC
+      capacity: 44736
+      cost: 1
+    - source: end/Atlanta
+      target: core/Greensboro
+      capacity: 44736
+      cost: 1
 risk_groups:
-  - name: RG_AnnArbor_Cleveland
+  - name: Seattle-SanFrancisco
     attrs:
-      description: Great-Lakes loop DS-3 pair
-  - name: RG_Atlanta_Houston
+      description: Both circuits of the Seattle–SanFrancisco connection
+  - name: Seattle-Denver
     attrs:
-      description: Southern arc DS-3 pair
-  - name: RG_Cleveland_Chicago
+      description: Both circuits of the Seattle–Denver connection
+  - name: Denver-StLouis
     attrs:
-      description: Northern arc DS-3 pair
-  - name: RG_Cleveland_NewYork
+      description: Both circuits of the Denver–StLouis connection
+  - name: SanFrancisco-LosAngeles
     attrs:
-      description: Northern arc DS-3 pair
-  - name: RG_Cleveland_StLouis
+      description: Both circuits of the SanFrancisco–LosAngeles connection
+  - name: SanFrancisco-Chicago
     attrs:
-      description: Mid-west shortcut DS-3 pair
-  - name: RG_Chicago_AnnArbor
+      description: Both circuits of the SanFrancisco–Chicago connection
+  - name: LosAngeles-Houston
     attrs:
-      description: Great-Lakes loop DS-3 pair
-  - name: RG_Chicago_PaloAlto
+      description: Both circuits of the LosAngeles–Houston connection
+  - name: Chicago-StLouis
     attrs:
-      description: Trans-continental northern DS-3 pair
-  - name: RG_Denver_Lincoln
+      description: Both circuits of the Chicago–StLouis connection
+  - name: StLouis-Houston
     attrs:
-      description: Rockies DS-3 pair
-  - name: RG_Greensboro_Atlanta
+      description: Both circuits of the StLouis–Houston connection
+  - name: Chicago-Cleveland
     attrs:
-      description: Southern arc DS-3 pair
-  - name: RG_Hartford_NewYork
+      description: Both circuits of the Chicago–Cleveland connection
+  - name: Cleveland-NewYork
     attrs:
-      description: Hartford hub DS-3 pair
-  - name: RG_Hartford_WashingtonDC
+      description: Both circuits of the Cleveland–NewYork connection
+  - name: NewYork-Hartford
     attrs:
-      description: Hartford hub DS-3 pair
-  - name: RG_Houston_LosAngeles
+      description: Both circuits of the NewYork–Hartford connection
+  - name: NewYork-WashingtonDC
     attrs:
-      description: Southern arc DS-3 pair
-  - name: RG_Lincoln_StLouis
+      description: Both circuits of the NewYork–WashingtonDC connection
+  - name: Hartford-Greensboro
     attrs:
-      description: Rockies DS-3 pair
-  - name: RG_LosAngeles_PaloAlto
+      description: Both circuits of the Hartford–Greensboro connection
+  - name: WashingtonDC-Greensboro
     attrs:
-      description: California DS-3 pair
-  - name: RG_NewYork_WashingtonDC
+      description: Both circuits of the WashingtonDC–Greensboro connection
+  - name: Greensboro-Houston
     attrs:
-      description: Southern arc DS-3 pair
-  - name: RG_PaloAlto_Seattle
-    attrs:
-      description: Pacific-Northwest DS-3 pair
-  - name: RG_Seattle_SaltLakeCity
-    attrs:
-      description: Pacific-Northwest DS-3 pair
-  - name: RG_SaltLakeCity_Denver
-    attrs:
-      description: Rockies DS-3 pair
-  - name: RG_StLouis_Chicago
-    attrs:
-      description: Rockies DS-3 pair
-  - name: RG_WashingtonDC_Greensboro
-    attrs:
-      description: Southern arc DS-3 pair
+      description: Both circuits of the Greensboro–Houston connection
 failures:
-  availability_1992:
+  single_link_failure:
     attrs:
-      description: |
-        Approximates 1992 backbone reliability: each physical DS-3 has ~99.9 % monthly availability (p=0.001 failure), and each CNSS or ENSS router has ~99.95 % availability (p=0.0005 failure).
+      description: Fails one random circuit per draw; on a core connection, one of its two circuits
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: link
+            mode: choice
+            count: 1
+  single_connection_failure:
+    attrs:
+      description: Fails one random core connection per draw, both circuits of its pair (the loss of its 1992 DS-3)
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: risk_group
+            mode: choice
+            count: 1
+  assumed_random_failures:
+    attrs:
+      description: >-
+        Assumed rates, not taken from a 1992 source: in each draw every circuit fails
+        independently with probability 0.001 and every site with probability 0.0005.
     modes:
       - weight: 1.0
         rules:
@@ -548,15 +480,6 @@ failures:
           - scope: node
             mode: random
             probability: 0.0005
-  single_link_failure:
-    attrs:
-      description: Fails exactly one random link to test network resilience
-    modes:
-      - weight: 1.0
-        rules:
-          - scope: link
-            mode: choice
-            count: 1
 workflow:
   - type: MaxFlow
     name: node_to_node_capacity_matrix_1
@@ -574,7 +497,18 @@ workflow:
     source: ^(.+)$
     target: ^(.+)$
     mode: pairwise
-    failure_policy: availability_1992
+    failure_policy: assumed_random_failures
+    iterations: 1000
+    workers: 8
+    seed: 42
+    failure_trace: true
+    outputs: {cost_distribution: true, min_cut: true}
+  - type: MaxFlow
+    name: node_to_node_capacity_matrix_3
+    source: ^(.+)$
+    target: ^(.+)$
+    mode: pairwise
+    failure_policy: single_connection_failure
     iterations: 1000
     workers: 8
     seed: 42
