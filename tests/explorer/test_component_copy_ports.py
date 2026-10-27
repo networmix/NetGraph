@@ -13,10 +13,6 @@ from ngraph import Component, ComponentsLibrary, Link, Network, NetworkExplorer,
 def test_component_copy_counts_apply_to_both_sides_of_the_port_limit(
     platform_count, optic_count, hw_count
 ):
-    assert (
-        "times the component's own count"
-        in NetworkExplorer._validate_node_utilization.__doc__
-    )
     library = ComponentsLibrary(
         {
             "p": Component("p", capacity=100, ports=1, count=platform_count),

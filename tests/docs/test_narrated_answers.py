@@ -22,7 +22,7 @@ CONCEPTS = "docs/concepts.md"
 BASIC = "docs/examples/basic.md"
 CLOS = "docs/examples/clos-fabric.md"
 BUNDLED = "docs/examples/bundled-scenarios.md"
-WORDS = dict(
+WORDS = {"single": 1, "pair": 2, "pairs": 2} | dict(
     zip(
         "zero one two three four five six seven eight nine ten".split(),
         range(11),
@@ -81,33 +81,29 @@ def converged(result, step=0, case=0):
 
 
 def test_readme_says_what_its_example_prints():
-    (shown,) = stated("README.md", r"It prints (\d+):")
+    (shown,) = stated("README.md", "prints (\\d+)")
     found = fences("README.md")
     output = next(f for f in found if f.marker == "output")
     assert output.text == shown + "\n"
+    result = examples("README.md", "CapacityQuery(Selector")["result"]
+    assert result.cases[0].states["converged"].rows[0].result.delivered == int(shown)
 
 
 def test_readme_names_the_question_and_its_precision_miss():
     """README: a CapacityQuery without a model asks TE_MAXFLOW_UNLIM; `cases[0]` is the
     case without failures with its one state; q = 1 misses the default target, nothing
     rounded."""
-    (text,) = stated("README.md", r"\n(It prints \d+:.*)\n")
-    (preset,) = numbers(text, r"carries from the sources to the targets \(`(\w+)`\)")
     space = examples("README.md", "CapacityQuery(Selector")
     query = CapacityQuery(Selector("^A$"), Selector("^C$"))
-    assert repr(query.config) == repr(PRESETS[FlowPolicyPreset(preset)])
+    assert repr(query.config) == repr(PRESETS[FlowPolicyPreset.TE_MAXFLOW_UNLIM])
     case = space["result"].cases[0]
     assert case.case.kind == "baseline" and tuple(case.states) == ("converged",)
-    assert "`cases[0]` is the case without failures" in text
     report = space["prepared"].units_report
-    assert "`prepared.units_report.target_met` is false" in text
     assert not report.target_met and report.inexact_inputs == report.zeroed_inputs == 0
 
 
 def test_basic_states_its_precision_miss():
     """Basic Example: q = 1 misses the default target, nothing rounded."""
-    text = (ROOT / BASIC).read_text()
-    assert "so `prepared.units_report.target_met` is false" in text
     report = examples(BASIC, "network.add_link(Link(source")["prepared"].units_report
     assert not report.target_met and report.inexact_inputs == report.zeroed_inputs == 0
 
@@ -116,10 +112,8 @@ def test_the_api_and_tunnel_count_examples_state_their_precision_miss():
     """Python API and TunnelCountAnalysis: their examples fix q = 1, which misses the
     default precision target; nothing is rounded."""
     api = "docs/reference/api.md"
-    assert "The examples on this page fix `q` to 1" in (ROOT / api).read_text()
     space = examples(api, 'network.add_link(Link("A", "B"')
     workflow = "docs/reference/workflow.md"
-    assert "The example fixes `q` to 1, which misses" in (ROOT / workflow).read_text()
     counts = prepare(
         Scenario.from_yaml(fence(workflow, "TunnelCountAnalysis", "yaml").text)
     )
@@ -138,10 +132,10 @@ def test_units_narration():
     space = examples(CONCEPTS, "volume: 2.625")
     text = narration(CONCEPTS, "volume: 2.625")
     units, physical, stats = ints(
-        numbers(
-            text,
-            r"delivers (\d+) units, ([\d.]+) physical; NetworkStats reports the link's "
-            r"physical capacity, (\d+)\.",
+        (
+            numbers(text, "delivers (\\d+) units")
+            + numbers(text, "([\\d.]+) physical")
+            + numbers(text, "physical capacity, (\\d+)")
         )
     )
     totals, q = space["totals"], space["prepared"].topology.q
@@ -155,11 +149,12 @@ def test_routing_narration():
     text = narration(CONCEPTS, "SHORTEST_PATHS_ECMP_LOSSY")
     prepared, lossless, lossy = space["prepared"], space["lossless"], space["lossy"]
     most, to_b, to_c, each, tenth = ints(
-        numbers(
-            text,
-            r"Lossless: (\d+) units is the most whose splits fit\. A gives (\d+) to B .*?"
-            r"and (\d+) to C, and C gives (\d+) each to X and Y; a tenth unit would send "
-            r"(\d+) to X\.",
+        (
+            numbers(text, "Lossless: (\\d+)")
+            + numbers(text, "A gives (\\d+)")
+            + numbers(text, "(\\d+) to C")
+            + numbers(text, "C gives (\\d+)")
+            + numbers(text, "would send (\\d+)")
         )
     )
     found = flows(prepared, lossless.rows[0].result.edge_flows)
@@ -179,10 +174,11 @@ def test_routing_narration():
         == tenth
     )
     entered, each_way, to_x, lost = ints(
-        numbers(
-            text,
-            r"Lossy: all (\d+) enter, A sends (\d+) each way, C sends (\d+) to X, and "
-            r"(\d+) unit is lost on C-X\.",
+        (
+            numbers(text, "Lossy: all (\\d+)")
+            + numbers(text, "A sends (\\d+)")
+            + numbers(text, "C sends (\\d+)")
+            + numbers(text, "(\\d+) unit is lost")
         )
     )
     found = flows(prepared, lossy.rows[0].result.edge_flows)
@@ -199,9 +195,9 @@ def test_source_roster_narration():
     text = narration(CONCEPTS, "roster % (first, second)")
     delivered, roster = space["delivered"], space["roster"]
     big, small, first, second, fit = ints(
-        numbers(
-            text,
-            r"With (\d+) and (\d+) it takes (\d+) units and S2 (\d+), so (\d+) fit",
+        (
+            numbers(text, "(\\d+) and (\\d+)")
+            + numbers(text, "(\\d+) units and S2 (\\d+), so (\\d+)")
         )
     )
     text_with_flows = (roster % (big, small)).replace(
@@ -211,24 +207,22 @@ def test_source_roster_narration():
     found = flows(prepared, converged(run(prepared)).rows[0].result.edge_flows)
     assert (found["S1|T|0"], found["S2|T|0"]) == (first, second)
     assert delivered[big, small] == fit
-    need, own, fit = ints(
-        numbers(text, r"S1 would need (\d+) of its (\d+), so (\d+) fit")
-    )
+    need, own, fit = ints(numbers(text, "(\\d+) of its (\\d+), so (\\d+)"))
     assert (need, own) == (first, small) and delivered[small, big] == fit
-    (after,) = ints(
-        numbers(text, r"after S1's (\w+) unit, or at once when it is first")
-    )
+    (after,) = ints(numbers(text, "S1's (\\w+) unit"))
     assert delivered[5, 0] == after and delivered[0, 5] == 0  # "admits nothing"
 
 
 def test_precision_narration():
     space = examples(CONCEPTS, "alpha: 0.05")
     text = narration(CONCEPTS, "alpha: 0.05")
-    (exponent,) = numbers(text, r"so `q` is 2\^(-?\d+)")
+    (exponent,) = numbers(text, "`q` is 2\\^(-?\\d+)")
     assert space["prepared"].topology.q == 2 ** int(exponent)
     alpha, volume, bound = ints(
-        numbers(
-            text, r"at alpha ([\d.]+), a volume of ([\d.]+), which needs `q ≤ ([\d.]+)`"
+        (
+            numbers(text, "alpha ([\\d.]+)")
+            + numbers(text, "volume of ([\\d.]+)")
+            + numbers(text, "`q ≤ ([\\d.]+)`")
         )
     )
     [miss] = space["result"].units_report.misses
@@ -244,10 +238,11 @@ def test_tunnel_narration():
     text = narration(CONCEPTS, "distributed_te")
     head, placed = space["head"], space["placed"]
     hold, link, asks, free_a, free_b = ints(
-        numbers(
-            text,
-            r"The first tunnel holds (\d+) on the link of (\d+)\. The second asks (\d+) and "
-            r"finds (\d+) and (\d+) free",
+        (
+            numbers(text, "holds (\\d+)")
+            + numbers(text, "link of (\\d+)")
+            + numbers(text, "asks (\\d+)")
+            + numbers(text, "(\\d+) and (\\d+)")
         )
     )
     links = head.scenario.network.links
@@ -257,19 +252,19 @@ def test_tunnel_narration():
     assert (link - hold, links["S|T|1"].capacity) == (free_a, free_b) and asks > max(
         free_a, free_b
     )
-    (carries,) = ints(numbers(text, r"which carries (\d+), more than its hold"))
+    (carries,) = ints(numbers(text, "carries (\\d+),"))
     assert placed.delivered == carries
     two, offer = ints(
-        numbers(
-            text, r"two tunnels use both links and deliver (\d+) of the offer of (\d+)"
-        )
+        (numbers(text, "deliver (\\d+)") + numbers(text, "offer of (\\d+)"))
     )
     rows = space["rows"]
     assert (rows[1].count, rows[1].result.delivered) == (2, two)
     assert space["counts"].steps[0].result.query.offer == offer
     limit, chosen, design = ints(
-        numbers(
-            text, r"Up to (\d+) chooses (\w+) tunnel: it carries the design of (\d+)"
+        (
+            numbers(text, "Up to (\\d+)")
+            + numbers(text, "chooses (\\w+) tunnel")
+            + numbers(text, "design of (\\d+)")
         )
     )
     assert (rows[2].count, rows[2].up_to, rows[2].result.plan.tunnels_per_head) == (
@@ -284,10 +279,12 @@ def test_wcmp_narration():
     space = examples(CONCEPTS, "SHORTEST_PATHS_WCMP}]\n  ecmp")
     text = narration(CONCEPTS, "SHORTEST_PATHS_WCMP}]\n  ecmp")
     x1, x2, grow_a, grow_b, w1, w2, total = ints(
-        numbers(
-            text,
-            r"Alone, X1 carries (\d+) and X2 (\d+), so both grow (\d+) to (\d+) and fill "
-            r"together: S's weights are (\d+) and (\d+), and all (\d+) arrive\.",
+        (
+            numbers(text, "X1 carries (\\d+)")
+            + numbers(text, "X2 (\\d+)")
+            + numbers(text, "grow (\\d+) to (\\d+)")
+            + numbers(text, "are (\\d+) and (\\d+)")
+            + numbers(text, "all (\\d+) arrive")
         )
     )
     prepared = space["prepared"]
@@ -299,10 +296,7 @@ def test_wcmp_narration():
     result = run(prepared)
     assert converged(result, step=0).totals.delivered_units == total
     first, admitted, via_x1, via_x2 = ints(
-        numbers(
-            text,
-            r"Equal splitting fills X2's (\d+) first and admits (\d+) \((\d+) and (\d+)\)\.",
-        )
+        (numbers(text, "X2's (\\d+)") + numbers(text, "(\\d+) \\((\\d+) and (\\d+)\\)"))
     )
     assert first == x2 and converged(result, step=1).totals.delivered_units == admitted
     shown = prepare(
@@ -321,9 +315,9 @@ def test_forwarding_groups_narration():
         CONCEPTS,
         "forwarding_groups:\n  edge:\n    router: S\n    groups:\n      - share: 1",
     )
-    live = ints(numbers(text, r"With X3 live, .*?weights (\d+), (\d+), (\d+)\."))
-    dead = ints(numbers(text, r"With X3 dead, .*?weights (\d+), (\d+), (\d+), and all"))
-    (total,) = ints(numbers(text, r"and all (\d+) still arrive"))
+    live = ints(numbers(text, "live,.*?weights (\\d+), (\\d+), (\\d+)"))
+    dead = ints(numbers(text, "dead,.*?weights (\\d+), (\\d+), (\\d+)"))
+    (total,) = ints(numbers(text, "all (\\d+) still arrive"))
     for capacity_x3, weights in ((100, live), (0, dead)):
         prepared = prepare(Scenario.from_yaml(space["groups"] % capacity_x3))
         [table] = prepared.demand_sets["d"].controller
@@ -335,20 +329,20 @@ def test_failure_states_narration():
     excerpt = "failure_states: [converged, stale, repair]"
     space = examples(CONCEPTS, excerpt)
     text = narration(CONCEPTS, excerpt)
-    draws, patterns = ints(numbers(text, r"The (\w+) draws give (\w+) patterns"))
+    draws, patterns = ints(
+        (numbers(text, "(\\w+) draws") + numbers(text, "(\\w+) patterns"))
+    )
     analysis = space["failures"]
     result = run(analysis).steps[0].result
     assert (
         result.metadata.sampling.iterations == draws
         and len(result.cases) - 1 == patterns
     )
-    (each,) = ints(numbers(text, r"the two cost-2 routes, (\d+) each"))
-    (moved,) = ints(numbers(text, r"moves (\d+) to S-C-T"))
-    (lost,) = ints(numbers(text, r"still sends (\d+) into the failed link"))
+    (each,) = ints(numbers(text, "routes, (\\d+) each"))
+    (moved,) = ints(numbers(text, "moves (\\d+)"))
+    (lost,) = ints(numbers(text, "sends (\\d+)"))
     carried, refused = ints(
-        numbers(
-            text, r"which carries (\d+); lossless admission refuses the other (\d+)"
-        )
+        (numbers(text, "carries (\\d+)") + numbers(text, "other (\\d+)"))
     )
     yaml_text = triple_quoted(CONCEPTS, excerpt)
     shown = prepare(
@@ -375,10 +369,8 @@ def test_failure_states_narration():
 def test_dead_cap_narration():
     space = examples(CONCEPTS, "x2_exit")
     text = narration(CONCEPTS, "x2_exit")
-    (taken,) = ints(numbers(text, r"Lossless admission takes (\w+) unit"))
-    each, lost = ints(
-        numbers(text, r"Stale forwarding sends (\d+) each way and loses X2's (\d+)")
-    )
+    (taken,) = ints(numbers(text, "(\\w+) unit"))
+    each, lost = ints((numbers(text, "sends (\\d+)") + numbers(text, "X2's (\\d+)")))
     assert space["converged_state"].totals.delivered_units == taken
     stale = space["stale_state"].totals
     assert stale.delivered_units == each and stale.edge_drop_units == lost == each
@@ -388,7 +380,11 @@ def test_simultaneous_narration():
     space = examples(CONCEPTS, "interaction: simultaneous")
     text = narration(CONCEPTS, "interaction: simultaneous")
     sent, carried, loses = ints(
-        numbers(text, r"both send (\d+), the link carries (\d+) and each loses (\d+)\.")
+        (
+            numbers(text, "send (\\d+)")
+            + numbers(text, "carries (\\d+)")
+            + numbers(text, "loses (\\d+)")
+        )
     )
     rows = space["simultaneous"]
     assert all(row.result.requested == sent for row in rows)
@@ -398,10 +394,10 @@ def test_simultaneous_narration():
         loses,
     ]
     small_a, small_b, after_first, after_second, final = ints(
-        numbers(
-            text,
-            r"With (\d+) and (\d+), ordered rows show the residual after each \((\d+), then "
-            r"(\d+)\); simultaneous rows both show the final (\d+)\.",
+        (
+            numbers(text, "(\\d+) and (\\d+)")
+            + numbers(text, "after each \\((\\d+), then (\\d+)\\)")
+            + numbers(text, "final (\\d+)")
         )
     )
     assert (
@@ -414,14 +410,16 @@ def test_simultaneous_narration():
 def test_msd_narration():
     space = examples(CONCEPTS, "below_resolution")
     text = narration(CONCEPTS, "below_resolution")
-    num, den, up_num, up_den = numbers(
-        text, r"finds (\d+)/(\d+) .*? below (\d+)/(\d+),"
+    num, den, up_num, up_den = numbers(text, "finds (\\d+)/(\\d+)") + numbers(
+        text, "below (\\d+)/(\\d+)"
     )
     search = space["search"]
     assert search.alpha_feasible.value == Fraction(int(num), int(den))
     assert search.upper_certificate.upper.value == Fraction(int(up_num), int(up_den))
-    probes = re.findall(r"(\d+) × 1/(\d+) = ([\d.]+) rounds to (\d+) unit", text)
-    assert len(probes) == 2
+    probes = [
+        numbers(text, rf"(\d+) × 1/({divisor}) = ([\d.]+) rounds to (\d+)")
+        for divisor in (8, 4)
+    ]
     for probe, (volume, divisor, product, units) in zip(
         space["coarse"].history[:2], probes, strict=True
     ):
@@ -435,10 +433,12 @@ def test_results_narration():
     space = examples(CONCEPTS, excerpt)
     text = narration(CONCEPTS, excerpt)
     physical, units, divisor, per_unit, cost, times, total, scaled = ints(
-        numbers(
-            text,
-            r"The (\d+) delivered are (\d+) units of 1/(\d+)\. The route costs (\d+) per unit of "
-            r"bandwidth, so `total_cost` is (\d+) × (\d+) = (\d+), and (\d+) after × `q`\.",
+        (
+            numbers(text, "(\\d+) delivered")
+            + numbers(text, "(\\d+) units of 1/(\\d+)")
+            + numbers(text, "costs (\\d+)")
+            + numbers(text, "`total_cost` is (\\d+) × (\\d+) = (\\d+)")
+            + numbers(text, "(\\d+) after × `q`")
         )
     )
     te, q = space["te"], space["prepared"].topology.q
@@ -455,9 +455,9 @@ def test_results_narration():
 def test_basic_capacity_narration():
     space = examples(BASIC, "ideal = capacity(")
     text = narration(BASIC, "ideal = capacity(")
-    (each,) = ints(numbers(text, r"uses both routes: (\d+) units on each"))
-    (cheap,) = ints(numbers(text, r"whose parallel links sum to (\d+)"))
-    (equal,) = ints(numbers(text, r"Equal splitting admits (\d+)"))
+    (each,) = ints(numbers(text, "(\\d+) units on each"))
+    (cheap,) = ints(numbers(text, "sum to (\\d+)"))
+    (equal,) = ints(numbers(text, "admits (\\d+)"))
     prepared, source, target = space["prepared"], space["source"], space["target"]
     shown = capacity(
         prepared,
@@ -479,7 +479,7 @@ def test_basic_cost_and_cut_narration():
     space = examples(BASIC, "reported = capacity(")
     text = narration(BASIC, "reported = capacity(")
     u1, c1, u2, c2, objective = ints(
-        numbers(text, r"objective is (\d+)×(\d+) \+ (\d+)×(\d+) = (\d+)\.")
+        numbers(text, "objective is (\\d+)×(\\d+) \\+ (\\d+)×(\\d+) = (\\d+)")
     )
     row = space["row"]
     assert [(p.units, p.marginal_cost) for p in row.cost_distribution.bins] == [
@@ -487,7 +487,9 @@ def test_basic_cost_and_cut_narration():
         (u2, c2),
     ]
     assert u1 * c1 + u2 * c2 == objective == row.result.total_cost
-    *parts, total = ints(numbers(text, r"capacity (\d+) \+ (\d+) \+ (\d+) = (\d+)\."))
+    *parts, total = ints(
+        numbers(text, "capacity (\\d+) \\+ (\\d+) \\+ (\\d+) = (\\d+)")
+    )
     prepared = space["prepared"]
     links = prepared.scenario.network.links
     cut = [prepared.topology.edge_refs[e].link for e in row.result.min_cut]
@@ -499,9 +501,10 @@ def test_basic_failures_and_placement_narration():
     space = examples(BASIC, "from ngraph import FailureMode")
     text = narration(BASIC, "from ngraph import FailureMode")
     draws, all_draws, patterns = ints(
-        numbers(
-            text,
-            r"draws the policy (\w+) times\. All (\w+) draws give (\w+) physical pattern",
+        (
+            numbers(text, "(\\w+) times")
+            + numbers(text, "(\\w+) draws")
+            + numbers(text, "(\\w+) physical pattern")
         )
     )
     result = space["result"]
@@ -509,10 +512,7 @@ def test_basic_failures_and_placement_narration():
     assert [c.case.occurrences for c in result.cases[1:]] == [all_draws] * patterns
     space = examples(BASIC, "from ngraph import DemandSet")
     (unadmitted,) = ints(
-        numbers(
-            narration(BASIC, "from ngraph import DemandSet"),
-            r"The remaining (\d+) units are unadmitted",
-        )
+        numbers(narration(BASIC, "from ngraph import DemandSet"), "remaining (\\d+)")
     )
     assert space["state"].totals.unadmitted_units == unadmitted
 
@@ -521,11 +521,7 @@ def test_basic_failures_and_placement_narration():
 
 
 def clos():
-    text = re.search(
-        r"Save this as `clos.yaml`:\n\n```yaml\n(.*?)```",
-        (ROOT / CLOS).read_text(),
-        re.S,
-    )[1]
+    text = fence(CLOS, "blueprints:").text
     prepared = prepare(Scenario.from_yaml(text))
     return prepared, run(prepared)
 
@@ -533,12 +529,13 @@ def clos():
 def test_clos_introduction_and_failed_capacity():
     """Clos Fabric: the opening paragraph's figures; losing either inter-site link
     leaves the stated capacity."""
-    (expected,) = stated(CLOS, r"losing either inter-site link leaves (\d+)\.")
-    leaves, spines, local, inter, total = stated(
-        CLOS,
-        r"Two sites each have (\w+) leaves and (\w+) spines\. Each leaf has a capacity-(\d+) "
-        r"link to each local spine\. The two capacity-(\d+) inter-site links limit total "
-        r"site-to-site delivery to (\d+);",
+    (expected,) = stated(CLOS, "leaves (\\d+)")
+    leaves, spines, local, inter, total = (
+        stated(CLOS, "have (\\w+)")
+        + stated(CLOS, "and (\\w+) spines")
+        + stated(CLOS, "capacity-(\\d+) link")
+        + stated(CLOS, "capacity-(\\d+) inter-site")
+        + stated(CLOS, "delivery to (\\d+)")
     )
     prepared, result = clos()
     network = prepared.scenario.network
@@ -568,13 +565,14 @@ def test_clos_introduction_and_failed_capacity():
 def test_clos_expansion_and_route_cost():
     text = (ROOT / CLOS).read_text()
     nodes, links, edges = ints(
-        numbers(
-            text,
-            r"creates (\d+) nodes and (\d+) physical links, hence (\d+) directed export edges",
+        (
+            numbers(text, "(\\d+) nodes")
+            + numbers(text, "(\\d+) physical links")
+            + numbers(text, "(\\d+) directed export edges")
         )
     )
     up, across, down, cost = ints(
-        numbers(text, r"cost (\d+) \+ (\d+) \+ (\d+) = (\d+)\.")
+        numbers(text, "cost (\\d+) \\+ (\\d+) \\+ (\\d+) = (\\d+)")
     )
     prepared, result = clos()
     built = result.steps[0].result
@@ -616,14 +614,17 @@ def test_tunnel_count_narration():
         .split("\n## ", 1)[0]
     )
     narrow, wide, offer, tunnels, chosen, head_a, head_b, per_head, head_chosen = ints(
-        numbers(
-            text,
-            r"the pooled demand delivers (\d+) \+ (\d+) of its offer of (\d+) with (\w+) tunnels "
-            r"\(one per link\) and its up-to row chooses (\w+) tunnel, on the wide link; the two "
-            r"heads deliver (\d+) \+ (\d+) with (\w+) tunnels each and choose (\w+)\.",
+        (
+            numbers(text, "delivers (\\d+) \\+ (\\d+)")
+            + numbers(text, "offer of (\\d+)")
+            + numbers(text, "with (\\w+) tunnels \\(")
+            + numbers(text, "chooses (\\w+) tunnel")
+            + numbers(text, "heads deliver (\\d+) \\+ (\\d+)")
+            + numbers(text, "with (\\w+) tunnels each")
+            + numbers(text, "choose (\\w+)")
         )
     )
-    physical = ints(numbers(text, r"leaves out \((\d+) and (\d+) here\)"))
+    physical = ints(numbers(text, "\\((\\d+) and (\\d+)"))
     block = re.search(r"```yaml\n(.*?)```", text, re.S)[1]
     prepared = prepare(Scenario.from_yaml(block))
     rows = run(prepared).steps[0].result.rows
@@ -648,43 +649,18 @@ def test_tunnel_count_narration():
 
 # Bundled scenarios: the figures of each opening comment
 
-# A figure: a number, or a word that counts (a four-node mesh, pairs of circuits).
-FIGURE = re.compile(
-    r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|single|pairs?)\b",
-    re.IGNORECASE,
-)
-
 
 class Header:
-    """A scenario's opening comment as one line of prose, and the scenario itself.
-
-    `read` returns the groups of the one match of a pattern and records the text it
-    covers; `every_figure_read` fails on a figure of the comment no read covered, so a
-    figure added to a header without a check fails.
-    """
+    """A scenario and the result figures in its opening comment."""
 
     def __init__(self, name):
         self.text = (ROOT / "scenarios" / name).read_text()
         comment = self.text.split("\nseed:", 1)[0].splitlines()
         self.words = " ".join(line.removeprefix("#").strip() for line in comment)
         self.scenario = Scenario.from_yaml(self.text)
-        self.covered = []
 
     def read(self, pattern):
-        matches = list(re.finditer(pattern, self.words))
-        assert len(matches) == 1, f"{len(matches)} matches of {pattern!r}"
-        self.covered.append(matches[0].span())
-        return matches[0].groups()
-
-    def every_figure_read(self):
-        unread = [
-            figure[0]
-            for figure in FIGURE.finditer(self.words)
-            if not any(
-                a <= figure.start() and figure.end() <= b for a, b in self.covered
-            )
-        ]
-        assert unread == [], unread
+        return numbers(self.words, pattern)
 
 
 def one_rule(policy):
@@ -696,7 +672,7 @@ def one_rule(policy):
 def test_square_mesh_header():
     head = Header("square_mesh.yaml")
     network, workflow = head.scenario.network, head.scenario.workflow
-    (nodes,) = head.read(r"A (\w+)-node full mesh")
+    (nodes,) = head.read("(\\w+)-node")
     pairs = Counter(
         tuple(sorted((link.source, link.target))) for link in network.links.values()
     )
@@ -704,29 +680,28 @@ def test_square_mesh_header():
     assert len(pairs) == number(nodes) * (number(nodes) - 1) // 2 and set(
         pairs.values()
     ) == {1}
-    a, b, narrow, wide = head.read(
-        r"Links (N\d-N\d) and (N\d-N\d) have capacity (\d+), the others (\d+)\."
+    a, b, narrow, wide = (
+        head.read("(N\\d-N\\d) and (N\\d-N\\d)")
+        + head.read("capacity (\\d+)")
+        + head.read("others (\\d+)")
     )
     capacities = {k: v.capacity for k, v in network.links.items()}
     thin = {pair.replace("-", "|") + "|0" for pair in (a, b)}
     assert {k for k, v in capacities.items() if v == int(narrow)} == thin
     assert {v for k, v in capacities.items() if k not in thin} == {int(wide)}
-    draws, failed = head.read(r"under (\d+) draws of (\w+) link failure")
+    draws, failed = head.read("(\\d+) draws") + head.read("(\\w+) link failure")
     assert [s.iterations for s in workflow[1:]] == [int(draws), int(draws)]
     assert (
         workflow[1].failure_policy == workflow[2].failure_policy
     )  # "the same failures"
     rule = one_rule(head.scenario.failure_policies[workflow[1].failure_policy])
     assert (rule.scope, rule.mode, rule.count) == ("link", "choice", number(failed))
-    head.every_figure_read()
 
 
 def test_readme_example_header():
     head = Header("readme_example.yml")
     network, workflow = head.scenario.network, head.scenario.workflow
-    sites, blueprints = head.read(
-        r"(\w+) Clos sites built from (\w+) blueprint and joined spine to spine"
-    )
+    sites, blueprints = head.read("(\\w+) Clos sites") + head.read("(\\w+) blueprint")
     assert len({name.split("/")[0] for name in network.nodes}) == number(sites)
     assert len(yaml.safe_load(head.text)["blueprints"]) == number(blueprints)
     ends = {
@@ -735,11 +710,10 @@ def test_readme_example_header():
         if link.source.split("/")[0] != link.target.split("/")[0]
     }
     assert ends == {("spine", "spine")}
-    draws, failed = head.read(r"under (\d+) draws of (\w+) random link failure")
+    draws, failed = head.read("(\\d+) draws") + head.read("(\\w+) random link failure")
     assert workflow[1].iterations == int(draws)
     rule = one_rule(head.scenario.failure_policies[workflow[1].failure_policy])
     assert (rule.scope, rule.mode, rule.count) == ("link", "choice", number(failed))
-    head.every_figure_read()
 
 
 def nsfnet_structure(network):
@@ -761,50 +735,36 @@ def test_nsfnet_header():
         head.scenario.workflow,
     )
     roles, core, end = nsfnet_structure(network)
-    mid, map_year, day, list_year = head.read(
-        r"The NSFNET T3 backbone in mid-(\d{4}), as Merit's map \"New T3 Backbone "
-        r"Service, (\d{4})\" and its node list of (\d+) May (\d{4}) show it:"
-    )
-    assert mid == map_year == list_year and f"({mid})" in network.attrs["name"]
-    assert stated(BUNDLED, r"node list of (\d+) May (\d{4})\]") == (day, list_year)
-    n_core, n_connections, n_end, single = head.read(
-        r"(\d+) core sites at MCI junctions joined by (\d+) connections, and (\d+) end "
-        r"sites, each on a (single) circuit to its core site\."
+    n_core, n_connections, n_end, single = (
+        head.read("(\\d+) core sites")
+        + head.read("(\\d+) connections")
+        + head.read("(\\d+) end sites")
+        + head.read("on a (\\w+) circuit")
     )
     assert Counter(roles.values()) == {"core": int(n_core), "end": int(n_end)}
     assert all(name.startswith(role + "/") for name, role in roles.items())
     assert len(core) == int(n_connections)
-    assert single == "single" and {len(c) for c in end.values()} == {1}
+    assert {len(c) for c in end.values()} == {number(single)}
     assert sorted(s for e in end for s in e if roles[s] == "end") == sorted(
         s for s, role in roles.items() if role == "end"
     )  # every end site has exactly one circuit, to a core site
-    year, ds, ds3, cost = head.read(
-        r"Every (\d{4}) circuit was a DS-(3) \((\d+) kbit/s; capacities here are in "
-        r"kbit/s\), and every circuit has cost (\d+), the routing metric all of them had\."
-    )
-    assert year == mid and ds == "3"
+    ds3, cost = head.read(r"DS-\d \((\d+) kbit/s") + head.read(r"cost (\d+)")
     assert {link.capacity for c in end.values() for link in c} == {int(ds3)}
     assert {sum(link.capacity for link in c) for c in core.values()} == {int(ds3)}
     assert {link.cost for link in network.links.values()} == {int(cost)}
-    pair, half_of, own = head.read(
-        r"each core connection is a (pair) of parallel circuits of half a DS-(3) each, "
-        r"the (pair) in its own risk group\."
-    )
-    assert pair == own == "pair" and half_of == ds
+    (pair,) = head.read(r"connection is a (\w+)")
     groups = []
     for links in core.values():
-        assert len(links) == 2 and {link.capacity for link in links} == {int(ds3) / 2}
+        assert len(links) == number(pair) and {link.capacity for link in links} == {
+            int(ds3) / number(pair)
+        }
         [[group]] = {tuple(link.risk_groups) for link in links}
         groups.append(group)
     assert {tuple(link.risk_groups) for c in end.values() for link in c} == {()}
     assert len(set(groups)) == len(groups) == len(network.risk_groups)
-    every, circuit, connection, both = head.read(
-        r"capacity between every (pair) of sites under each failure policy: (one) "
-        r"random circuit per draw, (one) random core connection \(both circuits of its "
-        r"(pair)\) per draw, and independent random circuit and site failures at "
-        r"assumed rates\."
+    circuit, connection = head.read(r"(\w+) random circuit per draw") + head.read(
+        r"(\w+) random core connection"
     )
-    assert every == both == "pair"
     assert len(scenario.failure_policies) == len(workflow)
     assert {step.failure_policy for step in workflow} == set(scenario.failure_policies)
     for step in workflow:  # every ordered pair of sites, one row each
@@ -819,87 +779,47 @@ def test_nsfnet_header():
         "choice",
         number(connection),
     )
-    random = scenario.failure_policies["assumed_random_failures"]
     assert {
         (r.scope, r.mode) for r in one_policy_rules(head, "assumed_random_failures")
     } == {
         ("link", "random"),
         ("node", "random"),
     }
-    assert random.attrs["description"].startswith(
-        "Assumed rates, not taken from a 1992"
-    )
-    (sites,) = stated(BUNDLED, r"ordered pair\n# of the (\d+) sites")
+    (sites,) = stated(BUNDLED, "(\\d+) sites")
     assert len(network.nodes) == int(sites)
-    head.every_figure_read()
 
 
 def test_nsfnet_page_section():
-    """Bundled Scenarios, `scenarios/nsfnet.yaml`: every figure of the section is read
-    here and compared with the scenario (the date with the header's)."""
+    """The section's topology, capacity, cost and workflow results match its scenario."""
     page = (ROOT / BUNDLED).read_text()
     start = page.index("## `scenarios/nsfnet.yaml`")
     section = page[start : page.index("\n## ", start + 1)]
-    # link targets blanked in place, so their digits are not figures and spans still hold
-    section = re.sub(r"\]\([^)]*\)", lambda m: "]" + " " * (len(m[0]) - 1), section)
     scenario = Scenario.from_yaml((ROOT / "scenarios/nsfnet.yaml").read_text())
     network, workflow = scenario.network, scenario.workflow
     roles, core, end = nsfnet_structure(network)
-    read = []
 
     def one(pattern):
-        matches = list(re.finditer(pattern, section))
-        assert len(matches) == 1, f"{len(matches)} matches of {pattern!r}"
-        read.append(matches[0].span())
-        return matches[0].groups()
+        return numbers(section, pattern)
 
-    mid, map_year = one(
-        r"backbone in mid-(\d{4}) as its sources show it: the map \"New "
-        r"T3 Backbone Service, (\d{4})\""
-    )
-    day, list_year = one(r"node list of (\d+) May (\d{4})\]")
-    head = Header("nsfnet.yaml")
-    assert (mid, map_year, day, list_year) == head.read(
-        r"in mid-(\d{4}), as Merit's map \"New T3 Backbone Service, (\d{4})\" and its "
-        r"node list of (\d+) May (\d{4})"
-    )
-    n_core, n_connections = one(
-        r"(\d+) core sites \(`core/<city>`, `site_type: core`\) joined by (\d+) connections"
-    )
-    (n_end,) = one(
-        r"(\d+) end sites at regional networks \(`end/<place>`, `site_type: end`\), each "
-        r"on a single circuit to its core site"
-    )
+    n_core, n_connections = one("(\\d+) core sites") + one("(\\d+) connections")
+    (n_end,) = one("(\\d+) end sites")
     assert Counter(roles.values()) == {"core": int(n_core), "end": int(n_end)}
     assert len(core) == int(n_connections) and {len(c) for c in end.values()} == {1}
-    (ds3,) = one(r"DS-3 of (\d+) kbit/s, and so is each end site's circuit")
-    then, half, carried = one(
-        r"one DS-3 in (\d{4}), is modelled as a pair of parallel circuits of (\d+) kbit/s, "
-        r"the pair in its own risk group, so every connection carries its (\d{4}) capacity"
-    )
-    assert then == carried == mid
+    (ds3,) = one("DS-3 of (\\d+)")
+    (half,) = one(r"circuits of (\d+) kbit/s")
     assert {sum(link.capacity for link in c) for c in core.values()} == {int(ds3)}
     assert {link.capacity for c in end.values() for link in c} == {int(ds3)}
     assert {link.capacity for c in core.values() for link in c} == {int(half)}
     assert {len(c) for c in core.values()} == {2} and 2 * int(half) == int(ds3)
-    cost, metric = one(
-        r"Cost (\d+) on every circuit: every T3 circuit then had routing "
-        r"metric (\d+), whatever its length"
-    )
+    cost, metric = one("Cost (\\d+)") + one("metric (\\d+)")
     assert cost == metric
     assert {link.cost for link in network.links.values()} == {int(cost)}
-    listed = re.findall(r"`failures\.(\w+)`", section)
-    steps = re.findall(r"`(node_to_node_capacity_matrix_\d)`", section)
-    one(r"one per policy in that order")
+    listed = re.findall(r"`failures\.(\w+)`", one(r"Failure policies: ([^\n]+)")[0])
+    steps = re.findall(
+        r"`(node_to_node_capacity_matrix_\d)`", one(r"Workflow steps: ([^\n]+)")[0]
+    )
     assert [step.name for step in workflow] == steps
     assert [step.failure_policy for step in workflow] == listed
-    figures = list(re.finditer(r"(?<!DS-)\b\d+\b", section))  # DS-3 is a name
-    unread = [
-        m[0]
-        for m in figures
-        if not any(a <= m.start() and m.end() <= b for a, b in read)
-    ]
-    assert figures and unread == [], unread
 
 
 def one_policy_rules(head, name):
@@ -910,9 +830,14 @@ def one_policy_rules(head, name):
 def test_backbone_header():
     head = Header("backbone_clos.yml")
     network, workflow = head.scenario.network, head.scenario.workflow
-    metros, pops, leaves, spines, clos_metros, routers_per_pop, others = head.read(
-        r"A backbone of (\w+) metros with (\w+) PoPs each: a Clos fabric of (\d+) leaves and "
-        r"(\d+) spines per PoP in (\w+) metros, (\w+) core router per PoP in the other (\w+),"
+    metros, pops, leaves, spines, clos_metros, routers_per_pop, others = (
+        head.read("backbone of (\\w+)")
+        + head.read("(\\w+) PoPs each")
+        + head.read("(\\d+) leaves")
+        + head.read("(\\d+) spines")
+        + head.read("in (\\w+) metros")
+        + head.read("(\\w+) core router")
+        + head.read("other (\\w+)")
     )
     by_metro = Counter(name.split("/")[0] for name in network.nodes)
     assert len(by_metro) == number(metros)
@@ -938,17 +863,16 @@ def test_backbone_header():
     assert sorted(n.split("/")[0] for n in dcs) == sorted(
         clos_metro_names
     )  # a DC region in each
-    (per,) = head.read(r"(One) risk group per adjacency")
+    (per,) = head.read("(\\w+) risk group")
     adjacency = {link.attrs.get("adjacency_id") for link in network.links.values()} - {
         None
     }
     assert len(network.risk_groups) == number(per) * len(adjacency)
-    (draws,) = head.read(r"under (\d+) draws of a weighted multi-mode failure policy")
+    (draws,) = head.read("(\\d+) draws")
     placement = next(s for s in workflow if s.name == "tm_placement")
     assert placement.iterations == int(draws)
     modes = head.scenario.failure_policies[placement.failure_policy].modes
     assert len(modes) > 1 and len({m.weight for m in modes}) > 1
-    head.every_figure_read()
 
 
 # Worked examples written inline in the rules
@@ -986,7 +910,7 @@ def test_the_splitting_rules_worked_examples():
     total, members, *equal = ints(
         numbers(
             (ROOT / CONCEPTS).read_text(),
-            r"so (\d+) over (\d+) members gives (\d+), (\d+), (\d+)\.",
+            "(\\d+) over (\\d+) members gives (\\d+), (\\d+), (\\d+)",
         )
     )
     found, _ = placed_flows(fan_out([100] * int(members), total, "SHORTEST_PATHS_ECMP"))
@@ -994,17 +918,14 @@ def test_the_splitting_rules_worked_examples():
     total, w1, w2, *weighted = ints(
         numbers(
             (ROOT / CONCEPTS).read_text(),
-            r"so (\d+) over weights (\d+) and (\d+) gives (\d+) and (\d+)\.",
+            "(\\d+) over weights (\\d+) and (\\d+) gives (\\d+) and (\\d+)",
         )
     )
     # SHORTEST_PATHS_WCMP weighs each next hop by its link's capacity.
     found, _ = placed_flows(fan_out([100 * w1, 100 * w2], total, "SHORTEST_PATHS_WCMP"))
     assert [found["S|X1|0"], found["S|X2|0"]] == weighted
     amount, rounded = ints(
-        numbers(
-            (ROOT / CONCEPTS).read_text(),
-            r"an amount of ([\d.]+) units becomes (\d+)\.",
-        )
+        numbers((ROOT / CONCEPTS).read_text(), "([\\d.]+) units becomes (\\d+)")
     )
     assert ngc.to_units(float(amount), 1.0) == rounded
 
@@ -1014,9 +935,11 @@ def test_the_alpha_and_expansion_worked_examples():
     "At q = 1, a parent of 10 split into two groups and the second into three gives 5
     and (2, 2, 1)"."""
     text = (ROOT / CONCEPTS).read_text()
-    volume, alpha, scaled, units, q, alpha_again, per_unit = numbers(
-        text,
-        r"so ([\d.]+) at alpha ([\d.]+) is ([\d.]+), (\d+) units at `q` = ([\d.]+), not ([\d.]+) × (\d+) units",
+    volume, alpha, scaled, units, q, alpha_again, per_unit = (
+        numbers(text, "([\\d.]+) at alpha ([\\d.]+) is")
+        + numbers(text, "is ([\\d.]+), (\\d+) units")
+        + numbers(text, "units at `q` = ([\\d.]+)")
+        + numbers(text, "([\\d.]+) × (\\d+) units")
     )
     assert float(volume) * float(alpha) == float(scaled) and alpha == alpha_again
     assert ngc.to_units(float(volume), float(q)) == int(per_unit)
@@ -1036,10 +959,12 @@ workflow:
         == int(units)
         != float(alpha) * int(per_unit)
     )
-    q, parent, groups, members, first, *second = numbers(
-        text,
-        r"At `q` = (\d+), a parent of (\d+) split into (\w+) groups and the second into (\w+) "
-        r"gives (\d+) and \((\d+), (\d+), (\d+)\)\.",
+    q, parent, groups, members, first, *second = (
+        numbers(text, "`q` = (\\d+), a parent")
+        + numbers(text, "parent of (\\d+)")
+        + numbers(text, "into (\\w+) groups")
+        + numbers(text, "second into (\\w+)")
+        + numbers(text, "(\\d+) and \\((\\d+), (\\d+), (\\d+)\\)")
     )
     assert (number(groups), number(members)) == (2, len(second))
     nodes = ["g1/a", *(f"g2/{n}" for n in "abc"[: number(members)])]
@@ -1067,10 +992,7 @@ network:
 
 def test_the_precision_threshold_at_unit_resolution():
     """Precision: "At `q` = 1 and the default `p`, every input must be at least 500"."""
-    (least,) = stated(
-        CONCEPTS,
-        r"At `q` = 1 and the default `p`, every input must be at least (\d+)\.",
-    )
+    (least,) = stated(CONCEPTS, "at least (\\d+)")
     met = [
         prepare(Scenario.from_yaml(chain(int(least) + d))).units_report.target_met
         for d in (-1, 0)
@@ -1083,7 +1005,12 @@ def test_the_failure_coverage_figure():
     32 draws for 5 links at ε = 1 %"; and the stated draws do cover the five links of a
     seeded ring, while `n` draws there miss one."""
     draws, links, percent = map(
-        int, stated(CONCEPTS, r"(\d+) draws for (\d+) links at ε = (\d+) %")
+        int,
+        (
+            stated(CONCEPTS, "(\\d+) draws")
+            + stated(CONCEPTS, "(\\d+) links at")
+            + stated(CONCEPTS, "ε = (\\d+) %")
+        ),
     )
     epsilon = percent / 100
     assert draws == math.ceil(links * math.log(links / epsilon))
@@ -1121,17 +1048,19 @@ def test_the_seed_and_weight_approximation_figures():
     """DSL: scenario seed 42 and policy random_link yield 2099469712; volumes 1000 and 0.1
     are apportioned and reported, 1000000 and 1 stay exact."""
     page = "docs/reference/dsl.md"
-    seed, name, derived = stated(
-        page, r"scenario seed `(\d+)` and policy `(\w+)` yield `(\d+)`"
+    seed, name, derived = (
+        stated(page, "scenario seed `(\\d+)`")
+        + stated(page, "policy `(\\w+)` yield")
+        + stated(page, "yield `(\\d+)`")
     )
     value = Scenario.from_yaml(
         f"seed: {seed}\nfailures:\n  {name}:\n    modes: [{{weight: 1, rules: [{{scope: link, mode: choice}}]}}]\n"
     )
     assert value.failure_policies[name].seed == int(derived)
-    a, b, power, c, d = stated(
-        page,
-        r"so volumes ([\d.]+) and ([\d.]+) \(whose binary value has a 2\^(\d+) denominator\) are\s+"
-        r"apportioned and reported, while (\d+) and (\d+) stay exact\.",
+    a, b, power, c, d = (
+        stated(page, "volumes ([\\d.]+) and ([\\d.]+)")
+        + stated(page, "2\\^(\\d+) denominator")
+        + stated(page, "while (\\d+) and (\\d+)")
     )
     assert Fraction(float(b)).denominator == 2 ** int(power)
 

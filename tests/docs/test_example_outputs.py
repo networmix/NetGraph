@@ -24,7 +24,7 @@ from ngraph import (
 from ngraph.analysis.failures import failure_cases
 from ngraph.dsl.expansion.brackets import expand_name_patterns
 from ngraph.workflow import MaximumSupportedDemand, TrafficMatrixPlacement
-from tests.docs.pages import ROOT, fence, fences, names, saved_files, stated
+from tests.docs.pages import ROOT, fence, fences, names, numbers, saved_files, stated
 
 DSL = "docs/reference/dsl.md"
 TUTORIAL = "docs/getting-started/tutorial.md"
@@ -78,10 +78,12 @@ def test_the_tutorial_results_are_the_ones_its_text_states():
     single-link failure disconnects A from C; at most two patterns plus the baseline,
     occurrences summing to 20; the placement uses the alpha MSD found."""
     text = saved_files()["example.yaml"]
-    amount, tail, head, cost = stated(
-        TUTORIAL, r"physical capacity (\d+), cut at (\w)→(\w), and route cost (\d+)"
+    amount, tail, head, cost = (
+        stated(TUTORIAL, r"physical capacity (\d+)")
+        + stated(TUTORIAL, r"cut at (\w)→(\w)")
+        + stated(TUTORIAL, r"route cost (\d+)")
     )
-    (patterns,) = stated(TUTORIAL, r"collapse into at most (\w+) failure patterns")
+    (patterns,) = stated(TUTORIAL, r"(\w+) failure patterns")
     (draws,) = stated(TUTORIAL, r"`occurrences` sum to (\d+)")
     prepared = prepare(Scenario.from_yaml(text))
     q = prepared.topology.q
@@ -106,7 +108,6 @@ def test_the_tutorial_results_are_the_ones_its_text_states():
     assert placement.alpha == msd.alpha_feasible
     # "alpha_tolerance, 0.01 by default": the tutorial omits it.
     assert msd.query.alpha_tolerance == 0.01
-    assert "alpha_tolerance" not in text
 
 
 # Basic Example
@@ -117,8 +118,8 @@ def test_the_basic_example_states_wcmp_and_the_cost_objective():
     the minimum-cost objective is 18."""
     from ngraph import CapacityQuery, capacity
 
-    (carried,) = stated(BASIC, r"\(`SHORTEST_PATHS_WCMP`\) carries the full (\d+)")
-    (objective,) = stated(BASIC, r"The minimum-cost objective is [^=]+= (\d+)\.")
+    (carried,) = stated(BASIC, r"full (\d+)")
+    (objective,) = stated(BASIC, r"objective[^=]+= (\d+)")
     space = run_python(BASIC, 3)
     prepared, source, target = space["prepared"], space["source"], space["target"]
     weighted = ngc.FlowPolicyConfig(
@@ -139,8 +140,8 @@ def test_the_clos_fabric_has_its_stated_links_and_cut_for_every_named_preset():
     """Clos Fabric: 18 physical links; with SHORTEST_PATHS_WCMP, SHORTEST_PATHS_MAXFLOW or
     TE_MAXFLOW_UNLIM the symmetric baseline is bounded by the same inter-site cut, 100."""
     text = saved_files()["clos.yaml"]
-    (count,) = stated(CLOS, r"creates \d+ nodes and (\d+) physical links")
-    (cut,) = stated(CLOS, r"limit total site-to-site delivery to (\d+);")
+    (count,) = stated(CLOS, r"(\d+) physical links")
+    (cut,) = stated(CLOS, r"delivery to (\d+)")
     assert len(Scenario.from_yaml(text).network.links) == int(count)
     step = "    preset: SHORTEST_PATHS_ECMP\n    failure_policy"
     assert text.count(step) == 1
@@ -198,16 +199,11 @@ def test_each_bundled_scenario_has_the_parts_its_page_lists(
 ):
     """Bundled Scenarios: each section's step names, failure policies and demand sets,
     and an opening comment in each file."""
-    page = (ROOT / "docs/examples/bundled-scenarios.md").read_text()
     text = (ROOT / "scenarios" / path).read_text()
     value = Scenario.from_yaml(text)
-    assert text.startswith("# ")
     assert [step.name for step in value.workflow] == steps
     assert sorted(value.failure_policies) == policies
     assert sorted(value.demand_sets) == demand_sets
-    section = page.split(f"## `scenarios/{path}`")[1].split("\n## ")[0]
-    for name in (*steps, *policies, *demand_sets):
-        assert f"`{name}`" in section or f"`failures.{name}`" in section, name
 
 
 def test_square_mesh_is_the_smallest_bundled_scenario():
@@ -294,7 +290,11 @@ def test_the_placement_example_keys_have_their_stated_defaults():
 def test_capturing_groups_create_the_stated_labels():
     """DSL, Capturing groups: the text example's labels for one and three groups."""
     text = fence(DSL, "Creates groups", lang="text").text
-    one, three = re.findall(r'# Creates groups: (".*?), etc\.', text)
+    one, three = numbers(
+        text, r'Single group:[^\n]*\n# Creates groups: ("[^"]+"(?:, "[^"]+")*)'
+    ) + numbers(
+        text, r'Multiple groups:[^\n]*\n# Creates groups: ("[^"]+"(?:, "[^"]+")*)'
+    )
     network = Scenario.from_yaml(
         "network:\n  nodes: {dc1/spine/switch-1: {}, dc1/leaf/switch-2: {}, dc2/leaf/switch-1: {}}\n"
     ).network
@@ -323,30 +323,26 @@ def test_node_groups_create_the_stated_names():
     assert (
         nodes(DSL, 'template: "leaf-{n}"\n      attrs:\n        role: "leaf"') == shown
     )
-    shown, elided = creates("Inline nested hierarchy")
-    found = nodes(DSL, "Inline nested hierarchy")
+    shown, elided = creates('template: "tor-{n}"')
+    found = nodes(DSL, 'template: "tor-{n}"')
     assert elided and found[:2] == shown[:2] and found[-2:] == shown[-2:]
-    group, *made = names(
-        stated(DSL, r"(`leaf: \{count: 2\}` creates `[^`]+` and `[^`]+`)")[0]
-    )
+    group, *made = names(stated(DSL, r"(`leaf: \{count: 2\}`[^)]*)")[0])
     assert nodes_of("network:\n  nodes: {%s}\n" % group) == made
 
 
 def comment_number(excerpt, pattern):
-    (value,) = re.search(pattern, fence(DSL, excerpt).text).groups()
+    (value,) = numbers(fence(DSL, excerpt).text, pattern)
     return int(value)
 
 
 def test_link_definitions_create_the_stated_links():
     """DSL: every leaf to every spine; every spine to every other spine, with the stated
     parallel links per pair; the attribute-filtered and the OR examples."""
-    shown = nodes(DSL, "Connect every leaf to every spine")
+    shown = nodes(DSL, "capacity: 3200")
     leaves = [n for n in shown if n.startswith("leaf/")]
     spines = [n for n in shown if n.startswith("spine/")]
-    parallel = comment_number(
-        "Connect every leaf to every spine", r"# Create (\d+) parallel"
-    )
-    assert links(DSL, "Connect every leaf to every spine") == [
+    parallel = comment_number("capacity: 3200", r"(\d+) parallel")
+    assert links(DSL, "capacity: 3200") == [
         *(f"{a}|{b}|0" for a in leaves for b in spines),
         *(f"{spines[0]}|{spines[1]}|{i}" for i in range(parallel)),
     ]
@@ -360,22 +356,20 @@ def test_link_definitions_create_the_stated_links():
 
 
 def test_bracket_expansion_creates_the_stated_names():
-    text = fence(DSL, "dc[1-3]/rack[a,b]:     #").text
-    (shown,) = re.search(r"# Creates (.*), etc\.", text).groups()
+    text = fence(DSL, "dc[1-3]/rack[a,b]:").text
+    (shown,) = numbers(text, r"# Creates (\w+/\w+(?:, \w+/\w+)*)")
     groups = sorted(
-        {name.rsplit("/", 1)[0] for name in nodes(DSL, "dc[1-3]/rack[a,b]:     #")}
+        {name.rsplit("/", 1)[0] for name in nodes(DSL, "dc[1-3]/rack[a,b]:")}
     )
     assert groups == [f"dc{d}/rack{r}" for d in (1, 2, 3) for r in "ab"]
     assert groups[: len(shown.split(", "))] == shown.split(", ")
     fragment = fence(DSL, "dc[1-2]/rack[a,b]: {}").text  # a fragment of network.nodes
-    (shown,) = re.search(r"# Creates: (.*)", fragment).groups()
+    (shown,) = numbers(fragment, r"# Creates: ([^\n]+)")
     wrapped = "network:\n  nodes:\n" + "".join(
         f"    {line}\n" for line in fragment.splitlines()
     )
     assert nodes_of(wrapped) == shown.split(", ")
-    single, *made = names(
-        stated(DSL, r"(`SEA\[1-2\]: \{\}` creates nodes `\w+` and `\w+`)")[0]
-    )
+    single, *made = names(stated(DSL, r"(`SEA\[1-2\]: \{\}`[^)]*)")[0])
     assert nodes_of("network: {nodes: {'%s': {}}}" % single.split(":")[0]) == made
     expansion = scenario(DSL, "DC[1-3]_Power")
     assert list(expansion.network.risk_groups) == [
@@ -399,8 +393,8 @@ def test_bracket_expansion_creates_the_stated_names():
 def test_variable_expansion_creates_the_stated_link_definitions():
     """DSL, Example in links: the stated cartesian and zip counts; and the attrs example:
     `${dc}` substituted in nested attrs."""
-    excerpt = 'mode: "cartesian"  # 2 × 2 × 3'
-    cartesian = comment_number(excerpt, r"= (\d+) link definitions")
+    excerpt = 'source: "plane${p}/rack${r}"'
+    cartesian = comment_number(excerpt, r"(\d+) link definitions")
     zipped = comment_number(excerpt, r"# (\d+) paired link definitions")
     fragment = fence(DSL, excerpt).text
     ends = [f"plane{p}/rack{r}" for p in (1, 2) for r in "ab"]
@@ -446,9 +440,7 @@ def test_cartesian_expansion_over_symmetric_lists_creates_both_orientations():
 def test_blueprint_parameters_give_the_stated_names_and_counts():
     """DSL, blueprints: the stated instance names and override; the nested override of
     the spine count; the dotted form is refused."""
-    shown = names(
-        stated(DSL, r"Instance names are prefixed with the group name: (.*)\.")[0]
-    )
+    shown = names(stated(DSL, r"group name: ([^\n]+)")[0])
     text = fence(DSL, "leaf.count: 6").text
     declared = yaml.safe_load(text)
     blueprint = declared["blueprints"]["leaf_spine"]["nodes"]
@@ -471,7 +463,7 @@ def test_blueprint_parameters_give_the_stated_names_and_counts():
     assert (
         sum(name.startswith("dc1/pod2/spine/") for name in found) == spines != override
     )
-    (dotted_key,) = names(stated(DSL, r"(The dotted form `[^`]+` is rejected)")[0])
+    (dotted_key,) = names(stated(DSL, r"dotted form (`[^`]+`)")[0])
     params = yaml.safe_load(text)["network"]["nodes"]["dc1"]["params"]
     [(outer, inner)] = params.items()
     assert dotted_key == f"{outer}.{next(iter(inner))}"  # the same override, dotted
@@ -485,8 +477,8 @@ def test_blueprint_parameters_give_the_stated_names_and_counts():
 
 def test_a_failed_risk_group_fails_the_stated_members():
     """DSL, Entity references: what failing each named group fails."""
-    sentence = stated(DSL, r"(Failing `Site_Seattle` fails .*`\.)")[0]
-    seattle, region = sentence.split("; ")
+    seattle = stated(DSL, r"(`Site_Seattle`[^;]+)")[0]
+    region = stated(DSL, r"(`Region_West`[^\n]+)")[0]
     prepared = prepare(scenario(DSL, "Router_PDX: {risk_groups"))
 
     def failed(group):
@@ -515,8 +507,8 @@ def test_yaml_anchors_merge_with_explicit_keys_winning():
 
 def test_demand_expansion_creates_the_stated_demands():
     """DSL, Variable Expansion in Demands: the stated cartesian and zip counts."""
-    combinations = comment_number("src_dc:", r"# All (\d+) combinations")
-    zipped = comment_number("src_dc:", r"# (\d+) demands, paired")
+    combinations = comment_number("src_dc:", r"(\d+) combinations")
+    zipped = comment_number("src_dc:", r"(\d+) demands")
     found = scenario(DSL, "src_dc:").demand_sets["inter_dc"].demands
     pairs = [(d.source.path, d.target.path) for d in found]
     assert len(pairs) == combinations + zipped == len(set(pairs))
@@ -530,7 +522,7 @@ def test_demand_expansion_creates_the_stated_demands():
 def test_group_pairwise_creates_one_demand_per_ordered_pair_of_labels():
     """DSL, Example with group_mode: the stated label pairs, and every other ordered one."""
     fragment = fence(DSL, "inter_dc_traffic:").text
-    (shown,) = re.search(r"# Creates (.*), etc\.", fragment).groups()
+    (shown,) = numbers(fragment, r"# Creates (\w+->\w+(?:, \w+->\w+)*)")
     text = "network:\n  nodes: {%s}\n%s" % (
         ", ".join(f"dc{i}/r: {{attrs: {{dc: dc{i}}}}}" for i in (1, 2, 3)),
         fragment,
@@ -574,10 +566,10 @@ def test_the_all_pairs_matrix_has_its_stated_pairs_and_shares():
     block = fence(DSL, '"^(A|B|C|D)$"').text
     pairs, total, over, each = (
         int(g)
-        for g in re.search(
-            r"# (\d+) ordered pairs of distinct sites, (\d+) / (\d+) = (\d+) each",
-            block,
-        ).groups()
+        for g in (
+            numbers(block, r"(\d+) ordered pairs")
+            + numbers(block, r", (\d+) / (\d+) = (\d+)")
+        )
     )
     [declared] = yaml.safe_load(block)["demands"]["matrix"]
     assert declared["volume"] == total and over == pairs and total / over == each

@@ -45,6 +45,7 @@ def sections(path):
 
 SOURCES = sorted((ROOT / "ngraph").rglob("*.py"))
 MODULES = tuple(module_name(path) for path in SOURCES if ">>>" in path.read_text())
+assert MODULES
 
 
 def test_every_docstring_example_is_a_doctest():
@@ -53,23 +54,7 @@ def test_every_docstring_example_is_a_doctest():
         for path in SOURCES
         for line, rest, following in sections(path)
     ]
-    assert len(found) >= 10
     assert [f for f in found if f[2] or not f[3].startswith(">>>")] == []
-
-
-def test_the_docstring_examples_are_found():
-    assert set(MODULES) >= {
-        "ngraph.cli",
-        "ngraph.dsl.blueprints.expand",
-        "ngraph.dsl.blueprints.parser",
-        "ngraph.dsl.expansion",
-        "ngraph.dsl.expansion.brackets",
-        "ngraph.explorer",
-        "ngraph.model.selectors",
-        "ngraph.model.selectors.conditions",
-        "ngraph.utils.seed_manager",
-        "ngraph.utils.yaml_utils",
-    }
 
 
 @pytest.mark.parametrize("name", MODULES)

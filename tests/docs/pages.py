@@ -63,12 +63,12 @@ def fence(page: str, excerpt: str, lang: str = "yaml") -> Fence:
 
 
 def saved_files() -> dict[str, str]:
-    """The files the pages ask the reader to save: `Save this as `name`:` before a fence."""
+    """Saved YAML files labelled by filename immediately before their code fence."""
     files = {}
     for page in pages():
         text = (ROOT / page).read_text()
         for match in re.finditer(
-            r"Save this as `([^`]+)`:\n\n```yaml\n(.*?)```", text, re.DOTALL
+            r"`([^`]+\.ya?ml)`:\s+```yaml\n(.*?)```", text, re.DOTALL
         ):
             assert match[1] not in files, f"{match[1]} saved twice"
             files[match[1]] = match[2]

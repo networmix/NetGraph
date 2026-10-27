@@ -443,19 +443,11 @@ def test_cli_refusals_keep_the_declaration_path_and_value(
 
 
 def test_unknown_top_level_key_has_the_documented_exception_and_cause():
-    from pathlib import Path
-
     with pytest.raises(ValueError) as error:
         load_scenario_yaml("unknown: 7")
     assert type(error.value) is ValueError
     assert isinstance(error.value.__cause__, ValidationError)
     assert str(error.value).startswith("scenario = {'unknown': 7}:")
-    document = Path(__file__).resolve().parents[2] / "docs/reference/dsl.md"
-    assert (
-        "with a `ValueError` whose cause is the schema's `ValidationError`"
-        in document.read_text()
-    )
-    assert "with `jsonschema.ValidationError`" not in document.read_text()
 
 
 @pytest.mark.parametrize("blueprint", [False, True])

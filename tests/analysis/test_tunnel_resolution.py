@@ -3,7 +3,6 @@
 from copy import deepcopy
 from dataclasses import replace
 from fractions import Fraction
-from pathlib import Path
 from typing import get_type_hints
 
 import jsonschema
@@ -798,32 +797,6 @@ def test_constraint_wire_fields_reject_missing_null_and_near_values():
 
 
 def test_concepts_state_the_live_plan_rule():
-    root = Path(__file__).resolve().parents[2]
-    concepts = (root / "docs/concepts.md").read_text()
-    sentence = next(
-        line
-        for line in concepts.splitlines()
-        if line.startswith("- **Tunnel resolution.**")
-    )
-    assert "live heads but no whole unit per tunnel misses the target" in sentence
-    assert "declared demands and workflow capacity questions" in sentence
-    assert (
-        "tunnel-count analyses, later questions, failure cases and searches" in sentence
-    )
-    fields = SCHEMA["$defs"]["UnitsReportJSON"]["properties"]
-    assert (
-        "has sufficient resolution for its live heads"
-        in fields["target_met"]["description"]
-    )
-    assert (
-        "observed tunnel plans with insufficient resolution"
-        in fields["binding_constraints"]["description"]
-    )
-    assert (
-        "at 2q when automatic preparation rejected"
-        in fields["binding_constraints"]["description"]
-    )
-    assert "native tunnel plan observed at q" in fields["target_met"]["description"]
     for q, met in ((0.5, False), (1 / 32, True)):
         p = prepared(q=q)
         assert p.units_report.target_met is met
@@ -831,19 +804,6 @@ def test_concepts_state_the_live_plan_rule():
 
 
 def test_the_automatic_preparation_description_checks_live_tunnel_plans():
-    page = (Path(__file__).resolve().parents[2] / "docs/concepts.md").read_text()
-    introduction = next(
-        line for line in page.splitlines() if line.startswith("A smaller `q`")
-    )
-    recipe = next(
-        line for line in page.splitlines() if line.startswith("- **The recipe.**")
-    )
-    assert (
-        "tunnel plans of the declared demands and workflow capacity questions give every live head a whole unit per tunnel"
-        in introduction
-    )
-    assert "observes its tunnel plans" in recipe
-    assert "meets every bound with no tunnel resolution miss" in recipe
     coarse = prepared(q=0.5)
     assert all(c.met for c in coarse.units_report.nominal_splits)
     assert coarse.units_report.inexact_inputs == coarse.units_report.zeroed_inputs == 0

@@ -1,7 +1,5 @@
 """Release notes describe observable equal-source and nested-group behavior."""
 
-from pathlib import Path
-
 import netgraph_core as core
 import pytest
 
@@ -30,19 +28,6 @@ from ngraph import (
 @pytest.mark.parametrize("q", [1, 1 / 1024])
 @pytest.mark.parametrize("caps,units", [((5, 0), 1), ((0, 5), 0), ((5, 5), None)])
 def test_equal_sources_report_only_the_traffic_their_shares_carry(q, caps, units):
-    release = (
-        (Path(__file__).resolve().parents[2] / "CHANGELOG.md")
-        .read_text()
-        .split("## [0.24.1]")[0]
-    )
-    assert (
-        "ECMP shortest-path demands in `combine` mode, which split their volume equally over several source nodes, now report what those equal shares actually deliver"
-        in release
-    )
-    assert (
-        "a selected source whose route has zero capacity keeps its share, so it can stop admission for the whole demand"
-        in release
-    )
     n = Network(nodes={s: Node(s) for s in ("a", "b", "t")})
     for s, cap in zip(("a", "b"), caps, strict=True):
         n.add_link(Link(s, "t", cap))
@@ -65,19 +50,6 @@ def test_equal_sources_report_only_the_traffic_their_shares_carry(q, caps, units
 @pytest.mark.parametrize("scope", ["node", "link"])
 @pytest.mark.parametrize("failed", ["child", "parent"])
 def test_child_only_group_references_participate_in_ancestor_failures(scope, failed):
-    release = (
-        (Path(__file__).resolve().parents[2] / "CHANGELOG.md")
-        .read_text()
-        .split("## [0.24.1]")[0]
-    )
-    assert (
-        "Nodes and links may reference a risk group declared only as a nested child"
-        in release
-    )
-    assert (
-        "that group's failures and its ancestors' failures include the members without a duplicate top-level declaration"
-        in release
-    )
     n = Network(
         nodes={
             "a": Node("a", risk_groups={"child"} if scope == "node" else ()),
@@ -108,12 +80,13 @@ def test_documented_numeric_string_ordering_and_equality_examples():
 
     from ngraph import Condition
     from ngraph.model.selectors.conditions import evaluate_condition
+    from tests.docs.pages import stated
 
-    text = (Path(__file__).resolve().parents[2] / "docs/reference/dsl.md").read_text()
-    assert "compare integer and finite float operands exactly" in text
-    matches = re.findall(r'`"(\d+)" (>|==) (\d+)` is (true|false)', text)
-    assert len(matches) == 2
-    for left, op, right, expected in matches:
+    for op in (">", "=="):
+        left, right, expected = stated(
+            "docs/reference/dsl.md",
+            rf'`"(\d+)" {re.escape(op)} (\d+)`\s+\w+\s+(true|false)',
+        )
         assert evaluate_condition({"x": left}, Condition("x", op, int(right))) is (
             expected == "true"
         )

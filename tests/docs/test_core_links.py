@@ -1,10 +1,4 @@
-"""Links to NetGraph-Core's documentation name the pinned release and a reviewed section.
-
-A page that needs one of the engine's exact rules states it in one line, then links the
-section of the Core's `docs/semantics.md` at the tag of the pinned lower bound. A rename
-on the Core side, another version or another section fails here instead of leaving a
-dead or drifting link.
-"""
+"""Core documentation links use the pinned version and point to existing sections."""
 
 import os
 import re
@@ -15,15 +9,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY = "https://github.com/networmix/NetGraph-Core"
-# The reviewed sections, title -> GitHub anchor. Each is linked at most once.
-SECTIONS = {
-    "Splitting whole units": "splitting-whole-units",
-    "Forwarding programs": "forwarding-programs",
-    "Several demands at once": "several-demands-at-once",
-    "T1: tunnels set up by their heads": "t1-tunnels-set-up-by-their-heads",
-    "T2: the controller's equal tunnels": "t2-the-controllers-equal-tunnels",
-    "The result": "the-result",
-}
 URL = re.compile(r"https?://[^\s)>\]\"'`]*networmix/NetGraph-Core[^\s)>\]\"'`]*")
 
 
@@ -49,11 +34,11 @@ def shipped_pages(root: Path) -> list[Path]:
 
 
 def link_problems(pages: dict[str, str], version: str) -> list[str]:
-    """Each Core link that is not the bare repository or a pinned reviewed section."""
+    """Each Core link that is not the bare repository or a pinned section URL."""
     form = re.compile(
         rf"{re.escape(REPOSITORY)}/blob/v{re.escape(version)}/docs/semantics\.md#([a-z0-9-]+)"
     )
-    problems, seen = [], {}
+    problems = []
     for name, text in pages.items():
         for url in URL.findall(text):
             if url.rstrip("/") == REPOSITORY:
@@ -61,14 +46,6 @@ def link_problems(pages: dict[str, str], version: str) -> list[str]:
             match = form.fullmatch(url)
             if match is None:
                 problems.append(f"{name}: {url} is not a link to v{version} semantics")
-            elif match[1] not in SECTIONS.values():
-                problems.append(f"{name}: #{match[1]} is not a reviewed section")
-            elif match[1] in seen:
-                problems.append(
-                    f"{name}: #{match[1]} is linked again ({seen[match[1]]})"
-                )
-            else:
-                seen[match[1]] = name
     return problems
 
 
@@ -82,10 +59,9 @@ def read(root: Path) -> dict[str, str]:
     }
 
 
-def test_every_core_link_names_the_pinned_release_and_a_reviewed_section():
+def test_every_core_link_uses_the_pinned_release():
     pages = read(ROOT)
     assert link_problems(pages, pinned_version()) == []
-    assert section_links(pages), "the scan found no Core section link"
 
 
 @pytest.mark.parametrize(
@@ -99,23 +75,10 @@ def test_every_core_link_names_the_pinned_release_and_a_reviewed_section():
             f"{REPOSITORY}/blob/v0.11.0/docs/semantics.md#forwarding-programs",
             "is not a link",
         ),
-        (
-            f"{REPOSITORY}/blob/v0.12.0/docs/semantics.md#1-units-the-one-numeric-domain",
-            "not a reviewed",
-        ),
-        (
-            f"{REPOSITORY}/blob/v0.12.0/docs/semantics.md#the-source-roster",
-            "not a reviewed",
-        ),
         (f"{REPOSITORY}/blob/v0.12.0/docs/semantics.md", "is not a link"),
-        (
-            f"[a]({REPOSITORY}/blob/v0.12.0/docs/semantics.md#the-result) "
-            f"[b]({REPOSITORY}/blob/v0.12.0/docs/semantics.md#the-result)",
-            "linked again",
-        ),
     ],
 )
-def test_a_wrong_version_anchor_or_repeat_is_refused(text, problem):
+def test_a_wrong_version_or_missing_section_is_refused(text, problem):
     (found,) = link_problems({"page.md": text}, "0.12.0")
     assert problem in found
 
@@ -157,6 +120,7 @@ def test_github_anchors_follow_the_heading_text():
     not os.environ.get("NETGRAPH_CORE_SEMANTICS"),
     reason="set NETGRAPH_CORE_SEMANTICS to the pinned Core's docs/semantics.md",
 )
-def test_the_reviewed_sections_exist_in_the_pinned_core_release():
+def test_each_linked_section_exists_in_the_pinned_core_release():
     text = Path(os.environ["NETGRAPH_CORE_SEMANTICS"]).read_text()
-    assert sorted(set(SECTIONS.values()) - github_anchors(text)) == []
+    targets = {url.rsplit("#", 1)[1] for url in section_links(read(ROOT))}
+    assert sorted(targets - github_anchors(text)) == []

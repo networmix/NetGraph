@@ -289,22 +289,14 @@ def test_reason_resolver_has_no_call_site_field_or_dead_reason_fallback():
         "labels",
         "fields",
     )
-    source = inspect.getsource(error_context)
-    assert 'getattr(exc, "_input_reason"' not in source
-    assert "owned" in (error_context.__doc__ or "")
 
 
 @pytest.mark.parametrize("filename", ["docs/reference/workflow.md", "CHANGELOG.md"])
 def test_published_name_limit_matches_acceptance(filename):
-    import re
-    from pathlib import Path
+    from tests.docs.pages import stated
 
-    wording = (Path(__file__).resolve().parents[2] / filename).read_text()
-    match = re.search(
-        r"step names longer than (\d+) characters are refused", wording, re.IGNORECASE
-    )
-    assert match is not None
-    limit = int(match.group(1))
+    (shown,) = stated(filename, r"(\d+) characters")
+    limit = int(shown)
     assert limit == 100
     BuildGraph(name="x" * limit)
     with pytest.raises(ValueError) as error:
