@@ -15,6 +15,7 @@ from itertools import product
 
 import jsonschema
 import netgraph_core as ngc
+import pytest
 
 from ngraph import (
     CapacityQuery,
@@ -376,6 +377,7 @@ def export_all():
     return out
 
 
+@pytest.mark.timeout(120)
 def test_every_query_option_exports_a_valid_document_on_both_graphs():
     results = export_all()
     for form, (exported, refused) in results.items():

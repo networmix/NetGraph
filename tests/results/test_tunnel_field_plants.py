@@ -222,6 +222,7 @@ def test_tunnel_fields_follow_hand_derivation(kind):
 
 
 @pytest.mark.parametrize("kind", ["physical-t1", "pooled-t2"])
+@pytest.mark.timeout(120)
 def test_tunnel_projection_field_plants_are_caught(monkeypatch, kind):
     original = exporting._native
     observed = []

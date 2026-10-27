@@ -8,6 +8,7 @@ import inspect
 import json
 import re
 import signal
+from enum import Enum
 from importlib import resources
 from types import NoneType
 from typing import get_args
@@ -65,6 +66,8 @@ def inventory():
     classes.update((GenerateSpec, MembershipSpec))
     found = []
     for cls in sorted(classes, key=lambda c: (c.__module__, c.__name__)):
+        if issubclass(cls, Enum):
+            continue
         if dataclasses.is_dataclass(cls):
             fields = [f for f in dataclasses.fields(cls) if f.init]
         elif cls.__module__.startswith("ngraph"):

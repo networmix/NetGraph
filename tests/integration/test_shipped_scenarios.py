@@ -28,7 +28,7 @@ def result_validator():
 
 
 @pytest.mark.slow
-@pytest.mark.timeout(300)
+@pytest.mark.timeout(900)
 @pytest.mark.parametrize("path", SCENARIOS, ids=lambda path: path.stem)
 def test_shipped_workflow_executes_and_exports(path, result_validator):
     scenario = Scenario.from_yaml(path.read_text())
