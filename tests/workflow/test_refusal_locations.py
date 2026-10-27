@@ -819,31 +819,6 @@ def test_each_refusal_has_a_valid_control(case, entry, stage, expected):
 
 
 @pytest.mark.timeout(10)
-@pytest.mark.parametrize("name, clause", [("bad", " (name 'bad')"), (None, "")])
-def test_yaml_scalar_conversion_refusal_identifies_the_step(name, clause):
-    import sys
-
-    previous = sys.get_int_max_str_digits()
-    sys.set_int_max_str_digits(4300)
-    try:
-        declaration = "   name: bad" if name else "   # unnamed"
-        text = (
-            "network: {}\nworkflow:\n - {type: BuildGraph, name: g}\n"
-            " - {type: BuildGraph, name: g2}\n - type: BuildGraph\n"
-            f"{declaration}\n   seed: {'9' * 5000}\n"
-        )
-        with pytest.raises(ValueError) as error:
-            Scenario.from_yaml(text)
-        assert str(error.value) == (
-            f"workflow[2]{clause}.seed = an integer of 5000 digits: "
-            "invalid YAML scalar at line 7, column 10"
-        )
-        prepare(Scenario.from_yaml(text.replace("9" * 5000, "9")))
-    finally:
-        sys.set_int_max_str_digits(previous)
-
-
-@pytest.mark.timeout(10)
 def test_an_empty_type_identifies_the_supplied_field():
     entry = {"type": "", "name": "bad"}
     with pytest.raises(ValueError) as error:

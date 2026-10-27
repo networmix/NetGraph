@@ -106,78 +106,9 @@ def _bounded(text: str, limit: int = 220) -> str:
 
 
 def _shown(value: object) -> str:
-    """Render an input without letting its representation replace a refusal."""
-    try:
-        rendered = repr(value)
-    except Exception:
-        try:
-            rendered = _safe_repr(value)
-        except Exception:
-            rendered = f"<unprintable {type(value).__name__}>"
+    """Render an input, shortening its representation to sixty characters."""
+    rendered = repr(value)
     return rendered if len(rendered) <= 60 else rendered[:57] + "..."
-
-
-def _safe_repr(value, seen=None):
-    try:
-        return repr(value)
-    except Exception:
-        pass
-    if isinstance(value, int):
-        number = abs(int.__int__(value))
-        digits = max(1, (number.bit_length() - 1) * 1233 // 4096 + 1)
-        while number >= 10**digits:
-            digits += 1
-        while digits > 1 and number < 10 ** (digits - 1):
-            digits -= 1
-        return f"an integer of {digits} digits"
-    seen = set() if seen is None else seen
-    if id(value) in seen:
-        return "..."
-    seen.add(id(value))
-    try:
-        if isinstance(value, dict):
-            return (
-                "{"
-                + ", ".join(
-                    f"{_safe_repr(k, seen)}: {_safe_repr(v, seen)}"
-                    for k, v in value.items()
-                )
-                + "}"
-            )
-        if isinstance(value, (list, tuple)):
-            left, right = ("[", "]") if isinstance(value, list) else ("(", ")")
-            return left + ", ".join(_safe_repr(v, seen) for v in value) + right
-        try:
-            return repr(value)
-        except Exception:
-            return f"<unprintable {type(value).__name__}>"
-    finally:
-        seen.remove(id(value))
-
-
-class _DiagnosticInteger(int):
-    def __repr__(self):
-        return _safe_repr(int.__int__(self))
-
-
-def _diagnostic_value(value):
-    """A schema-only view when its own diagnostic cannot print a supplied int.
-
-    The original parsed values are returned to callers. This fallback is used
-    only after jsonschema's error rendering fails, preserving its constraints,
-    selected field path and ValidationError cause.
-    """
-    if isinstance(value, int) and not isinstance(value, bool):
-        try:
-            repr(value)
-        except ValueError:
-            return _DiagnosticInteger(value)
-        return value
-    if isinstance(value, dict):
-        return {k: _diagnostic_value(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_diagnostic_value(v) for v in value]
-    return value
 
 
 def _is_flag(value: object) -> bool:
@@ -297,14 +228,9 @@ def integer(
         raise _input_error(
             label, f"expected an integer, got {_shown(value)}", value=value
         )
-    # A subclass of int or float is read as its stored value, not its conversions.
-    if isinstance(value, int):
-        number = int.__int__(value)
-    elif isinstance(value, Integral):
+    if isinstance(value, Integral):
         number = int(value)
-    elif isinstance(value, float) and float.__float__(value).is_integer():
-        number = int(float.__float__(value))
-    elif isinstance(value, np.floating) and float(value).is_integer():
+    elif isinstance(value, (float, np.floating)) and float(value).is_integer():
         number = int(float(value))
     else:
         raise _input_error(
@@ -403,26 +329,28 @@ def _type_name(value: object) -> str:
 
 
 def _plain(value, label):
-    """Return the stored built-in value of a str, int or float subclass."""
-    try:
-        if isinstance(value, (bool, np.bool_)):
-            return bool(value)
-        if isinstance(value, np.integer):
-            return int(value)
-        if isinstance(value, np.floating):
-            return float(value)
-        if isinstance(value, str):
-            return str.__str__(value)
-        if isinstance(value, int):
-            return int.__int__(value)
-        if isinstance(value, float):
-            return float.__float__(value)
-    except MemoryError:
-        raise
-    except Exception as exc:
-        raise _input_error(
-            label, f"cannot normalize scalar {_type_name(value)}", value=value
-        ) from exc
+    """Normalize accepted scalars to their plain built-in values."""
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (np.integer, np.floating)):
+        try:
+            return int(value) if isinstance(value, np.integer) else float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            cause = _input_error(
+                label, f"cannot normalize scalar {_type_name(value)}", value=value
+            )
+            cause.__cause__ = exc
+            raise _input_error(
+                label,
+                f"expected finite JSON data, got {_type_name(value)}",
+                value=value,
+            ) from cause
+    if isinstance(value, str):
+        return str.__str__(value)
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        return float(value)
     return value
 
 
@@ -444,14 +372,7 @@ def frozen_json(
     if type(value) is float and math.isfinite(value):
         return value
     if isinstance(value, (bool, str, int, float, np.bool_, np.integer, np.floating)):
-        try:
-            plain = _plain(value, label)
-        except ValueError as exc:
-            raise _input_error(
-                label,
-                f"expected finite JSON data, got {_type_name(value)}",
-                value=value,
-            ) from exc
+        plain = _plain(value, label)
         if not isinstance(plain, float) or math.isfinite(plain):
             return plain
     elif isinstance(value, list):

@@ -7,9 +7,8 @@ import pytest
 import yaml
 from jsonschema import ValidationError
 
-from ngraph import Component, ComponentsLibrary, Scenario
+from ngraph import ComponentsLibrary, Scenario
 from ngraph.dsl.loader import load_scenario_yaml
-from ngraph.utils.values import _shown
 
 
 @pytest.fixture(autouse=True)
@@ -349,50 +348,6 @@ def test_standalone_component_entries_follow_the_same_rule(path):
     ComponentsLibrary.from_yaml(source(good))
 
 
-@pytest.mark.parametrize(
-    "loader", [Scenario.from_yaml, ComponentsLibrary.from_yaml, load_scenario_yaml]
-)
-@pytest.mark.parametrize("nested", [False, True])
-@pytest.mark.parametrize(
-    "number,digits",
-    [(10**5000, 5001), (1 << 16000, 4817)],
-    ids=["decimal-size", "binary-size"],
-)
-def test_an_unprintable_count_still_refuses_its_exact_declaration(
-    loader, nested, number, digits
-):
-    # Hexadecimal YAML reaches the integer checker without Python's decimal parser limit.
-    text = f"components: {{c: {{count: {hex(number)}}}}}"
-    path = "components.c.count"
-    if nested:
-        text = "components: {p: {children: {c: {count: " + hex(number) + "}}}}"
-        path = "components.p.children.c.count"
-    with pytest.raises(ValueError) as error:
-        loader(text)
-    assert type(error.value) is ValueError
-    assert str(error.value).startswith(path)
-    assert f"an integer of {digits} digits" in str(error.value)
-    if loader is load_scenario_yaml or loader is Scenario.from_yaml:
-        assert isinstance(error.value.__cause__, ValidationError)
-    loader(text.replace(hex(number), "1"))
-    with pytest.raises(
-        ValueError, match=f"component c.count:.*an integer of {digits} digits"
-    ):
-        Component("c", count=number)
-    assert Component("c", count=1).count == 1
-
-
-@pytest.mark.parametrize(
-    "value",
-    [10**5000, [10**5000], {"count": 10**5000}],
-    ids=["integer", "list", "mapping"],
-)
-def test_value_display_never_fails_while_refusing_an_input(value):
-    rendered = _shown(value)
-    assert "5001 digits" in rendered and len(rendered) <= 60
-    assert _shown(7) == "7"
-
-
 @pytest.mark.parametrize("position", [0, 2])
 @pytest.mark.parametrize("bad", [[], {}, [1]])
 def test_generation_retains_its_source_position_and_resolved_raw_value(position, bad):
@@ -461,7 +416,7 @@ def test_duplicate_names_retain_the_offending_source_position_and_value(kind):
 
 
 @pytest.mark.parametrize("command", ["run", "inspect"])
-@pytest.mark.parametrize("case", ["template", "generation", "duplicate", "huge"])
+@pytest.mark.parametrize("case", ["template", "generation", "duplicate"])
 def test_cli_refusals_keep_the_declaration_path_and_value(
     tmp_path, capsys, command, case
 ):
@@ -473,14 +428,11 @@ def test_cli_refusals_keep_the_declaration_path_and_value(
     elif case == "generation":
         text = "network: {nodes: {A: {attrs: {role: []}}}}\nrisk_groups: [{generate: {scope: node, group_by: role, name: 'r-${value}'}}]"
         path, shown = "risk_groups[0].generate.group_by", "[]"
-    elif case == "duplicate":
+    else:
         text = (
             "workflow: [{type: BuildGraph, name: same}, {type: BuildGraph, name: same}]"
         )
         path, shown = "workflow[1] (name 'same').name", "'same'"
-    else:
-        text = f"components: {{c: {{count: {hex(10**5000)}}}}}"
-        path, shown = "components.c.count", "an integer of 5001 digits"
     filename = tmp_path / "scenario.yml"
     filename.write_text(text)
     with pytest.raises(SystemExit) as error:
@@ -519,46 +471,6 @@ def test_bracket_expansion_retains_the_unexpanded_template_declaration(blueprint
     assert str(error.value).startswith(path + ": invalid template '{n[0]}':")
     nodes["G[1-2]"]["template"] = "n-{n}"
     assert len(Scenario.from_yaml(source(data)).network.nodes) == 4
-
-
-def test_schema_diagnostic_view_changes_only_unprintable_integer_representations():
-    from ngraph.utils.values import _diagnostic_value
-
-    raw = {"flag": True, "small": 7, "nested": [10**5000, None]}
-    display = _diagnostic_value(raw)
-    assert display == raw
-    assert type(display["flag"]) is bool and type(display["small"]) is int
-    assert display["nested"][0] == 10**5000
-    assert repr(display["nested"][0]) == "an integer of 5001 digits"
-    assert type(raw["nested"][0]) is int
-
-
-def test_value_display_refuses_neither_broken_repr_nor_recursive_containers():
-    class BrokenRepr:
-        def __repr__(self):
-            raise ValueError("broken repr")
-
-    assert _shown(BrokenRepr()) == "<unprintable BrokenRepr>"
-    recursive = [10**5000]
-    recursive.append(recursive)
-    assert _shown(recursive) == "[an integer of 5001 digits, ...]"
-
-
-def test_generation_of_an_unprintable_scalar_keeps_its_field_and_value():
-    text = (
-        "network: {nodes: {A: {attrs: {role: "
-        + hex(10**5000)
-        + "}}}}\nrisk_groups: [{generate: {scope: node, group_by: role, name: 'r-${value}'}}]"
-    )
-    with pytest.raises(ValueError) as error:
-        Scenario.from_yaml(text)
-    assert type(error.value) is ValueError
-    assert str(error.value).startswith("risk_groups[0].generate.group_by:")
-    assert "an integer of 5001 digits" in str(error.value)
-    assert (
-        "r-1"
-        in Scenario.from_yaml(text.replace(hex(10**5000), "1")).network.risk_groups
-    )
 
 
 @pytest.mark.parametrize("raw", ["", " ", None])

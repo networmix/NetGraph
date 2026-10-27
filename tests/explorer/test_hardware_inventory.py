@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+from enum import Enum, IntEnum, IntFlag
 
 import pytest
 
@@ -36,6 +37,40 @@ from ngraph.scenario import Scenario, prepare, run
 from ngraph.workflow.cost_power import CostPower
 
 COUNT_TEXT = "Hardware 'count' must be a finite positive number, got"
+
+
+@pytest.mark.parametrize("kind", ["intenum", "int-mixin", "intflag"])
+@pytest.mark.parametrize("resolver", ["node", "link-end"])
+@pytest.mark.parametrize("invalid", [0, -1, 10**309])
+def test_integer_enum_hardware_count_refusals_show_the_plain_number(
+    kind, resolver, invalid
+):
+    members = {"INVALID": invalid, "TWO": 2}
+    if kind == "intenum":
+        counts = IntEnum("Counts", members)
+    elif kind == "intflag":
+        counts = IntFlag("Counts", members)
+    else:
+        counts = Enum("Counts", members, type=int)
+    library = ComponentsLibrary({"C": Component("C")})
+
+    def resolve(value):
+        spec = {"component": "C", "count": value}
+        return (
+            resolve_node_hardware({"hardware": spec}, library)[1]
+            if resolver == "node"
+            else resolve_link_end(spec, library)[1]
+        )
+
+    assert resolve(counts.TWO) == 2.0
+    with pytest.raises(ValueError) as error:
+        resolve(counts.INVALID)
+    assert type(error.value) is ValueError
+    assert str(error.value) == f"{COUNT_TEXT} {invalid}"
+    for flag in (False, True):
+        with pytest.raises(ValueError) as error:
+            resolve(flag)
+        assert str(error.value) == f"{COUNT_TEXT} {flag!r}"
 
 
 def _hw(name, count=None):
@@ -737,59 +772,6 @@ def test_a_count_too_large_for_a_float_is_an_invalid_count():
             with pytest.raises(ValueError) as exc:
                 _cost_power(net, P_LIB, include_disabled, 0)
             assert str(exc.value) == text
-
-
-HUGE = 10**5000
-HUGE_TEXT = "1" + "0" * 5000
-
-
-class Count(int):
-    """An int subclass the resolvers accept as a count."""
-
-
-def test_a_count_past_the_int_to_str_digit_limit_keeps_the_count_text():
-    """10**5000 has more digits than Python's int-to-str limit; the text still shows them,
-    for an int subclass and a negative count too."""
-    for call in (
-        lambda: resolve_node_hardware(_hw("C", HUGE), P_LIB),
-        lambda: resolve_link_end(_end("O", HUGE), P_LIB),
-    ):
-        with pytest.raises(ValueError) as exc:
-            call()
-        assert str(exc.value) == f"{COUNT_TEXT} {HUGE_TEXT}"
-    assert resolve_node_hardware(_hw("C", Count(2)), P_LIB)[1] == 2.0
-    for call in (
-        lambda: resolve_node_hardware(_hw("C", Count(HUGE)), P_LIB),
-        lambda: resolve_link_end(_end("O", Count(HUGE)), P_LIB),
-    ):
-        with pytest.raises(ValueError) as exc:
-            call()
-        assert str(exc.value) == f"{COUNT_TEXT} {HUGE_TEXT}"
-    with pytest.raises(ValueError) as exc:
-        resolve_link_end(_end("O", -HUGE), P_LIB)
-    assert str(exc.value) == f"{COUNT_TEXT} -{HUGE_TEXT}"
-    with pytest.raises(ValueError) as exc:
-        hardware_inventory(_a_to_b({"component": "C", "count": -HUGE}), P_LIB)
-    assert str(exc.value) == f"node a: {COUNT_TEXT} -{HUGE_TEXT}"
-    cases = [
-        (
-            _a_to_b({"component": "C", "count": HUGE}),
-            f"node a: {COUNT_TEXT} {HUGE_TEXT}",
-        ),
-    ]
-    for end in ("source", "target"):
-        cases.append(
-            (
-                _a_to_b(link_hw={end: _end("O", HUGE)}),
-                f"link a|b|0 {end} end: {COUNT_TEXT} {HUGE_TEXT}",
-            )
-        )
-    for net, text in cases:
-        with pytest.raises(ValueError) as exc:
-            hardware_inventory(net, P_LIB)
-        assert str(exc.value) == text
-        for error in _refusals(net):
-            assert str(error) == text
 
 
 def _inspect(tmp_path, yaml_text):

@@ -1,8 +1,8 @@
 """Refusal context does not change accepted steps or extension exceptions."""
 
 import pickle
-import sys
 from dataclasses import dataclass, fields
+from enum import Enum, StrEnum
 
 import pytest
 import yaml
@@ -21,7 +21,8 @@ from ngraph import (
 )
 from ngraph.analysis.preparation import StepNeeds
 from ngraph.utils.values import _shown
-from ngraph.workflow import BuildGraph, TunnelCountAnalysis
+from ngraph.workflow import BuildGraph
+from ngraph.workflow.base import _check_name_length
 from ngraph.workflow.diagnostics import workflow_location
 from ngraph.workflow.parse import build_workflow_steps
 
@@ -30,6 +31,40 @@ NET = {
     "links": [{"source": "A", "target": "B", "capacity": 8, "cost": 3}],
 }
 REASON = "no legal resolution represents the complete prepared input/augmented graph"
+
+
+@pytest.mark.parametrize("kind", ["strenum", "mixin"])
+def test_enum_workflow_names_keep_values_and_refusal_locations(kind):
+    def member(value):
+        return (
+            StrEnum("Name", {"VALUE": value}).VALUE
+            if kind == "strenum"
+            else Enum("Name", {"VALUE": value}, type=str).VALUE
+        )
+
+    name = member("step")
+    assert workflow_location(2, name) == "workflow[2] (name 'step')"
+    assert workflow_location(2, member("")) == "workflow[2]"
+    assert workflow_location(2, None) == "workflow[2]"
+    assert _check_name_length(member("n" * 100)) == "n" * 100
+    with pytest.raises(ValueError) as error:
+        _check_name_length(member("n" * 101))
+    assert str(error.value).startswith(
+        "workflow step name: expected a name of at most 100 characters, got 101"
+    )
+    step = build_workflow_steps(
+        [{"type": "BuildGraph", "name": name}], lambda name: None
+    )[0]
+    assert step.name == "step" and type(step.name) is str
+    with pytest.raises(ValueError) as error:
+        build_workflow_steps(
+            [{"type": "BuildGraph", "name": name, "bad": True}], lambda name: None
+        )
+    assert str(error.value) == (
+        "workflow[0] (name 'step') = {'type': 'BuildGraph', 'name': <Name.VALUE: 'step'>, 'bad...: "
+        "Unrecognized key(s) in workflow step 'step': bad. "
+        "Allowed keys are: ['add_reverse', 'name', 'seed']"
+    )
 
 
 def loaded(entry, resolution=1):
@@ -167,42 +202,6 @@ def test_extension_exception_is_the_original_object(base):
 
 
 @pytest.mark.parametrize(
-    "declaration, clause, field",
-    [
-        ("name: bad, seed: ", " (name 'bad')", "seed"),
-        ("seed: ", "", "seed"),
-        ("name: 3, seed: ", "", "seed"),
-        ("name: ", "", "name"),
-        ("name: old, name: bad, seed: ", " (name 'bad')", "seed"),
-        ("name: old, name: 3, seed: ", "", "seed"),
-    ],
-)
-def test_scalar_refusal_uses_the_actual_duplicate_workflow_entry(
-    declaration, clause, field
-):
-    previous = sys.get_int_max_str_digits()
-    sys.set_int_max_str_digits(4300)
-    try:
-        prefix = "- {type: BuildGraph, " + declaration
-        text = "network: {}\nworkflow: []\nworkflow:\n" + prefix + "9" * 5000 + "}\n"
-        with pytest.raises(ValueError) as error:
-            Scenario.from_yaml(text)
-        assert type(error.value) is ValueError
-        assert (
-            str(error.value)
-            == f"workflow[0]{clause}.{field} = an integer of 5000 digits: invalid YAML scalar at line 4, column {len(prefix) + 1}"
-        )
-        # A valid document with the same repeated key is still accepted.
-        prepare(
-            Scenario.from_yaml(
-                "network: {}\nworkflow: []\nworkflow:\n- {type: BuildGraph, name: bad, seed: 9}\n"
-            )
-        )
-    finally:
-        sys.set_int_max_str_digits(previous)
-
-
-@pytest.mark.parametrize(
     "entry",
     [
         {"type": "BuildGraph", "name": "b"},
@@ -244,36 +243,6 @@ def test_loaded_build_step_keeps_its_serialized_state():
         hash(step)
 
 
-def test_a_valid_load_does_not_render_a_name():
-    calls = []
-
-    class Name(str):
-        def __repr__(self):
-            calls.append("repr")
-            raise AssertionError("user repr")
-
-    step = build_workflow_steps(
-        [{"type": "BuildGraph", "name": Name("b")}], lambda name: None
-    )[0]
-    assert step.name == "b"
-    prepare(Scenario(Network(), (step,)))
-    assert calls == []
-
-
-def test_location_uses_the_plain_text_name():
-    class Name(str):
-        def __str__(self):
-            raise AssertionError("user str")
-
-        def __repr__(self):
-            raise AssertionError("user repr")
-
-        def __len__(self):
-            raise AssertionError("user len")
-
-    assert workflow_location(2, Name("bad")) == "workflow[2] (name 'bad')"
-
-
 @pytest.mark.parametrize(
     "entry",
     [
@@ -295,20 +264,6 @@ def test_refusals_remain_bounded(entry):
         reason = "'" + "x" * 216 + "..."
         assert message == f"workflow[1] (name 'bad').add_reverse = {shown}: {reason}"
     prepare(loaded({"type": "BuildGraph", "name": "good", "add_reverse": False}))
-
-
-def test_huge_count_keeps_its_field_and_digit_count():
-    with pytest.raises(ValueError) as error:
-        TunnelCountAnalysis(
-            name="bad", demand_set="load", counts=(10**5000,), offer=1, design_demand=1
-        )
-    assert (
-        str(error.value)
-        == "workflow step bad: tunnel_counts.counts[0]: expected an integer in [1, 10000], got an integer of 5001 digits"
-    )
-    TunnelCountAnalysis(
-        name="bad", demand_set="load", counts=(1,), offer=1, design_demand=1
-    )
 
 
 @pytest.mark.parametrize("base", [ValueError, TypeError])
@@ -354,20 +309,6 @@ def test_parser_locates_an_extension_construction_exception(monkeypatch):
     build_workflow_steps([{"type": "BuildGraph", "name": "bad"}], lambda name: None)
 
 
-def test_failed_repr_does_not_replace_the_refusal():
-    class Value:
-        def __repr__(self):
-            raise AssertionError("user repr")
-
-    with pytest.raises(ValueError) as error:
-        BuildGraph(name="bad", add_reverse=Value())
-    assert (
-        str(error.value)
-        == "BuildGraph.add_reverse: expected bool, got <unprintable Value>"
-    )
-    BuildGraph(name="bad", add_reverse=False)
-
-
 @pytest.mark.parametrize(
     "given, shown",
     [
@@ -377,16 +318,12 @@ def test_failed_repr_does_not_replace_the_refusal():
         (None, "None"),
         ((1,), "(1,)"),
         ({"x": [3]}, "{'x': [3]}"),
-        (10**5000, "an integer of 5001 digits"),
     ],
-    ids=["bytes", "float", "flag", "null", "tuple", "mapping", "huge_integer"],
+    ids=["bytes", "float", "flag", "null", "tuple", "mapping"],
 )
 def test_primitive_refusal_values(given, shown):
     assert _shown(given) == shown
 
 
-def test_recursive_value_repr_is_bounded():
-    values = []
-    values.append(values)
-    assert _shown(values) == "[[...]]"
+def test_long_list_representation_is_bounded():
     assert _shown(["x"] * 100000) == repr(["x"] * 100000)[:57] + "..."

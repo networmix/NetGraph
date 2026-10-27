@@ -114,26 +114,17 @@ class MembershipIndex:
         first_paths: dict[str, tuple[str, ...]] = {}
         signatures: dict[int, tuple] = {}
 
-        def inline_signature(
-            group: RiskGroup, path: tuple[str, ...], ancestors: tuple[int, ...] = ()
-        ) -> tuple:
+        def inline_signature(group: RiskGroup) -> tuple:
             if group.name in network.risk_groups:
                 return ("registered", group.name)
             identity = id(group)
-            if identity in ancestors:
-                raise ValueError("risk group cycle: " + " -> ".join(path))
             if identity not in signatures:
                 signatures[identity] = (
                     group.name,
                     group.disabled,
                     group.attrs,
                     group._membership_raw,
-                    tuple(
-                        inline_signature(
-                            child, (*path, child.name), (*ancestors, identity)
-                        )
-                        for child in group.children
-                    ),
+                    tuple(inline_signature(child) for child in group.children),
                 )
             return signatures[identity]
 
@@ -145,9 +136,7 @@ class MembershipIndex:
             previous = groups.get(name)
             if previous is not None and previous is not group:
                 first_path = first_paths[name]
-                if inline_signature(previous, first_path) != inline_signature(
-                    group, path
-                ):
+                if inline_signature(previous) != inline_signature(group):
                     raise ValueError(
                         f"risk group {name}: conflicting inline declarations at "
                         f"{' -> '.join(first_path)} and {' -> '.join(path)}"

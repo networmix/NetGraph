@@ -1,4 +1,4 @@
-"""Refused values keep their ordinary representations and bounded fallbacks."""
+"""Refused values keep their ordinary representations, shortened when long."""
 
 import datetime
 from decimal import Decimal
@@ -8,7 +8,6 @@ import pytest
 
 from ngraph import Node, Scenario
 from ngraph.utils.values import _shown
-from ngraph.workflow import BuildGraph
 
 
 @pytest.mark.parametrize(
@@ -69,68 +68,6 @@ def test_python_standard_value_refusal(value, kind, shown):
     assert Node("A", attrs={"x": 5}).attrs["x"] == 5
 
 
-def test_a_refused_value_can_supply_its_representation():
-    calls = []
-
-    class Value:
-        def __repr__(self):
-            calls.append("repr")
-            return "custom value"
-
-    with pytest.raises(ValueError) as error:
-        BuildGraph(add_reverse=Value())
-    assert str(error.value) == "BuildGraph.add_reverse: expected bool, got custom value"
-    assert calls == ["repr"]
-    BuildGraph(add_reverse=False)
-
-
-def test_failed_representations_keep_the_base_fallbacks():
-    class Value:
-        def __repr__(self):
-            raise RuntimeError("cannot print")
-
-    assert _shown(Value()) == "<unprintable Value>"
-    huge = 10**5000
-    assert _shown(huge) == "an integer of 5001 digits"
-    assert _shown({"x": huge}) == "{'x': an integer of 5001 digits}"
-    assert _shown([huge]) == "[an integer of 5001 digits]"
-    assert _shown((huge,)) == "(an integer of 5001 digits)"
+def test_text_representation_is_bounded():
     assert _shown("x" * 58) == "'" + "x" * 58 + "'"
     assert _shown("x" * 59) == "'" + "x" * 56 + "..."
-
-
-def test_recursive_fallback_keeps_values_when_container_repr_fails():
-    values = []
-    values.extend((values, 10**5000))
-    assert _shown(values) == "[..., an integer of 5001 digits]"
-
-    class Value:
-        def __repr__(self):
-            raise RuntimeError("cannot print")
-
-    assert _shown({"x": Value()}) == "{'x': <unprintable Value>}"
-
-
-def test_failed_container_fallback_does_not_replace_the_refusal():
-    class Values(list):
-        def __repr__(self):
-            raise RuntimeError("cannot print")
-
-        def __iter__(self):
-            raise RuntimeError("cannot iterate")
-
-    class Mapping(dict):
-        def __repr__(self):
-            raise RuntimeError("cannot print")
-
-        def items(self):
-            raise RuntimeError("cannot iterate")
-
-    for value, shown in [(Values([1]), "Values"), (Mapping(x=1), "Mapping")]:
-        with pytest.raises(ValueError) as error:
-            BuildGraph(add_reverse=value)
-        assert (
-            str(error.value)
-            == f"BuildGraph.add_reverse: expected bool, got <unprintable {shown}>"
-        )
-    BuildGraph(add_reverse=False)

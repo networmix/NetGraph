@@ -13,7 +13,7 @@ from typing import Any, Dict
 from jsonschema.exceptions import best_match
 from jsonschema.validators import validator_for
 
-from ngraph.utils.values import _bounded, _diagnostic_value, _shown
+from ngraph.utils.values import _bounded, _shown
 from ngraph.utils.yaml_load import _load_yaml
 from ngraph.workflow.diagnostics import workflow_location
 
@@ -90,12 +90,7 @@ def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
     # keeps jsonschema.validate's instance-error selection without repeatedly
     # validating that fixed schema against its metaschema.
     validator = validator_for(schema)(schema)
-    try:
-        error = best_match(validator.iter_errors(data))
-    except ValueError:
-        # jsonschema formats values while creating errors; Python may refuse
-        # decimal rendering of a huge integer before an error has a path.
-        error = best_match(validator.iter_errors(_diagnostic_value(data)))
+    error = best_match(validator.iter_errors(data))
     if error is not None:
         # Name the field and its value, as a constructor's refusal does.
         where = _where(error.absolute_path, data)

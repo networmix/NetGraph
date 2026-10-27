@@ -637,40 +637,14 @@ def test_valid_discarded_tunnel_models_need_no_offer_or_design_question(
     )
 
 
-def test_model_validation_reuses_identity_without_requiring_user_hash_or_equality():
+def test_model_validation_accepts_unhashable_configs():
     class Unhashable(core.FlowPolicyConfig):
         __hash__ = None
-
-    class EqualModels(core.FlowPolicyConfig):
-        def __hash__(self):
-            return 1
-
-        def __eq__(self, other):
-            return True
 
     p = prepare(Scenario(network(), units=UnitsSettings(1)))
     valid = Unhashable(routing=core.ShortestPaths())
     d = DemandSet("d", (DemandSpec(Selector("a"), Selector("a"), 1, valid),))
     assert resolve_demands(p, d).accounting[0].discarded_units == 1
-    first = EqualModels(routing=core.ShortestPaths())
-    bad = EqualModels(
-        routing=core.ShortestPaths(
-            allocation=core.RouteAllocation.WEIGHTED,
-            weight_basis=core.WeightBasis.EXPLICIT,
-            edge_weights=[1],
-        )
-    )
-    d = DemandSet(
-        "d",
-        tuple(
-            DemandSpec(Selector("a"), Selector("a"), 1, config)
-            for config in (first, bad)
-        ),
-    )
-    with pytest.raises(
-        ValueError, match=r"demands\.d\[1\].*edge_weights: expected 2 entries"
-    ):
-        resolve_demands(p, d)
 
 
 def test_pinned_diagonal_checks_the_original_question_options():

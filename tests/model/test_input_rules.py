@@ -6,6 +6,7 @@ numbers. Each refusal names the field and the value. What only the whole network
 check (names that must exist, sums) stays at preparation.
 """
 
+from enum import Enum, IntEnum, StrEnum
 from fractions import Fraction
 
 import netgraph_core as ngc
@@ -13,6 +14,7 @@ import numpy as np
 import pytest
 
 from ngraph import (
+    CapacityQuery,
     Component,
     ComponentsLibrary,
     Condition,
@@ -35,9 +37,151 @@ from ngraph import (
     Selector,
     UnitsSettings,
 )
+from ngraph.analysis.paths import PathQuery
+from ngraph.analysis.placement import PlacementQuery
+from ngraph.model.demand import WCMPController
+from ngraph.results import ResolvedDemandSet
+from ngraph.utils.values import _bounded, exact_fraction, frozen_json, json_copy
+from ngraph.workflow import MaxFlow, TrafficMatrixPlacement
 from ngraph.workflow.base import step_type
 
 EDGE = DirectedLink("A|B|0", "forward")
+
+
+def enum_text(kind, value):
+    if kind == "strenum":
+        return StrEnum("TextValue", {"VALUE": value}).VALUE
+    return Enum("TextValue", {"VALUE": value}, type=str).VALUE
+
+
+@pytest.mark.parametrize("kind", ["strenum", "mixin"])
+@pytest.mark.parametrize(
+    "build,field,literal",
+    [
+        (lambda v: Node(v), "name", "A"),
+        (lambda v: Condition("role", "==", v), "value", "spine"),
+        (lambda v: MaxFlow(mode=v), "mode", "combine"),
+        (
+            lambda v: CapacityQuery(Selector("A"), Selector("B"), mode=v),
+            "mode",
+            "pairwise",
+        ),
+        (lambda v: PathQuery(Selector("A"), Selector("B"), mode=v), "mode", "combine"),
+        (
+            lambda v: PlacementQuery(ResolvedDemandSet("d", (), (), ()), interaction=v),
+            "interaction",
+            "ordered",
+        ),
+        (lambda v: FailureRequest(None, seed_source=v), "seed_source", "query"),
+        (
+            lambda v: DemandSpec(Selector("A"), Selector("B"), 1, mode=v),
+            "mode",
+            "combine",
+        ),
+        (
+            lambda v: DemandSpec(Selector("A"), Selector("B"), 1, group_mode=v),
+            "group_mode",
+            "flatten",
+        ),
+        (lambda v: WCMPController(scope=v), "scope", "next_hop"),
+        (lambda v: FailureRule(scope=v), "scope", "link"),
+        (lambda v: FailureRule(scope="link", logic=v), "logic", "and"),
+        (lambda v: FailureRule(scope="link", mode=v), "mode", "random"),
+        (lambda v: Condition("role", v, "spine"), "op", "=="),
+        (lambda v: MatchSpec(logic=v), "logic", "or"),
+        (
+            lambda v: TrafficMatrixPlacement(demand_set="d", interaction=v),
+            "interaction",
+            "simultaneous",
+        ),
+    ],
+)
+def test_text_enum_fields_store_their_plain_values(kind, build, field, literal):
+    member = enum_text(kind, literal)
+    stored = getattr(build(member), field)
+    assert type(stored) is str
+    assert stored == literal
+    assert member.value == literal
+
+
+@pytest.mark.parametrize("kind", ["strenum", "mixin"])
+def test_text_enum_attributes_keys_bounds_and_exact_shares(kind):
+    member = enum_text(kind, "spine")
+    key = enum_text(kind, "role")
+    attrs = Node("A", attrs={key: member}).attrs
+    assert attrs == {"role": "spine"}
+    assert type(next(iter(attrs))) is str
+    assert type(attrs["role"]) is str
+    assert _bounded(enum_text(kind, "A")) == "A"
+    assert exact_fraction(enum_text(kind, "3/2"), "share") == Fraction(3, 2)
+    assert _bounded(enum_text(kind, "x" * 220)) == "x" * 220
+    assert _bounded(enum_text(kind, "x" * 221)) == "x" * 217 + "..."
+
+
+@pytest.mark.parametrize("form", ["intenum", "int-mixin", "float-mixin"])
+def test_numeric_enums_store_plain_integer_and_json_values(form):
+    if form == "intenum":
+        member = IntEnum("Number", {"VALUE": 2}).VALUE
+    else:
+        member = Enum(
+            "Number", {"VALUE": 2}, type=int if form == "int-mixin" else float
+        ).VALUE
+    link = Link("A", "B", cost=member)
+    assert type(link.cost) is int and link.cost == 2 == member.value
+    scalar = frozen_json(member)
+    assert type(scalar) is (float if form == "float-mixin" else int)
+    assert scalar == 2 == member.value
+    assert Node("A", attrs={"value": member}).attrs["value"] == scalar
+
+
+def test_a_fractional_float_enum_is_json_but_not_an_integer():
+    member = Enum("Ratio", {"HALF": 2.5}, type=float).HALF
+    stored = frozen_json(member)
+    assert type(stored) is float and stored == 2.5
+    with pytest.raises(ValueError, match="expected an integer"):
+        Link("A", "B", cost=member)
+    assert Link("A", "B", cost=2.0).cost == 2
+
+
+@pytest.mark.parametrize("entry", ["node", "frozen-json", "json-copy"])
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize(
+    "duration",
+    [np.timedelta64(2, "D"), np.timedelta64("NaT", "D"), np.timedelta64("NaT", "ns")],
+)
+def test_numpy_duration_conversion_failures_keep_the_json_label(
+    entry, nested, duration
+):
+    def convert(value):
+        data = {"elapsed": [value]} if nested else value
+        if entry == "node":
+            return Node("A", attrs={"value": data}).attrs["value"]
+        return (frozen_json if entry == "frozen-json" else json_copy)(data, "payload")
+
+    label = "node A.attrs.value" if entry == "node" else "payload"
+    if nested:
+        label += ".elapsed[0]"
+    with pytest.raises(ValueError) as error:
+        convert(duration)
+    assert type(error.value) is ValueError
+    assert (
+        str(error.value) == f"{label}: expected finite JSON data, got numpy.timedelta64"
+    )
+    assert type(error.value.__cause__) is ValueError
+    assert (
+        str(error.value.__cause__)
+        == f"{label}: cannot normalize scalar numpy.timedelta64"
+    )
+    assert type(error.value.__cause__.__cause__) is TypeError
+    assert error.value.__dict__["_input_label"] == label
+    path = ("value",) if entry == "node" else ()
+    if nested and entry != "json-copy":
+        path += ("elapsed", 0)
+    assert error.value.__dict__["_input_path"] == path
+    for valid in (np.int64(2), np.timedelta64(2, "ns")):
+        stored = convert(valid)
+        scalar = stored["elapsed"][0] if nested else stored
+        assert type(scalar) is int and scalar == 2
 
 
 # --- one rule per kind ------------------------------------------------------------
@@ -351,18 +495,6 @@ def test_valid_controls_build():
     assert type(named.policy_name) is str
     assert UnitsSettings(np.str_("auto")).resolution == "auto"
     assert type(UnitsSettings(np.str_("auto")).resolution) is str
-
-
-def test_an_int_subclass_is_read_as_its_stored_value_not_its_conversions():
-    class Shifted(int):
-        def __int__(self):
-            return 99
-
-        def __index__(self):
-            return 99
-
-    cost = Link("A", "B", cost=Shifted(3)).cost
-    assert cost == 3 and type(cost) is int
 
 
 def test_exported_costs_are_the_links_integers():

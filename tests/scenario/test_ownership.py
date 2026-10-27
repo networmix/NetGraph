@@ -9,7 +9,7 @@ import copy
 import dataclasses
 import pickle
 from dataclasses import FrozenInstanceError, dataclass, field, replace
-from enum import Enum, IntEnum
+from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
 from types import MappingProxyType
 
@@ -17,7 +17,6 @@ import numpy as np
 import pytest
 
 from ngraph import (
-    CapacityQuery,
     Condition,
     DemandSet,
     DemandSpec,
@@ -25,7 +24,6 @@ from ngraph import (
     EdgeWeight,
     FailureMode,
     FailurePolicy,
-    FailureRequest,
     FailureRule,
     FlowPolicyPreset,
     Link,
@@ -42,11 +40,11 @@ from ngraph import (
     UnitsSettings,
     WeightSpec,
     WorkflowStep,
-    capacity,
     prepare,
     run,
 )
 from ngraph.model.components import Component, ComponentsLibrary
+from ngraph.model.risk import MembershipIndex
 from ngraph.utils.values import _FrozenDict, _FrozenList
 from ngraph.workflow.build_graph import BuildGraph
 from ngraph.workflow.cost_power import CostPower
@@ -58,21 +56,88 @@ from ngraph.workflow.traffic_matrix_placement_step import TrafficMatrixPlacement
 READ_ONLY = "read-only: records are immutable"
 
 
-class MutableFloat(float):
-    """A float subclass whose own state can change after construction."""
+@pytest.mark.parametrize("difference", ["attrs", "child", "registered-child"])
+def test_inline_risk_declarations_keep_conflict_checks(difference):
+    def network(equal):
+        if difference == "attrs":
+            left = RiskGroup("X", attrs={"value": 1})
+            right = RiskGroup("X", attrs={"value": 1 if equal else 2})
+        else:
+            left = RiskGroup("X", children=(RiskGroup("A"),))
+            right = RiskGroup("X", children=(RiskGroup("A" if equal else "B"),))
+        groups = {
+            "P": RiskGroup("P", children=(left,)),
+            "Q": RiskGroup("Q", children=(right,)),
+        }
+        if difference == "registered-child":
+            groups.update(A=RiskGroup("A"), B=RiskGroup("B"))
+        return Network(risk_groups=groups)
 
-    def __new__(cls, value):
-        result = super().__new__(cls, value)
-        result.current = value
-        return result
+    with pytest.raises(ValueError) as error:
+        MembershipIndex.build(network(False))
+    assert (
+        str(error.value)
+        == "risk group X: conflicting inline declarations at P -> X and Q -> X"
+    )
+    assert "X" in MembershipIndex.build(network(True)).transitive
 
-    def __float__(self):
-        return float(self.current)
+
+def test_named_risk_cycles_keep_the_named_path():
+    groups = {
+        "P": RiskGroup("P", children=(RiskGroup("Q"),)),
+        "Q": RiskGroup("Q", children=(RiskGroup("P"),)),
+    }
+    with pytest.raises(ValueError) as error:
+        MembershipIndex.build(Network(risk_groups=groups))
+    assert str(error.value) == "risk group cycle: P -> Q -> P"
+    groups["Q"] = RiskGroup("Q")
+    assert set(MembershipIndex.build(Network(risk_groups=groups)).transitive) == {
+        "P",
+        "Q",
+    }
 
 
-class Text(str):
-    def __str__(self):
-        raise ValueError("do not convert text")
+@pytest.mark.parametrize("kind", ["strenum", "mixin"])
+def test_text_enums_are_plain_values_in_a_running_scenario(kind):
+    members = {"A": "A", "ROLE": "spine", "MODE": "combine", "DEMAND": "d"}
+    text = (
+        StrEnum("Text", members)
+        if kind == "strenum"
+        else Enum("Text", members, type=str)
+    )
+    network = Network(
+        nodes={"A": Node(text.A, attrs={"role": text.ROLE}), "C": Node("C")}
+    )
+    network.add_link(Link("A", "C", capacity=4, cost=3))
+    step = MaxFlow(
+        name="flow",
+        source=Selector("^A$"),
+        target=Selector("^C$"),
+        mode=text.MODE,
+        workers=1,
+    )
+    scenario = Scenario(
+        network,
+        (step,),
+        units=UnitsSettings(1),
+        demand_sets={text.DEMAND: DemandSet("d", ())},
+    )
+    assert tuple(scenario.demand_sets) == ("d",)
+    assert type(next(iter(scenario.demand_sets))) is str
+    prepared = prepare(scenario, demand_sets=(text.DEMAND,))
+    assert prepared.units_report.scope.library_demand_sets == ("d",)
+    assert type(prepared.units_report.scope.library_demand_sets[0]) is str
+    node = prepared.scenario.network.nodes["A"]
+    assert node.name == "A" and type(node.name) is str
+    assert node.attrs["role"] == "spine" and type(node.attrs["role"]) is str
+    assert step.mode == "combine" and type(step.mode) is str
+    result = run(prepared).steps[0].result
+    assert len(result.cases) == 1
+    rows = result.cases[0].states["converged"].rows
+    assert len(rows) == 1
+    assert rows[0].endpoints.sources == ("A",)
+    assert rows[0].endpoints.destinations == ("C",)
+    assert rows[0].result.delivered == 4
 
 
 def selection(role):
@@ -252,92 +317,6 @@ def test_nothing_mutable_is_reachable_from_a_prepared_scenario(scenario):
     )
 
 
-class Name(str):
-    """A name whose own state can change after construction."""
-
-    def __new__(cls, value):
-        result = super().__new__(cls, value)
-        result.current = value
-        result.descending = False
-        return result
-
-    def __hash__(self):
-        return hash(self.current)
-
-    def __eq__(self, other):
-        return self.current == str.__str__(other)
-
-    def __lt__(self, other):
-        if self.descending:
-            return str.__gt__(self, other)
-        return str.__lt__(self, other)
-
-
-def named_network(names):
-    network = Network(
-        nodes={
-            names[n]: Node(names[n], risk_groups={names["r"]}, attrs={names["k"]: 1})
-            for n in ("s1", "s2", "t")
-        }
-    )
-    network.add_link(Link(names["s1"], names["t"], 2, 1))
-    network.add_link(Link(names["s2"], names["t"], 7, 1))
-    network.risk_groups[names["r"]] = RiskGroup(names["r"])
-    network.attrs[names["k"]] = names["k"]
-    return network
-
-
-def test_caller_string_subclasses_become_plain_in_a_prepared_scenario():
-    names = {n: Name(n) for n in ("s1", "s2", "t", "r", "k", "hw", "c", "stats")}
-    library = ComponentsLibrary(
-        {names["hw"]: Component("hw", children={names["c"]: Component("c")})}
-    )
-    stats = NetworkStats(
-        name=names["stats"], excluded_nodes=(names["s1"],), excluded_links=("s2|t|0",)
-    )
-    scenario = Scenario(
-        named_network(names),
-        (stats,),
-        components_library=library,
-        units=UnitsSettings(1),
-    )
-    prepared = prepare(scenario)
-    assert list(walk(prepared)) == []
-    assert list(walk(run(prepared))) == []
-    # Control: the caller's own scenario keeps its subclass keys.
-    assert "scenario.network.nodes key 's1': Name" in walk(scenario, "scenario")
-
-
-def test_caller_key_and_exclusion_edits_never_reach_prepared_answers():
-    keys = {n: Name(n) for n in ("s1", "s2", "t", "r", "k")}
-    excluded = Name("s1")
-    stats = NetworkStats(name="stats", excluded_nodes=(excluded,))
-    prepared = prepare(Scenario(named_network(keys), (stats,), units=UnitsSettings(1)))
-    policy = FailurePolicy(
-        modes=(
-            FailureMode(1, (FailureRule("node", path="^s", mode="choice", count=1),)),
-        )
-    )
-    query = CapacityQuery(
-        Selector("^s"),
-        Selector("^t$"),
-        failures=FailureRequest(policy, 1, seed=1),
-        workers=1,
-    )
-
-    def answers():
-        case = capacity(prepared, query).cases[1]
-        delivered = case.states["converged"].rows[0].result.delivered
-        stats = run(prepared).steps[0].result.total_capacity
-        return case.case.pattern.excluded_nodes, delivered, stats
-
-    assert answers() == (("s1",), 7, 7)
-    for key in keys.values():
-        key.descending = True
-    excluded.current = "s2"
-    assert answers() == (("s1",), 7, 7)
-
-
 @pytest.mark.parametrize("editable", ["nodes", "links", "risk_groups", "attrs"])
 def test_each_network_collection_is_owned_on_its_own(editable):
     """A network mixing a prepared view's dicts with an editable one owns each."""
@@ -401,7 +380,6 @@ def test_json_values_are_checked_and_frozen_at_construction(build, label):
         (np.array(1.5), "numpy.ndarray"),
         (np.float64("nan"), "numpy.float64"),
         ({1, 2}, "set"),
-        (MutableFloat(float("nan")), f"{__name__}.MutableFloat"),
     ):
         with pytest.raises(ValueError) as error:
             build(bad)
@@ -409,14 +387,13 @@ def test_json_values_are_checked_and_frozen_at_construction(build, label):
             str(error.value)
             == f"{label}: expected finite JSON data, got {kind} = {bad!r}"
         )
-    caller = [Rank.ONE, np.float64(2), MutableFloat(3), {Text("key"): [4]}]
+    caller = [Rank.ONE, np.float64(2), np.float64(3), {np.str_("key"): [4]}]
     record = build(caller)
     stored = record.value["x"] if isinstance(record, Condition) else record.attrs["x"]
     assert stored == [1, 2.0, 3.0, {"key": [4]}]
     assert [type(v) for v in stored[:3]] == [int, float, float]
     assert type(next(iter(stored[3]))) is str
     caller.append(5)
-    caller[2].current = 9
     assert stored == [1, 2.0, 3.0, {"key": [4]}]
     assert type(stored) is _FrozenList and type(stored[3]) is _FrozenDict
     for edit in (
@@ -478,14 +455,6 @@ def test_a_numpy_scalar_of_another_kind_is_refused(build, message):
 
 
 def test_scalar_subclasses_are_stored_as_their_plain_values():
-    score = MutableFloat(5)
-    component = Component("hw", capex=score)
-    condition = Condition(Text("role"), "==", MutableFloat(1.5))
-    node = Node(Text("a"), risk_groups={Text("g")})
-    score.current = 99
-    assert type(component.capex) is float and component.total_capex() == 5
-    assert type(condition.attr) is str and type(condition.value) is float
-    assert type(node.name) is str and {type(g) for g in node.risk_groups} == {str}
     assert Component("hw", capex=np.float64(2)).capex == 2.0
 
 

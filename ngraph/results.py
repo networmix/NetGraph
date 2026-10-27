@@ -10,7 +10,6 @@ from collections.abc import Mapping
 from dataclasses import MISSING, FrozenInstanceError, dataclass, field, fields, replace
 from fractions import Fraction
 from functools import cache
-from reprlib import recursive_repr
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
@@ -110,7 +109,6 @@ class _ResultRecord:
     def __hash__(self):
         return hash(tuple(getattr(self, name) for name in _record_fields(type(self))))
 
-    @recursive_repr()
     def __repr__(self):
         members = ", ".join(
             f"{name}={getattr(self, name)!r}" for name in _record_fields(type(self))

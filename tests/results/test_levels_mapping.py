@@ -18,33 +18,6 @@ from ngraph import (
 )
 from ngraph.workflow import CostPower
 
-
-class EqualInteger:
-    def __hash__(self):
-        return 1
-
-    def __eq__(self, other):
-        return other == 1
-
-
-class EqualWithBrokenIndex(EqualInteger):
-    def __index__(self):
-        raise ValueError("a dict never asks for this conversion")
-
-
-class UnequalSameHash:
-    def __hash__(self):
-        return 1
-
-    def __eq__(self, other):
-        return False
-
-
-class IndexOnly:
-    def __index__(self):
-        return 1
-
-
 KEYS = [
     1,
     1.0,
@@ -63,10 +36,6 @@ KEYS = [
     float("inf"),
     Fraction(3, 2),
     1 + 1j,
-    EqualInteger(),
-    EqualWithBrokenIndex(),
-    UnequalSameHash(),
-    IndexOnly(),
     [],
     {},
 ]
@@ -154,10 +123,7 @@ def test_equivalent_numeric_keys_and_large_requested_levels_keep_storage_bounded
         assert len(levels.rows) == 3
         assert levels[requested] is levels[requested - 1]
         assert levels[1.0] is levels[Fraction(1)] is levels[1 + 0j] is levels[True]
-        assert levels[EqualInteger()] is levels[1]
         assert (1 << 80) not in levels
-        with pytest.raises(KeyError):
-            levels[IndexOnly()]
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, previous)

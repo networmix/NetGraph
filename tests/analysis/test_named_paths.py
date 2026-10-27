@@ -105,10 +105,6 @@ def test_native_option_integer_types_and_index_controls_keep_native_error_classe
     source = topology.node_id_by_name["s1"]
     destination = topology.node_id_by_name["t"]
 
-    class Index:
-        def __index__(self):
-            return 1
-
     for value in (True, np.bool_(True), 1.0, "1"):
         options = ngc.SpfOptions(ngc.Direction.FORWARD, min_residual=value)
         with pytest.raises(TypeError):
@@ -124,7 +120,7 @@ def test_native_option_integer_types_and_index_controls_keep_native_error_classe
             paths(
                 context, PathQuery(Selector("^s1$"), Selector("^t$"), options=options)
             )
-    for value in (Index(), np.int64(1)):
+    for value in (np.int64(1),):
         result = paths(
             context,
             PathQuery(

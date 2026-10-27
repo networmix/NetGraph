@@ -68,9 +68,10 @@ def test_shared_record_values_copies_hashes_and_refusals():
         results.ExactAlpha(0.5, 1, 2, unknown=True)
     with pytest.raises(TypeError):
         hash(results.StepOutput({"x": 1}, None))
-    recursive = results.StepOutput({}, None)
-    object.__setattr__(recursive, "result", recursive)
-    assert repr(recursive).endswith("result=...)")
+    assert (
+        repr(results.StepOutput({"x": 1}, None))
+        == "StepOutput(question={'x': 1}, result=None)"
+    )
 
 
 def test_record_post_init_and_generic_constructors_still_run():

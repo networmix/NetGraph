@@ -213,24 +213,6 @@ def test_an_invalid_regex_is_refused_where_it_is_declared(tmp_path, flags):
     _inspect(tmp_path, text.replace('source: "["', 'source: "^A"'), *flags)
 
 
-def test_a_selection_failure_other_than_a_regex_is_reported(tmp_path):
-    """A group key too long to write as text (16,001 bits) is an ERROR preview; exit 0."""
-    try:
-        str(1 << 16000)
-    except ValueError as exc:
-        reason = f"ValueError: {exc}"
-    text = (
-        f"network:\n  nodes:\n    A: {{attrs: {{role: 0x1{'0' * 4000}}}}}\n    B: {{}}\n"
-        'demands:\n  d: [{source: {group_by: role}, target: "^B", volume: 1}]\n'
-    )
-    lines = _inspect(tmp_path, text)
-    assert f"source * [group_by: role]: ERROR {reason}" in lines
-    detail = _inspect(tmp_path, text, "--detail")
-    assert _table_row(detail, "* [group_by: role]", 7) == [
-        ["* [group_by: role]", "^B", "1", "1", f"ERROR {reason}", "1g/1n (1e)", "-"]
-    ]
-
-
 def test_a_wide_json_integer_is_compared_exactly_in_the_preview(tmp_path):
     """A positive wide integer selects its node without a float conversion."""
     text = (

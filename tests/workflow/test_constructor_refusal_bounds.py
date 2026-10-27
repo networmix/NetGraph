@@ -129,35 +129,6 @@ def test_count_query_output_value_is_bounded_during_construction():
     )
 
 
-def test_msd_shared_query_values_are_bounded():
-    from ngraph import ResolvedDemandSet
-    from ngraph.analysis.msd import MSDQuery
-    from ngraph.workflow import MaximumSupportedDemand
-
-    class Loud(float):
-        def __repr__(self):
-            return "x" * 100000
-
-    for factory, prefix in [
-        (
-            lambda value: MaximumSupportedDemand(
-                demand_set="load", growth_factor=value
-            ),
-            "MaximumSupportedDemand.growth_factor: must exceed 1, got ",
-        ),
-        (
-            lambda value: MSDQuery(
-                ResolvedDemandSet("load", (), (), ()), growth_factor=value
-            ),
-            "msd.growth_factor: must exceed 1, got ",
-        ),
-    ]:
-        with pytest.raises(ValueError) as error:
-            factory(Loud(0.5))
-        assert str(error.value) == prefix + "x" * 57 + "..."
-        factory(2)
-
-
 def test_shared_selector_refusals_render_values():
     from ngraph.model.selectors import Condition, MatchSpec
 
@@ -253,18 +224,13 @@ def test_msd_range_tuple_uses_the_shared_value_bound():
     MaximumSupportedDemand(demand_set="load")
 
 
-def test_shared_required_condition_value_uses_the_renderer():
+def test_required_conditions_refuse_an_empty_list():
     from ngraph.model.selectors import parse_match_spec
 
-    class Empty(list):
-        def __repr__(self):
-            return "x" * 100000
-
     with pytest.raises(ValueError) as error:
-        parse_match_spec({"conditions": Empty()}, require_conditions=True)
+        parse_match_spec({"conditions": []}, require_conditions=True)
     assert (
-        str(error.value)
-        == "match.conditions: expected at least one condition, got " + "x" * 57 + "..."
+        str(error.value) == "match.conditions: expected at least one condition, got []"
     )
     parse_match_spec(
         {"conditions": [{"attr": "x", "op": "exists"}]}, require_conditions=True

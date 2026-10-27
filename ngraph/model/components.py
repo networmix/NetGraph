@@ -7,7 +7,6 @@ import numbers
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
 from ngraph.utils.values import (
@@ -445,11 +444,11 @@ def _positive_count(value: Any) -> float:
     except OverflowError:
         count = float("inf")
     if not (count > 0 and math.isfinite(count)):
-        # Decimal writes any int (bool aside) past Python's int-to-str digit limit.
-        if isinstance(value, int) and not isinstance(value, bool):
-            text = str(Decimal(value))
-        else:
-            text = repr(value)
+        text = repr(
+            int(value)
+            if isinstance(value, int) and not isinstance(value, bool)
+            else value
+        )
         raise ValueError(
             f"Hardware 'count' must be a finite positive number, got {text}"
         )

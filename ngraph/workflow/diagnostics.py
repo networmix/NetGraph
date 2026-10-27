@@ -1,7 +1,5 @@
 """Declaration locations for workflow refusals at load and preparation."""
 
-from typing import cast
-
 from ngraph.utils.values import _bounded, _shown
 
 _MISSING = object()
@@ -9,8 +7,8 @@ _MISSING = object()
 
 def workflow_location(index, name=None):
     location = f"workflow[{index}]"
-    if issubclass(type(name), str):
-        plain = str.__str__(cast(str, name))
+    if isinstance(name, str):
+        plain = str.__str__(name)
         if plain:
             location += f" (name {_shown(plain)})"
     return location

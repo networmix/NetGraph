@@ -1,8 +1,6 @@
 """Parsing and overrides retain the declaration that supplied each refused value."""
 
 import signal
-import sys
-from numbers import Integral
 
 import numpy as np
 import pytest
@@ -25,49 +23,6 @@ def bounded_case():
 
 
 LOADERS = [load_scenario_yaml, Scenario.from_yaml, ComponentsLibrary.from_yaml]
-
-
-@pytest.mark.parametrize(
-    "loader,wrapped,nested",
-    [
-        (loader, wrapped, nested)
-        for loader in LOADERS
-        for wrapped, nested in [(True, False), (True, True), (False, True)]
-        if wrapped or getattr(loader, "__self__", None) is ComponentsLibrary
-    ],
-)
-@pytest.mark.parametrize("sign,separators", [("", False), ("+", True), ("-", False)])
-def test_decimal_conversion_refusal_preserves_field_position_and_lexical_size(
-    loader, wrapped, nested, sign, separators
-):
-    original_limit = sys.get_int_max_str_digits()
-    digits = max(4300, original_limit) + 1
-    value = "1" + "0" * (digits - 1)
-    if separators:
-        value = "_".join(value)
-    value = sign + value
-    if nested:
-        prefix, suffix = "p:\n  children:\n    c:\n      count: ", "\n"
-        path = "components.p.children.c.count"
-    else:
-        prefix, suffix = "c:\n  count: ", "\n"
-        path = "components.c.count"
-    if wrapped:
-        prefix = "components:\n" + "\n".join("  " + line for line in prefix.split("\n"))
-    good = prefix + "1" + suffix
-    bad = prefix + value + suffix
-    loader(good)
-    with pytest.raises(ValueError) as error:
-        loader(bad)
-    assert type(error.value) is ValueError
-    line = prefix.count("\n") + 1
-    column = len(prefix.rsplit("\n", 1)[-1]) + 1
-    assert (
-        str(error.value)
-        == f"{path}: invalid YAML scalar at line {line}, column {column}: an integer of {digits} digits"
-    )
-    assert type(error.value.__cause__) is ValueError
-    assert sys.get_int_max_str_digits() == original_limit
 
 
 @pytest.mark.parametrize("loader", LOADERS)
@@ -188,87 +143,9 @@ def test_subtree_then_field_assignment_preserves_both_actual_sources(position):
     assert "'{n[0]}'" in str(error.value)
 
 
-@pytest.mark.parametrize("shape", ["root", "entry", "children", "nested", "name"])
-@pytest.mark.parametrize(
-    "loader", [ComponentsLibrary.from_dict, ComponentsLibrary.from_yaml]
-)
-def test_before_constructor_component_refusals_use_the_safe_renderer(shape, loader):
-    number = 10**5000
-    bad, good, path = {
-        "root": (number, {}, "components"),
-        "entry": ({"c": number}, {"c": {}}, "components.c"),
-        "children": (
-            {"c": {"children": number}},
-            {"c": {"children": {}}},
-            "components.c.children",
-        ),
-        "nested": (
-            {"p": {"children": {"c": number}}},
-            {"p": {"children": {"c": {}}}},
-            "components.p.children.c",
-        ),
-        "name": ({"c": {"name": number}}, {"c": {"name": "c"}}, "components.c.name"),
-    }[shape]
-    if loader.__name__ == "from_yaml":
-        # Build hexadecimal scalars without changing Python's decimal limit.
-        good_text = yaml.safe_dump(good)
-
-        def hexadecimal(value):
-            if isinstance(value, int):
-                return hex(value)
-            return (
-                "{"
-                + ", ".join(
-                    f"{key}: {hexadecimal(item)}"
-                    if isinstance(item, (dict, int))
-                    else f"{key}: {item}"
-                    for key, item in value.items()
-                )
-                + "}"
-            )
-
-        bad, good = hexadecimal(bad), good_text
-    loader(good)
-    with pytest.raises(ValueError) as error:
-        loader(bad)
-    assert type(error.value) is ValueError
-    assert str(error.value).startswith(path)
-    assert "5001 digits" in str(error.value)
-
-
-class RegisteredEqualKey:
-    calls = 0
-
-    def __hash__(self):
-        return 1
-
-    def __eq__(self, other):
-        return other == 1
-
-    def __index__(self):
-        type(self).calls += 1
-        raise RuntimeError("dictionary lookup never converts a key")
-
-
-Integral.register(RegisteredEqualKey)
-
-
-class IntWithoutConversions(int):
-    def __int__(self):
-        raise RuntimeError("dictionary lookup never converts a key")
-
-    def __index__(self):
-        raise RuntimeError("dictionary lookup never converts a key")
-
-
-@pytest.mark.parametrize(
-    "key", [RegisteredEqualKey(), IntWithoutConversions(1), np.int64(1), np.uint64(1)]
-)
+@pytest.mark.parametrize("key", [np.int64(1), np.uint64(1)])
 @pytest.mark.parametrize("requested", [3, 1 << 62])
-def test_registered_integrals_and_integer_subclasses_are_only_hashed_and_compared(
-    key, requested
-):
-    RegisteredEqualKey.calls = 0
+def test_numpy_integer_keys_are_hashed_and_compared(key, requested):
     levels = (
         run(
             prepare(
@@ -294,22 +171,17 @@ def test_registered_integrals_and_integer_subclasses_are_only_hashed_and_compare
     assert levels.get(key) == expected.get(key)
     assert (key in levels) == (key in expected)
     assert len(levels.rows) == 3
-    assert RegisteredEqualKey.calls == 0
 
 
 @pytest.mark.parametrize("command", ["run", "inspect"])
-@pytest.mark.parametrize("kind", ["dotted", "params", "decimal"])
+@pytest.mark.parametrize("kind", ["dotted", "params"])
 def test_cli_reports_the_scalar_or_override_that_supplied_the_value(
     tmp_path, capsys, command, kind
 ):
     from ngraph.cli import main
 
-    if kind == "decimal":
-        text = "components: {c: {count: " + "1" + "0" * 4300 + "}}"
-        path, raw = "components.c.count", "4301 digits"
-    else:
-        doc, path = override_document("{n[0]}", kind)
-        text, raw = yaml.safe_dump(doc), "'{n[0]}'"
+    doc, path = override_document("{n[0]}", kind)
+    text, raw = yaml.safe_dump(doc), "'{n[0]}'"
     filename = tmp_path / "case.yml"
     filename.write_text(text)
     with pytest.raises(SystemExit) as error:
@@ -317,22 +189,6 @@ def test_cli_reports_the_scalar_or_override_that_supplied_the_value(
     assert error.value.code == 1
     message = capsys.readouterr().err
     assert path in message and raw in message
-
-
-@pytest.mark.parametrize("loader", [load_scenario_yaml, Scenario.from_yaml])
-def test_scalar_conversion_path_in_a_sequence(loader):
-    prefix = (
-        "workflow:\n  - type: MaxFlow\n    source: A\n    target: B\n    iterations: "
-    )
-    value = "1" + "0" * 4300
-    loader(prefix + "1")
-    with pytest.raises(ValueError) as error:
-        loader(prefix + value)
-    assert (
-        str(error.value)
-        == "workflow[0].iterations = an integer of 4301 digits: invalid YAML scalar at line 5, column 17"
-    )
-    assert type(error.value.__cause__) is ValueError
 
 
 @pytest.mark.parametrize("loader", LOADERS)
