@@ -50,7 +50,7 @@ For development, or to install from the repository:
 ```bash
 # Clone both repositories
 git clone https://github.com/networmix/NetGraph-Core
-git clone https://github.com/networmix/NetGraph
+git clone --recurse-submodules https://github.com/networmix/NetGraph
 
 # Install NetGraph-Core first
 cd NetGraph-Core

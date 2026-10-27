@@ -83,6 +83,8 @@ dev:
 		fi; \
 		$(VENV_BIN)/python -m pip install -U pip setuptools; \
 	fi
+	@echo "🔗 Checking out the skills submodule..."
+	@if [ -e .git ]; then git submodule update --init; fi
 	@echo "📦 Installing dev dependencies..."
 	@$(VENV_BIN)/python -m pip install -e .'[dev]'
 	@echo "🔗 Installing pre-commit hooks..."
