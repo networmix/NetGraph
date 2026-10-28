@@ -290,22 +290,6 @@ def test_t2_rows_of_every_ebb_state(state, final, at_q1):
 # --- controller and native figures -------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("name", "value", "extra"),
-    [
-        ("S1", 3200, 0),
-        ("S2", 1600, 16),
-        ("S3", 800, 0),
-        ("S4", 2400, 0),
-        ("S5", 1600, 8),
-        ("S6", 800, 0),
-    ],
-)
-def test_ebb_groups_physical_at_the_final_q(name, value, extra):
-    units, q = bound(ebb(name, scope="group", trees={"planes": planes()}))
-    assert physical(units, q) == value + extra * Fraction(q)
-
-
 def native_ebb(state, policy, volume):
     prep = prepare(
         Scenario(

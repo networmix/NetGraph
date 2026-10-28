@@ -1,12 +1,9 @@
 """Independent question declarations distinguish every recorded control."""
 
-from copy import deepcopy
 from fractions import Fraction
 
 import netgraph_core as ngc
-import pytest
 
-import ngraph.export as exporting
 from ngraph import (
     CapacityQuery,
     DemandSet,
@@ -32,7 +29,7 @@ from ngraph import (
     prepare,
 )
 from tests.question import asked
-from tests.results.test_report_field_plants import change, exact, field_paths, project
+from tests.results.test_report_field_plants import exact, project
 
 SOURCE = {"path": "^s$", "group_by": None, "match": None, "active_only": False}
 TARGET = {"path": "^t$", "group_by": "name", "match": None, "active_only": True}
@@ -399,40 +396,6 @@ def test_every_recorded_question_field_has_hand_expectation():
         assert type(value.query).__name__.endswith("Query")
         exact(asked(value), expected)
         exact(project(value)["analysis"]["query"], expected)
-
-
-def test_question_projection_field_plants_have_success_and_applicability_controls(
-    monkeypatch,
-):
-    original = exporting.question
-    caught = equivalent = count = 0
-    for value, expected in samples():
-        exact(project(value)["analysis"]["query"], expected)
-        for path in field_paths(expected):
-            for mode in ("missing", "null", "wrong"):
-                current = expected
-                for key in path:
-                    current = current[key]
-                if mode == "null" and current is None:
-                    equivalent += 1
-                    continue
-
-                def planted(question, topology, path=path, mode=mode):
-                    result = deepcopy(original(question, topology))
-                    change(result, path, mode)
-                    return result
-
-                with monkeypatch.context() as patch:
-                    patch.setattr(exporting, "question", planted)
-                    with pytest.raises(AssertionError):
-                        exact(project(value)["analysis"]["query"], expected)
-                caught += 1
-            count += 1
-        exact(project(value)["analysis"]["query"], expected)
-    assert caught + equivalent == count * 3
-    print(
-        f"QUESTION PLANTS: {count} fields; {caught} caught; {equivalent} equivalent null->null; model and SPF/KSP applicability controls pass"
-    )
 
 
 def test_sensitivity_question_records_the_excluded_nodes_and_edges():

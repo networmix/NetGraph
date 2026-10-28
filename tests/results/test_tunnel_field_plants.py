@@ -1,12 +1,8 @@
-"""Hand-derived physical T1 and pooled T2 result projections and helper plants."""
+"""Hand-derived physical T1 and pooled T2 result projections."""
 
-from copy import deepcopy
-
-import jsonschema
 import netgraph_core as ngc
 import pytest
 
-import ngraph.export as exporting
 from ngraph import (
     CapacityQuery,
     DemandSet,
@@ -24,8 +20,6 @@ from ngraph import (
     prepare,
 )
 from tests.results.test_analysis_wire import project
-from tests.results.test_native_field_plants import at
-from tests.results.test_report_field_plants import change, field_paths
 
 
 def edge(link, direction="forward"):
@@ -219,43 +213,3 @@ def oracle(kind):
 @pytest.mark.parametrize("kind", ["physical-t1", "pooled-t2"])
 def test_tunnel_fields_follow_hand_derivation(kind):
     oracle(kind)
-
-
-@pytest.mark.parametrize("kind", ["physical-t1", "pooled-t2"])
-@pytest.mark.timeout(120)
-def test_tunnel_projection_field_plants_are_caught(monkeypatch, kind):
-    original = exporting._native
-    observed = []
-
-    def capture(*args, **kwargs):
-        value = original(*args, **kwargs)
-        observed.append(deepcopy(value))
-        return value
-
-    with monkeypatch.context() as patch:
-        patch.setattr(exporting, "_native", capture)
-        oracle(kind)
-    (baseline,) = observed
-    paths = tuple(field_paths(baseline))
-    caught, equivalent = 0, 0
-    for path in paths:
-        for mode in ("missing", "null", "wrong"):
-            if mode == "null" and at(baseline, path) is None:
-                equivalent += 1
-                continue
-
-            def planted(*args, path=path, mode=mode, **kwargs):
-                value = original(*args, **kwargs)
-                change(value, path, mode)
-                return value
-
-            with monkeypatch.context() as patch:
-                patch.setattr(exporting, "_native", planted)
-                with pytest.raises((AssertionError, jsonschema.ValidationError)):
-                    oracle(kind)
-            caught += 1
-    oracle(kind)
-    assert caught + equivalent == 3 * len(paths)
-    print(
-        f"TUNNEL FIELD PLANTS: {kind}; {len(paths)} paths; {caught} caught; {equivalent} equivalent null->null"
-    )

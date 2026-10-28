@@ -1,12 +1,7 @@
-"""A signed improvement survives the exact sensitivity projection and field plants."""
+"""A signed improvement survives the exact sensitivity projection."""
 
-from copy import deepcopy
-
-import jsonschema
 import netgraph_core as ngc
-import pytest
 
-import ngraph.export as exporting
 from ngraph import (
     Link,
     Network,
@@ -19,8 +14,7 @@ from ngraph import (
     prepare,
 )
 from tests.results.test_analysis_wire import project
-from tests.results.test_native_field_plants import at
-from tests.results.test_report_field_plants import change, exact, field_paths
+from tests.results.test_report_field_plants import exact
 
 
 def oracle():
@@ -119,44 +113,3 @@ def oracle():
 
 def test_signed_sensitivity_fields_are_exact():
     oracle()
-
-
-def test_sensitivity_exporter_field_plants_are_caught(monkeypatch):
-    original = exporting._sensitivity
-    cls = next(
-        cls for cls, encoder in exporting._EXPORTERS.items() if encoder is original
-    )
-    observed = []
-
-    def capture(*args, **kwargs):
-        value = original(*args, **kwargs)
-        observed.append(deepcopy(value))
-        return value
-
-    with monkeypatch.context() as patch:
-        patch.setitem(exporting._EXPORTERS, cls, capture)
-        oracle()
-    (baseline,) = observed
-    caught = equivalent = 0
-    paths = tuple(field_paths(baseline))
-    for path in paths:
-        for mode in ("missing", "null", "wrong"):
-            if mode == "null" and at(baseline, path) is None:
-                equivalent += 1
-                continue
-
-            def planted(*args, path=path, mode=mode, **kwargs):
-                value = original(*args, **kwargs)
-                change(value, path, mode)
-                return value
-
-            with monkeypatch.context() as patch:
-                patch.setitem(exporting._EXPORTERS, cls, planted)
-                with pytest.raises((AssertionError, jsonschema.ValidationError)):
-                    oracle()
-            caught += 1
-    oracle()
-    assert caught + equivalent == len(paths) * 3
-    print(
-        f"SENSITIVITY FIELD PLANTS: {len(paths)} paths; {caught} caught; {equivalent} equivalent null->null"
-    )

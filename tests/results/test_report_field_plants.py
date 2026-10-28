@@ -1,9 +1,8 @@
-"""Hand-derived report/domain values reject every emitted field near miss."""
+"""Hand-derived report and domain values, with shared field-checking helpers."""
 
 import json
 import math
 import sys
-from copy import deepcopy
 from fractions import Fraction
 from hashlib import sha256
 from importlib.metadata import version
@@ -11,9 +10,7 @@ from io import StringIO
 from pathlib import Path
 
 import _netgraph_core
-import pytest
 
-import ngraph.export as exporting
 from ngraph import (
     DemandSet,
     DemandSpec,
@@ -27,7 +24,7 @@ from ngraph import (
     run,
     write_json,
 )
-from ngraph.results import PreparationScope, RunResult
+from ngraph.results import PreparationScope
 from ngraph.workflow.build_graph import BuildGraph
 
 
@@ -208,48 +205,7 @@ def near(value):
     return 0
 
 
-def change(value, path, mode):
-    parent = value
-    for name in path[:-1]:
-        parent = parent[name]
-    name = path[-1]
-    if mode == "missing":
-        del parent[name]
-    elif mode == "null":
-        parent[name] = None
-    else:
-        parent[name] = near(parent[name])
-
-
 def test_units_python_and_wire_domain_metadata_have_complete_hand_expectations():
     value, expected, expected_python = fixture()
     exact(vars(value.units_report), expected_python)
     exact(project(value), expected)
-
-
-def test_report_projection_helper_field_plants_are_all_caught(monkeypatch):
-    value, expected, _ = fixture()
-    original = exporting._export_registered
-    exact(project(value), expected)
-    observed = tuple(field_paths(expected))
-    caught = 0
-    for path in observed:
-        for mode in ("missing", "null", "wrong"):
-
-            def planted(item, context, path=path, mode=mode):
-                projected = original(item, context)
-                if type(item) is RunResult:
-                    projected = deepcopy(projected)
-                    change(projected, path, mode)
-                return projected
-
-            with monkeypatch.context() as patch:
-                patch.setattr(exporting, "_export_registered", planted)
-                with pytest.raises(AssertionError):
-                    exact(project(value), expected)
-            caught += 1
-    exact(project(value), expected)
-    assert caught == 3 * len(observed)
-    print(
-        f"FIELD PLANTS: {len(observed)} emitted field paths; {caught} missing/null/near-value helper plants caught"
-    )

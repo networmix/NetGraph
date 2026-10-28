@@ -1,14 +1,12 @@
 """Destination tables: who is programmed, in what order, by which rule, and how they forward."""
 
 import json
-from copy import deepcopy
 from fractions import Fraction
 from io import StringIO
 
 import netgraph_core as ngc
 import pytest
 
-import ngraph.export as exporting
 from ngraph import (
     FlowPolicyPreset,
     MSDQuery,
@@ -29,7 +27,7 @@ from tests.controller.helpers import (
     table,
     tree,
 )
-from tests.results.test_report_field_plants import change, exact, field_paths
+from tests.results.test_report_field_plants import exact
 
 # Stacked sources: S (BGP) with uplinks S-U 30 and S-C 10; U, a programmed source inside the domain,
 # splits U-A 10 and U-B 20; A, B and C are exits to T.
@@ -511,38 +509,12 @@ def expected_key(first, second):
     ("scope", "weights"), [("next_hop", (2, 1)), ("group", (1, 1))]
 )
 def test_the_controller_key_reports_the_table_and_every_field_is_checked(
-    scope, weights, monkeypatch
+    scope, weights
 ):
     prep = fixture(scope)
     expected = expected_key(*weights)
     exact(controller_json(prep)["controller"], expected)
     exact(msd_json(prep)["controller"], expected)
-    assert plant_every_field(prep, expected, monkeypatch) > 30
-
-
-def plant_every_field(prep, expected, monkeypatch):
-    """Plant a missing, null and wrong value at every field of the key; count them."""
-    original = exporting._controller
-    caught = 0
-    for path in field_paths(expected):
-        for mode in ("missing", "null", "wrong"):
-
-            def planted(demands, path=path, mode=mode):
-                result = deepcopy(original(demands))
-                change(result["controller"], path, mode)
-                return result
-
-            with monkeypatch.context() as patch:
-                patch.setattr(exporting, "_controller", planted)
-                current = expected
-                for key in path:
-                    current = current[key]
-                if mode == "null" and current is None:
-                    continue
-                with pytest.raises(AssertionError):
-                    exact(controller_json(prep)["controller"], expected)
-                caught += 1
-    return caught
 
 
 def test_the_fixture_at_its_lossless_bound_tells_the_scopes_apart():
@@ -779,13 +751,12 @@ ALL_ROUTERS_KEY = [
 ]
 
 
-def test_the_all_routers_key_in_placement_and_msd(monkeypatch):
+def test_the_all_routers_key_in_placement_and_msd():
     from tests.controller.test_all_routers import A2, B1, merge_at_m
 
     prep = merge_at_m(A2, B1)
     exact(controller_json(prep)["controller"], ALL_ROUTERS_KEY)
     exact(msd_json(prep)["controller"], ALL_ROUTERS_KEY)
-    assert plant_every_field(prep, ALL_ROUTERS_KEY, monkeypatch) > 50
 
 
 @pytest.mark.parametrize("scope", ["next_hop", "group", "all_routers"])

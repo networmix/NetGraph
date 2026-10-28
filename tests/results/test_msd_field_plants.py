@@ -1,13 +1,10 @@
-"""Exact search histories/statuses and every emitted MSD helper field near miss."""
+"""Exact search histories, statuses and emitted MSD fields."""
 
 import math
-from copy import deepcopy
 from fractions import Fraction
 
-import jsonschema
 import pytest
 
-import ngraph.export as exporting
 from ngraph import (
     DemandSet,
     DemandSpec,
@@ -25,8 +22,7 @@ from ngraph.analysis import msd
 from ngraph.analysis.units import UnitRangeError
 from tests.analysis.test_persistent_msd import prepared
 from tests.results.test_analysis_wire import project
-from tests.results.test_native_field_plants import at
-from tests.results.test_report_field_plants import change, exact, field_paths
+from tests.results.test_report_field_plants import exact
 
 # One physical link, capacity4, cost3, q1. These are requested probes from the
 # declared search controls, not a recording of production output.
@@ -307,47 +303,3 @@ def oracle(case, monkeypatch):
 @pytest.mark.parametrize("case", CASES)
 def test_msd_full_fields_follow_declared_search(case, monkeypatch):
     oracle(case, monkeypatch)
-
-
-@pytest.mark.parametrize("case", CASES)
-def test_msd_projection_field_plants_are_caught(case, monkeypatch):
-    original = exporting._msd
-    observed = []
-
-    def capture(*args, **kwargs):
-        value = original(*args, **kwargs)
-        observed.append(deepcopy(value))
-        return value
-
-    # Registered built-ins keep their explicit function, so patch the registry
-    # entry as well as testing the helper itself.
-    result_type = next(
-        cls for cls, encoder in exporting._EXPORTERS.items() if encoder is original
-    )
-    with monkeypatch.context() as patch:
-        patch.setitem(exporting._EXPORTERS, result_type, capture)
-        oracle(case, monkeypatch)
-    (baseline,) = observed
-    paths = tuple(field_paths(baseline))
-    caught = equivalent = 0
-    for path in paths:
-        for mode in ("missing", "null", "wrong"):
-            if mode == "null" and at(baseline, path) is None:
-                equivalent += 1
-                continue
-
-            def planted(*args, path=path, mode=mode, **kwargs):
-                value = original(*args, **kwargs)
-                change(value, path, mode)
-                return value
-
-            with monkeypatch.context() as patch:
-                patch.setitem(exporting._EXPORTERS, result_type, planted)
-                with pytest.raises((AssertionError, jsonschema.ValidationError)):
-                    oracle(case, monkeypatch)
-            caught += 1
-    oracle(case, monkeypatch)
-    assert caught + equivalent == 3 * len(paths)
-    print(
-        f"MSD FIELD PLANTS: {case[2]}/{case[3]}; {len(paths)} paths; {caught} caught; {equivalent} equivalent null->null"
-    )

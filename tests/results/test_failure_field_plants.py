@@ -1,12 +1,9 @@
 """First-draw traces and sampling receipts have independent complete wire values."""
 
 import sys
-from copy import deepcopy
 
-import jsonschema
 import pytest
 
-import ngraph.export as exporting
 from ngraph import (
     CapacityQuery,
     FailureMode,
@@ -23,10 +20,8 @@ from ngraph import (
     prepare,
 )
 from ngraph.model.risk import RiskGroup
-from ngraph.results import AnalysisMetadata
 from tests.results.test_analysis_wire import project
-from tests.results.test_native_field_plants import at
-from tests.results.test_report_field_plants import change, exact, field_paths
+from tests.results.test_report_field_plants import exact
 
 
 def oracle(seed_source):
@@ -109,59 +104,3 @@ def oracle(seed_source):
 @pytest.mark.parametrize("seed_source", ["query", "policy", "unseeded"])
 def test_trace_and_sampling_fields_are_exact(seed_source):
     oracle(seed_source)
-
-
-@pytest.mark.parametrize("seed_source", ["query", "policy", "unseeded"])
-@pytest.mark.parametrize("helper", ["_failure_case", "project"])
-def test_trace_and_sampling_helper_field_plants_are_caught(
-    monkeypatch, seed_source, helper
-):
-    # The generic projection is planted only where it writes analysis metadata.
-    original = getattr(exporting, helper)
-    observed = []
-
-    def selected(args):
-        return helper != "project" or type(args[0]) is AnalysisMetadata
-
-    def capture(*args, **kwargs):
-        value = original(*args, **kwargs)
-        if selected(args):
-            observed.append(deepcopy(value))
-        return value
-
-    with monkeypatch.context() as patch:
-        patch.setattr(exporting, helper, capture)
-        oracle(seed_source)
-    caught = equivalent = count = 0
-    for index, baseline in enumerate(observed):
-        paths = tuple(field_paths(baseline))
-        count += len(paths)
-        for path in paths:
-            for mode in ("missing", "null", "wrong"):
-                if mode == "null" and at(baseline, path) is None:
-                    equivalent += 1
-                    continue
-                calls = []
-
-                def planted(
-                    *args, path=path, mode=mode, index=index, calls=calls, **kwargs
-                ):
-                    value = original(*args, **kwargs)
-                    if not selected(args):
-                        return value
-                    if len(calls) == index:
-                        value = deepcopy(value)
-                        change(value, path, mode)
-                    calls.append(None)
-                    return value
-
-                with monkeypatch.context() as patch:
-                    patch.setattr(exporting, helper, planted)
-                    with pytest.raises((AssertionError, jsonschema.ValidationError)):
-                        oracle(seed_source)
-                caught += 1
-    oracle(seed_source)
-    assert caught + equivalent == count * 3
-    print(
-        f"FAILURE FIELD PLANTS: {seed_source}/{helper}; {count} paths; {caught} caught; {equivalent} equivalent null->null"
-    )

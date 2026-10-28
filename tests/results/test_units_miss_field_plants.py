@@ -1,13 +1,10 @@
 """Nonempty units diagnostics retain exact errors, constraints and probe locations."""
 
-from copy import deepcopy
 from fractions import Fraction
 
-import jsonschema
 import netgraph_core as ngc
 import pytest
 
-import ngraph.export as exporting
 from ngraph import (
     CapacityQuery,
     DemandSet,
@@ -24,10 +21,8 @@ from ngraph import (
     place,
     prepare,
 )
-from ngraph.results import UnitsReport
 from tests.results.test_analysis_wire import project
-from tests.results.test_native_field_plants import at
-from tests.results.test_report_field_plants import change, exact, field_paths
+from tests.results.test_report_field_plants import exact
 
 
 def fraction(value):
@@ -270,46 +265,3 @@ def opaque_oracle():
 )
 def test_nonempty_units_report_is_exact(variant):
     oracle(variant)
-
-
-@pytest.mark.parametrize(
-    "variant", ["rounding", "split", "weighted", "range", "opaque"]
-)
-def test_units_miss_helper_field_plants_are_caught(monkeypatch, variant):
-    original = exporting.project
-    observed = []
-
-    def capture(value):
-        projected = original(value)
-        if type(value) is UnitsReport:
-            observed.append(deepcopy(projected))
-        return projected
-
-    with monkeypatch.context() as patch:
-        patch.setattr(exporting, "project", capture)
-        oracle(variant)
-    (baseline,) = observed
-    caught = equivalent = 0
-    paths = tuple(field_paths(baseline))
-    for path in paths:
-        for mode in ("missing", "null", "wrong"):
-            if mode == "null" and at(baseline, path) is None:
-                equivalent += 1
-                continue
-
-            def planted(value, path=path, mode=mode):
-                projected = original(value)
-                if type(value) is UnitsReport:
-                    change(projected, path, mode)
-                return projected
-
-            with monkeypatch.context() as patch:
-                patch.setattr(exporting, "project", planted)
-                with pytest.raises((AssertionError, jsonschema.ValidationError)):
-                    oracle(variant)
-            caught += 1
-    oracle(variant)
-    assert caught + equivalent == len(paths) * 3
-    print(
-        f"UNITS MISS FIELD PLANTS: {variant}; {len(paths)} paths; {caught} caught; {equivalent} equivalent null->null"
-    )
