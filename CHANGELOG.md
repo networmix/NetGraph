@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.26.0] - 2026-10-29
+
+### Fixed
+
+- Preparation and runs no longer repeat exact-fraction precision checks for every failure case and MSD probe: scenarios with many ECMP `combine` sources prepare and run 15 to 30 times faster than in 0.25.0, and placement uses its `workers` again.
 
 ### Changed
 
