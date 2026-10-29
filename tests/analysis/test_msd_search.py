@@ -186,9 +186,7 @@ def test_range_terminal_cause_wins_without_a_feasible_probe(monkeypatch):
     assert result.best_rows is result.best_accounting is None
 
 
-@pytest.mark.parametrize(
-    "boundary", ["MSDProbe", "placement_miss", "analysis_metadata"]
-)
+@pytest.mark.parametrize("boundary", ["MSDProbe", "analysis_metadata"])
 def test_python_result_failure_releases_every_policy_and_retry_succeeds(
     monkeypatch, boundary
 ):

@@ -15,12 +15,9 @@ from ngraph.analysis.capacity import (
 from ngraph.analysis.demands import selected_pairs
 from ngraph.analysis.failures import Workers, checked_workers, resolve_workers
 from ngraph.analysis.metadata import analysis_metadata
-from ngraph.analysis.precision import query_inputs, query_miss
 from ngraph.model.selectors import Selector
 from ngraph.results import (
-    Endpoints,
     OutputSelection,
-    ReportLocation,
     SensitivityAnalysis,
 )
 from ngraph.utils.values import flag, own, physical
@@ -110,34 +107,8 @@ def edge_sensitivity(
         options,
         workers=workers,
     )
-    baseline = result.baseline
-    entries = result.entries
-    observations: list[
-        tuple[Endpoints, int, ngc.Eligibility, str, None, ngc.PlacementResult | None]
-    ] = [(pair, baseline.delivered, mask, "sensitivity.baseline", None, baseline)]
-    observations.extend(
-        (
-            pair,
-            baseline.delivered - entry.delivery_reduction,
-            ngc.Eligibility.intersect(
-                mask, topology.graph.eligibility(excluded_edges=[entry.edge])
-            ),
-            f"sensitivity.edge[{entry.edge}]",
-            None,
-            None,  # The native sensitivity entry exposes a reduction, not its plan.
-        )
-        for entry in entries
-    )
-    miss = query_miss(
-        prepared,
-        query,
-        observations,
-        ReportLocation(None, "baseline", None),
-        query_inputs(prepared, query, "sensitivity"),
-    )
     return SensitivityAnalysis(
         prepared,
-        () if miss is None else (miss,),
         analysis_metadata(workers),
         OutputSelection(query.outputs, False, query.export_details),
         pair,

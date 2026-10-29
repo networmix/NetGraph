@@ -22,7 +22,7 @@ def test_packaged_schema_equals_the_generated_schema():
 
 def test_plain_record_definitions_follow_their_declared_fields():
     tools = generator()
-    from ngraph.results import ExactAlpha, SelfPair, SplitConstraint
+    from ngraph.results import ExactAlpha, SelfPair, SplitCountConstraint
 
     alpha = tools["record"](ExactAlpha)
     assert list(alpha["properties"]) == ["value", "numerator", "denominator"]
@@ -50,13 +50,17 @@ def test_plain_record_definitions_follow_their_declared_fields():
         "node": {"type": "string"},
         "capacity_units": {"enum": [0]},
     }
-    split = tools["record"](SplitConstraint)
+    split = tools["record"](SplitCountConstraint)
     assert split["required"] == [
         "kind",
-        "label",
-        "incoming_physical",
-        "basis",
-        "members",
+        "capacity_label",
+        "capacity",
+        "nodes",
+        "directed_links",
+        "group",
+        "demands",
+        "tunnels",
+        "count",
         "q_upper_bound",
         "met",
     ]

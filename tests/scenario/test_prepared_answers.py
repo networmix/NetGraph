@@ -1,4 +1,4 @@
-"""One prepared scenario: analyses return their own misses, steps state their needs."""
+"""One prepared scenario: analyses share its report, steps state their needs."""
 
 from dataclasses import dataclass, fields
 
@@ -21,7 +21,7 @@ from ngraph import (
 )
 from ngraph.analysis.preparation import StepNeeds
 from ngraph.analysis.topology import PreparedTopology
-from ngraph.results import StepOutput, UnitsReport
+from ngraph.results import StepOutput
 from ngraph.workflow.base import WorkflowStep
 from ngraph.workflow.max_flow_step import MaxFlow
 
@@ -42,51 +42,6 @@ def ecmp(name):
         preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
         workers=1,
     )
-
-
-def test_each_analysis_returns_only_its_own_misses():
-    prepared = prepare(Scenario(network(), units=UnitsSettings(0.5, 0.25)))
-    assert prepared.units_report.misses == ()
-    query = CapacityQuery(
-        Selector("^s$"),
-        Selector("^t$"),
-        ecmp("x").query(prepared).config,
-        workers=1,
-    )
-    first, second = capacity(prepared, query), capacity(prepared, query)
-    assert len(first.misses) == len(second.misses) == 1
-    assert first.misses == second.misses
-    assert first.prepared is prepared and first.topology is prepared.topology
-    assert first.units_report == prepared.units_report.with_misses(first.misses)
-    assert second.units_report.misses == first.misses
-    assert prepared.units_report.misses == ()
-
-
-def test_run_labels_each_steps_misses_and_composes_the_report_once(monkeypatch):
-    prepared = prepare(
-        Scenario(
-            network(), [ecmp("first"), ecmp("second")], units=UnitsSettings(0.5, 0.25)
-        )
-    )
-    composed = []
-    original = UnitsReport.with_misses
-
-    def counted(report, misses):
-        composed.append(misses)
-        return original(report, misses)
-
-    monkeypatch.setattr(UnitsReport, "with_misses", counted)
-    result = run(prepared)
-    assert len(composed) == 1
-    assert [miss.location.step for miss in result.units_report.misses] == [
-        "first",
-        "second",
-    ]
-    assert [step.result.misses[0].location.step for step in result.steps] == [
-        None,
-        None,
-    ]
-    assert result.prepared is prepared and result.topology is prepared.topology
 
 
 @dataclass
@@ -145,3 +100,62 @@ def test_prepared_topology_holds_the_graph_and_its_labels_only():
         "pool_budgets",
         "_edge_id_by_ref",
     ]
+
+
+def test_every_analysis_and_run_keep_the_prepared_report():
+    import netgraph_core as ngc
+
+    from ngraph import (
+        MSDQuery,
+        PathQuery,
+        PlacementQuery,
+        SensitivityQuery,
+        TunnelCountQuery,
+        edge_sensitivity,
+        maximum_supported_demand,
+        paths,
+        place,
+        tunnel_counts,
+    )
+
+    load = DemandSet(
+        "load",
+        (
+            DemandSpec(
+                Selector("^s$"),
+                Selector("^t$"),
+                1,
+                ngc.FlowPolicyConfig(
+                    routing=ngc.CentralizedTE(
+                        source_allocation=ngc.SourceAllocation.EQUAL,
+                        tunnel_count=ngc.TunnelCount(16),
+                    )
+                ),
+            ),
+        ),
+    )
+    p = prepare(
+        Scenario(
+            network(),
+            [ecmp("cap")],
+            demand_sets={"load": load},
+            units=UnitsSettings(0.5, 0.25),
+        ),
+        demand_sets=("load",),
+    )
+    source, target = Selector("^s$"), Selector("^t$")
+    config = ngc.FlowPolicyConfig(
+        routing=ngc.CentralizedTE(source_allocation=ngc.SourceAllocation.OPTIMIZED)
+    )
+    ds = p.demand_sets["load"]
+    values = (
+        capacity(p, CapacityQuery(source, target, workers=1)),
+        place(p, PlacementQuery(ds, workers=1)),
+        edge_sensitivity(p, SensitivityQuery(source, target, config, workers=1)),
+        paths(p, PathQuery(source, target)),
+        maximum_supported_demand(p, MSDQuery(ds, alpha_max=1)),
+        tunnel_counts(p, TunnelCountQuery(ds, (1,), 1, 1, workers=1)),
+        run(p),
+    )
+    assert all(value.units_report is p.units_report for value in values)
+    assert all(value.prepared is p and value.topology is p.topology for value in values)

@@ -119,7 +119,7 @@ def test_square_mesh_divides_the_declared_total_among_twelve_pairs():
     prepared = prepare(
         Scenario.from_yaml(Path("scenarios/square_mesh.yaml").read_text())
     )
-    assert prepared.topology.q == 1 / 1024
+    assert prepared.topology.q == 1 / 131072
     (demands,) = prepared.demand_sets.values()
     pairs = [
         (s, t)
@@ -131,7 +131,7 @@ def test_square_mesh_divides_the_declared_total_among_twelve_pairs():
         (r.id, r.order, r.endpoints.sources, r.endpoints.destinations, r.nominal_units)
         for r in demands.demands
     ] == [
-        (f"baseline_traffic_matrix|0|{i}", i, (s,), (t,), 1024)
+        (f"baseline_traffic_matrix|0|{i}", i, (s,), (t,), 131072)
         for i, (s, t) in enumerate(pairs)
     ]
     (accounting,) = demands.accounting
@@ -140,20 +140,17 @@ def test_square_mesh_divides_the_declared_total_among_twelve_pairs():
         accounting.resolved_units,
         accounting.discarded_units,
         accounting.discards,
-    ) == (12288, 12288, 0, ())
+    ) == (1572864, 1572864, 0, ())
     report = prepared.units_report
     assert (
         report.exponent,
         report.target_met,
         report.augmented_capacity_sum_units,
-    ) == (-10, True, 20480)
-    (split,) = [s for s in report.nominal_splits if s.kind == "expansion"]
-    assert (split.members, split.incoming_physical, split.q_upper_bound, split.met) == (
-        12,
-        Fraction(12),
-        Fraction(float(0.001)) * 12 / 11,
-        True,
-    )
+    ) == (-17, True, 2621440)
+    assert report.split_bound.count == Fraction(72)
+    assert report.split_bound.demands == 12
+    assert report.split_bound.q_upper_bound == Fraction(0.001) / 72
+    assert report.split_bound.met
     value = run(prepared)
     msd = next(s.result for s in value.steps if s.name == "msd_baseline")
     assert msd.alpha_feasible.value == 1
@@ -173,10 +170,12 @@ def test_square_mesh_divides_the_declared_total_among_twelve_pairs():
     for case in placement.cases:
         state = case.states["converged"]
         assert [(r.id, r.reference_request_units) for r in state.rows] == [
-            (r.id, 1024) for r in demands.demands
+            (r.id, 131072) for r in demands.demands
         ]
         impaired = bool(set(case.case.pattern.excluded_links) - {"N1|N3|0", "N2|N4|0"})
-        expected = (12288, 10240, 2048, 2048) if impaired else (12288, 12288, 0, 0)
+        expected = (
+            (1572864, 1310720, 262144, 262144) if impaired else (1572864, 1572864, 0, 0)
+        )
         assert (
             state.totals.reference_request_units,
             state.totals.delivered_units,

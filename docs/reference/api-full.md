@@ -49,7 +49,6 @@ The answer of ``capacity``: the question asked and one result per failure case.
 
 - `kind` (ClassVar[Literal['capacity']]) = capacity
 - `prepared` (PreparedScenario)
-- `misses` (tuple[PrecisionMiss, ...])
 - `metadata` (AnalysisMetadata)
 - `outputs` (OutputSelection)
 - `question` (Literal['lossless_bound', 'fixed_offer_delivery', 'first_hop_experiment'])
@@ -584,20 +583,23 @@ whether q meets it.
 - `q_upper_bound` (Fraction)
 - `met` (bool)
 
-### ngraph.InputQuantization
+### ngraph.SplitCountConstraint
 
-One physical input converted to units: its binary64 value, its units and the
-rounding error.
+The prepared split-count bound, not a certificate for arbitrary answers.
 
 **Attributes:**
 
-- `label` (str)
-- `kind` (Literal['capacity', 'demand', 'offer', 'design', 'min_unreserved'])
-- `binary64_value` (float)
-- `binary64_hex` (str)
-- `units` (int)
-- `error` (Fraction)
-- `relative_error` (Fraction | None): None when the input is zero
+- `kind` (ClassVar[Literal['split_count']]) = split_count
+- `capacity_label` (str)
+- `capacity` (float)
+- `nodes` (int)
+- `directed_links` (int)
+- `group` (str | None): None when the floor sets the count
+- `demands` (int)
+- `tunnels` (int)
+- `count` (Fraction)
+- `q_upper_bound` (Fraction)
+- `met` (bool)
 
 ### ngraph.JSONValue
 
@@ -656,7 +658,6 @@ under ``MSDAnalysisJSON`` in the results reference.
 
 - `kind` (ClassVar[Literal['msd']]) = msd
 - `prepared` (PreparedScenario)
-- `misses` (tuple[PrecisionMiss, ...])
 - `metadata` (AnalysisMetadata)
 - `outputs` (OutputSelection)
 - `alpha_feasible` (ExactAlpha | None)
@@ -895,7 +896,6 @@ The answer of ``paths``: one row per endpoint pair.
 
 - `kind` (ClassVar[Literal['paths']]) = paths
 - `prepared` (PreparedScenario)
-- `misses` (tuple[PrecisionMiss, ...])
 - `metadata` (AnalysisMetadata)
 - `algorithm` (Literal['spf', 'ksp'])
 - `mode` (Literal['combine', 'pairwise'])
@@ -970,7 +970,6 @@ accounting.
 
 - `kind` (ClassVar[Literal['placement']]) = placement
 - `prepared` (PreparedScenario)
-- `misses` (tuple[PrecisionMiss, ...])
 - `metadata` (AnalysisMetadata)
 - `outputs` (OutputSelection)
 - `alpha` (ExactAlpha)
@@ -1047,19 +1046,6 @@ A TE ingress pool; ``offer_limit_units`` is its prepared lossy offer budget.
 - `offer_limit_units` (int) = 0
 - `synthetic_ingress_cost` (ClassVar[Literal[1]]) = 1
 
-### ngraph.PrecisionMiss
-
-One place an analysis missed the precision target: its location, the constraints
-it missed and its input rounding.
-
-**Attributes:**
-
-- `location` (ReportLocation)
-- `constraints` (tuple[InputConstraint | SplitConstraint | TunnelResolutionConstraint | UnverifiedConstraint, ...])
-- `inexact_inputs` (int)
-- `zeroed_inputs` (int)
-- `examples` (tuple[InputQuantization, ...])
-
 ### ngraph.PreparationScope
 
 What a preparation covered: its workflow steps, and the demand sets bound for the
@@ -1075,8 +1061,7 @@ workflow and for library callers.
 
 One graph, unit and demand binding over a read-only view of a scenario.
 
-``units_report`` is the preparation's report; each analysis returns its
-own precision misses beside it.
+``units_report`` records the fixed input/count bounds for every analysis.
 
 **Attributes:**
 
@@ -1127,17 +1112,6 @@ Why an MSD probe was out of range.
 - `reason` (Literal['scaled_nonfinite', 'native_units_range'])
 - `message` (str)
 - `binary64_hex` (str | None): None when the refused amount is not a binary64 value
-
-### ngraph.ReportLocation
-
-Where a precision miss happened: the step, the failure case and the MSD probe,
-where they apply.
-
-**Attributes:**
-
-- `step` (str | None): None when the report is outside a workflow
-- `case_id` (str | None): None when the report is outside failure cases
-- `probe_index` (int | None): None when the report is outside MSD
 
 ### ngraph.ResolvedDemand
 
@@ -1229,7 +1203,7 @@ version and the seed.
 
 ### ngraph.RunResult
 
-One run; ``units_report`` adds every step's precision misses, by step.
+One run with the preparation's units report.
 
 **Attributes:**
 
@@ -1329,7 +1303,6 @@ directed edge's removal causes.
 
 - `kind` (ClassVar[Literal['sensitivity']]) = sensitivity
 - `prepared` (PreparedScenario)
-- `misses` (tuple[PrecisionMiss, ...])
 - `metadata` (AnalysisMetadata)
 - `outputs` (OutputSelection)
 - `endpoints` (Endpoints)
@@ -1354,21 +1327,6 @@ delivery.
 - `workers` (Workers) = auto
 - `outputs` (ngc.OutputOptions)
 - `export_details` (bool) = False
-
-### ngraph.SplitConstraint
-
-The split bound of a positive amount v over m members at precision p (q at most
-pv/(m - 1)), and whether q meets it.
-
-**Attributes:**
-
-- `kind` (Literal['expansion', 'source', 'router', 'tunnel'])
-- `label` (str)
-- `incoming_physical` (Fraction)
-- `basis` (Literal['declared', 'observed'])
-- `members` (int)
-- `q_upper_bound` (Fraction)
-- `met` (bool)
 
 ### ngraph.StepContext
 
@@ -1454,7 +1412,6 @@ The answer of ``tunnel_counts``: one row per demand and count.
 
 - `kind` (ClassVar[Literal['tunnel_counts']]) = tunnel_counts
 - `prepared` (PreparedScenario)
-- `misses` (tuple[PrecisionMiss, ...])
 - `metadata` (AnalysisMetadata)
 - `outputs` (OutputSelection)
 - `rows` (tuple[TunnelCountRow, ...])
@@ -1500,34 +1457,9 @@ offer).
 - `lossless_at_design_units` (int)
 - `physical_tunnel_cost` (int)
 
-### ngraph.TunnelResolutionConstraint
-
-A native tunnel plan whose live heads cannot receive a whole unit per tunnel.
-
-**Attributes:**
-
-- `kind` (ClassVar[Literal['tunnel_resolution']]) = tunnel_resolution
-- `label` (str)
-- `q` (float)
-- `heads` (tuple[str | PoolHead, ...])
-- `met` (ClassVar[Literal[False]]) = False
-
-### ngraph.UnitConstraint
-
-```python
-UnitConstraint = (InputConstraint
-    | SplitConstraint
-    | TunnelResolutionConstraint
-    | RangeConstraint
-    | UnverifiedConstraint)
-```
-
-One precision or range constraint of a units report.
-
 ### ngraph.UnitsReport
 
-How preparation chose q: the mode and target, the bounds that set q, input
-rounding, the range sums and every precision miss.
+The prepared unit, its input/count bounds and augmented graph range sums.
 
 **Attributes:**
 
@@ -1539,25 +1471,18 @@ rounding, the range sums and every precision miss.
 - `input_convention` (ClassVar[Literal['promoted_binary64_half_up']]) = promoted_binary64_half_up
 - `display_convention` (ClassVar[Literal['units_authoritative_binary64_display']]) = units_authoritative_binary64_display
 - `scope` (PreparationScope)
-- `binding_constraints` (tuple[UnitConstraint, ...])
-- `input_count` (int)
-- `inexact_inputs` (int)
-- `zeroed_inputs` (int)
-- `inexact_examples` (tuple[InputQuantization, ...])
-- `zeroed_examples` (tuple[InputQuantization, ...])
-- `max_absolute_input_error` (Fraction)
-- `max_relative_input_error` (Fraction)
+- `limited_by` (Literal['input', 'split_count', 'range', 'resolution_floor', 'declared', 'unbounded'])
+- `achieved_precision` (Fraction | None): None when there is no positive input or capacity
+- `input_bound` (InputConstraint | None): None when there is no positive prepared bandwidth input
+- `split_bound` (SplitCountConstraint | None): None when there is no positive link capacity
+- `range_limit` (RangeConstraint | None): None when limited_by is not range
 - `augmented_capacity_sum_units` (int)
 - `augmented_cost_sum` (int)
-- `nominal_split_count` (int)
-- `nominal_splits` (tuple[SplitConstraint, ...])
-- `misses` (tuple[PrecisionMiss, ...])
 - `weight_approximations` (tuple[WeightApproximation, ...]) = ()
 
 **Methods:**
 
 - `with_approximations(self, entries: 'tuple[WeightApproximation, ...]') -> 'UnitsReport'` - This report with the controller's weight approximations, each once.
-- `with_misses(self, misses: 'tuple[PrecisionMiss, ...]') -> 'UnitsReport'` - This report with further precision misses appended.
 
 ### ngraph.UnitsSettings
 
@@ -1568,16 +1493,6 @@ relative precision target.
 
 - `resolution` (float | Literal['auto']) = auto
 - `precision` (float) = 0.001
-
-### ngraph.UnverifiedConstraint
-
-A supplied program whose splits cannot be checked against the precision target.
-
-**Attributes:**
-
-- `kind` (ClassVar[Literal['unverified']]) = unverified
-- `label` (str)
-- `reason` (ClassVar[Literal['opaque_program']]) = opaque_program
 
 ### ngraph.UpperCertificate
 
@@ -1747,13 +1662,13 @@ What preparation must know of one workflow step's question.
 ``numerical`` steps are evaluated at the prepared resolution. A step may
 name a demand set to bind, a failure policy, and an earlier step whose
 feasible alpha it uses (one that ``provides_alpha``). ``capacity`` builds
-the step's capacity question, which preparation evaluates once per
-candidate resolution; ``inputs`` are that question's physical amounts, by
+the step's capacity question, which preparation validates once after
+final compilation; ``inputs`` are that question's physical amounts, by
 field name. ``pool_endpoints`` are the source and target of a question
 whose combined sources are a pool: preparation gives them a private head.
 ``offer_budget`` is a fixed lossy offer every pool leaf of ``demand_set``
-receives; ``counts`` builds a tunnel-count question, whose split targets
-preparation observes once per candidate resolution. ``nodes`` and ``links``
+receives; ``counts`` builds a tunnel-count question, which preparation
+validates once after final binding. ``nodes`` and ``links``
 are names the step reads that must exist in the network.
 
 **Attributes:**

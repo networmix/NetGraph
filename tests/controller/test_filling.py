@@ -7,8 +7,7 @@ from math import lcm
 import netgraph_core as ngc
 import pytest
 
-from ngraph.analysis.controller import fill, integer_weights, member_column
-from ngraph.analysis.precision import propagate
+from ngraph.analysis.controller import fill, integer_weights, member_column, propagate
 from tests.controller.helpers import (
     delivered,
     demand,
@@ -495,3 +494,19 @@ def test_the_apportionment_equals_the_unit_by_unit_rule():
             weights,
             total,
         )
+
+
+def test_highest_averages_lower_quota_oracle_keeps_unit_priority_and_ties():
+    from tests.controller.helpers import highest_averages
+
+    # Independent one-unit construction controls the accelerated test oracle.
+    for weights in ([1, 1, 1], [2, 1], [0, 7, 2, 0, 1], [1, 1000, 1], [0, 0]):
+        allocated = [0] * len(weights)
+        for total in range(31):
+            assert highest_averages(total, weights) == allocated
+            if any(weights):
+                index = max(
+                    (i for i, w in enumerate(weights) if w),
+                    key=lambda i: (Fraction(weights[i], allocated[i] + 1), -i),
+                )
+                allocated[index] += 1

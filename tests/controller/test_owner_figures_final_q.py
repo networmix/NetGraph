@@ -5,7 +5,7 @@ oracles share no code with the product: round robin over a source's members in
 EdgeId order (ECMP keeps a zero-capacity member), highest averages over explicit
 or flattened weights (a zero-capacity member has weight 0), and for tunnel counts
 the chains' fluid sizing, round robin over the plan's tunnels and the per-chain
-minimum. Values at q = 1 or 1/4096 are kept only as labelled comparisons.
+minimum. Values at declared q = 1, 1/128 or 1/4096 are kept as labelled comparisons.
 """
 
 import math
@@ -38,6 +38,19 @@ ECMP, ECMP_LOSSY = (
     FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY,
 )
 IDEAL = {"S1": 3200, "S2": 2400, "S3": 3125, "S4": 3100, "S5": 3000, "S6": 2125}
+
+# Each EBB fixture has 66 physical nodes and 96 links: L=258, floor=133/2.
+# Positive minimum capacities are 100, 50, 25, 100, 50, 25. A 256-tunnel
+# count question has Gamma=645/2, whereas native/controller leaves use the floor.
+NATIVE_Q = {
+    "S1": 1 / 1024,
+    "S2": 1 / 2048,
+    "S3": 1 / 4096,
+    "S4": 1 / 1024,
+    "S5": 1 / 2048,
+    "S6": 1 / 4096,
+}
+COUNT_Q = {name: q / 4 for name, q in NATIVE_Q.items()}
 
 
 def rr(x, k):
@@ -165,8 +178,12 @@ S2_CURVE = (8, 16, 24, 32, 48, 64, 96, 128)
 def test_the_s2_count_curve_at_the_final_q():
     prep, rows = count_rows("S2", S2_CURVE)
     q = prep.topology.q
-    # The up-to row's 256 members bind the recipe: 0.001 * 2400 / 255 -> 2^-7.
-    assert q == 1 / 128
+    assert q == COUNT_Q["S2"]
+    for row in rows:
+        check_tunnel_oracles(prep, "S2", row)
+    # Retain the independently derived coarse-unit curve as a declared-q control.
+    prep, rows = count_rows("S2", S2_CURVE, q=1 / 128)
+    q = prep.topology.q
     for row in rows:
         check_tunnel_oracles(prep, "S2", row)
     lossless = [physical(r.lossless_at_design_units, q) for r in rows]
@@ -263,9 +280,17 @@ def test_the_s2_count_curve_at_q_1_in_whole_units():
 def test_t2_rows_of_every_ebb_state(state, final, at_q1):
     prep, rows = count_rows(state, (32, 64))
     q = prep.topology.q
-    assert q == 1 / 128
+    assert q == COUNT_Q[state]
     for row in rows:
         check_tunnel_oracles(prep, state, row)
+    assert (
+        rows[-1].result.plan.tunnels_per_head,
+        physical(rows[-1].lossless_at_design_units, q),
+    ) == final[-2:]
+    # The literal figures below describe the declared 1/128 control; the automatic
+    # rows above are checked by the integer forwarding/sizing oracles at COUNT_Q.
+    prep, rows = count_rows(state, (32, 64), q=1 / 128)
+    q = prep.topology.q
     k32, k64, limit = rows
     assert (
         physical(k32.lossless_at_design_units, q),
@@ -308,7 +333,10 @@ def native_ebb(state, policy, volume):
 
 @pytest.mark.parametrize(
     ("state", "q", "figure", "q1"),
-    [("S2", 1 / 16, 1601, 1616), ("S5", 1 / 16, Fraction(3201, 2), 1608)],
+    [
+        ("S2", 1 / 2048, Fraction(204801, 128), 1616),
+        ("S5", 1 / 2048, Fraction(409601, 256), 1608),
+    ],
 )
 def test_native_ecmp_lossless_at_the_final_q(state, q, figure, q1):
     units, chosen = native_ebb(state, ECMP, 10000)
@@ -343,13 +371,13 @@ def native_ebb_q1(state, policy, volume):
 def test_native_ecmp_s4_keeps_its_zero_member_at_the_final_q():
     units, q = native_ebb("S4", ECMP, 10000)
     # The first 6 units avoid the zero-capacity seventh member.
-    assert (q, units, physical(units, q)) == (1 / 8, 6, Fraction(3, 4))
+    assert (q, units, physical(units, q)) == (1 / 1024, 6, Fraction(3, 512))
     units, q = native_ebb("S4", ECMP_LOSSY, 3100)
     minima = chain_minima("S4", q)
     offer = int(Fraction(3100) / Fraction(q))
     assert units == sum(min(a, c) for a, c in zip(rr(offer, 32), minima, strict=True))
-    # 3100 / q = 49600 units, 1550 per member, the zero member's 1550 lost.
-    assert (q, units, physical(units, q)) == (1 / 16, 48050, Fraction(24025, 8))
+    # 3100/q=3174400 units, 99200 per member; the zero member loses its share.
+    assert (q, units, physical(units, q)) == (1 / 1024, 3075200, Fraction(24025, 8))
     assert (
         native_ebb_q1("S4", ECMP, 10000),
         native_ebb_q1("S4", ECMP_LOSSY, 3100),
@@ -367,11 +395,11 @@ def test_wcmp_scope_native_ecmp_at_the_final_q():
     q = Fraction(prep.topology.q)
     units = delivered(prep)[0]["d|0|0"]
     # QA1 (third uplink) halves its arrival onto the 20-link: x = 4 (40/q + 1) + 2 units.
-    assert (q, units) == (Fraction(1, 32), int(4 * (40 / q + 1) + 2))
+    assert (q, units) == (Fraction(1, 1024), int(4 * (40 / q + 1) + 2))
     assert physical(units, q) == 160 + 6 * q
 
 
-def raw_plane(state, volume, admission):
+def raw_plane(state, volume, admission, resolution=None):
     links = ebb_links(state)
     caps = {(u, v): c for u, v, c, *_ in links}
     plane = [
@@ -402,6 +430,8 @@ def raw_plane(state, volume, admission):
         "{type: shortest_paths, allocation: weighted, weight_basis: explicit, edge_weights: raw}, "
         f"admission: {admission}}}}}"
     )
+    if resolution is not None:
+        lines.append(f"units: {{resolution: {resolution}}}")
     prep = prepare(Scenario.from_yaml("\n".join(lines)), demand_sets=("d",))
     result = place(
         prep, PlacementQuery(prep.demand_sets["d"], states=("converged",), workers=1)
@@ -427,14 +457,15 @@ def raw_plane(state, volume, admission):
 )
 def test_raw_plane_weights_lossless_at_the_final_q(state, q, figure, q1):
     units, chosen, minima, weights = raw_plane(state, 10000, "lossless")
-    assert chosen == q
+    assert chosen == NATIVE_Q[state]
     assert units == largest(
         lambda x: all(
             a <= c for a, c in zip(highest_averages(x, weights), minima, strict=True)
         ),
         sum(minima),
     )
-    assert physical(units, q) == figure
+    coarse, coarse_q, _, _ = raw_plane(state, 10000, "lossless", resolution=q)
+    assert coarse_q == q and physical(coarse, coarse_q) == figure
 
 
 def test_raw_plane_s4_lossy_at_the_final_q():
@@ -443,7 +474,9 @@ def test_raw_plane_s4_lossy_at_the_final_q():
     assert units == sum(
         min(a, c) for a, c in zip(highest_averages(offer, weights), minima, strict=True)
     )
-    assert (q, physical(units, q)) == (1 / 16, Fraction(48490, 16))
+    assert q == NATIVE_Q["S4"]
+    coarse, coarse_q, _, _ = raw_plane("S4", 3100, "lossy", resolution=1 / 16)
+    assert (coarse_q, physical(coarse, coarse_q)) == (1 / 16, Fraction(48490, 16))
 
 
 @pytest.mark.parametrize(
@@ -479,7 +512,7 @@ def test_groups_a_and_b_at_the_final_q(members, groups, volume, carried):
     scale = 1
     for f in flat:
         scale = scale * f.denominator // math.gcd(scale, f.denominator)
-    assert q == Fraction(1, 1024)
+    assert q == (Fraction(1, 512) if members == 3 else Fraction(1, 1024))
     assert units == highest_averages(int(volume / q), [int(f * scale) for f in flat])
     assert [physical(u, q) for u in units] == carried
 
@@ -493,8 +526,8 @@ def test_groups_c_and_d_at_the_final_q():
         q="auto",
     )
     assert (c.topology.q, physical(delivered(c)[0]["d|0|0"], c.topology.q)) == (
-        1 / 16,
+        1 / 2048,
         2400,
     )
     units, q = bound(ebb("S4", scope="group", trees={"planes": planes()}, q="auto"))
-    assert (q, physical(units, q)) == (1 / 8, 2400)
+    assert (q, physical(units, q)) == (1 / 1024, 2400)

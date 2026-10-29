@@ -65,8 +65,8 @@ def test_an_approximation_travels_from_preparation_to_every_report():
         assert [e.label for e in step.result.units_report.weight_approximations] == [
             "controller.ebb.DC_B.router.DC_A"
         ]
-    # The approximation changes neither the target nor the constraints or misses.
-    for name in ("target_met", "binding_constraints", "misses"):
+    # The approximation changes neither the target nor the input/count bounds.
+    for name in ("target_met", "input_bound", "split_bound", "achieved_precision"):
         assert getattr(result.units_report, name) == getattr(control.units_report, name)
     # The controller key reports the apportioned weights and nothing of the error.
     placed = wire["steps"][0]["result"]["controller"][0]["programmed"][0]["members"]

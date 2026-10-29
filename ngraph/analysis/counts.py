@@ -16,11 +16,9 @@ import netgraph_core as ngc
 from ngraph.analysis.failures import Workers, checked_workers, resolve_workers
 from ngraph.analysis.metadata import analysis_metadata
 from ngraph.analysis.placement import _endpoints
-from ngraph.analysis.precision import _Searched, query_inputs, query_splits
-from ngraph.analysis.units import precision_miss, quantize
+from ngraph.analysis.units import quantize
 from ngraph.results import (
     OutputSelection,
-    ReportLocation,
     ResolvedDemandSet,
     TunnelCountAnalysis,
     TunnelCountRow,
@@ -134,15 +132,6 @@ class TunnelCountQuery:
         return tuple((count, False) for count in self.counts) + tail
 
 
-@dataclass(frozen=True)
-class _Question:
-    """One row's question in the shape the split rules read."""
-
-    config: ngc.FlowPolicyConfig
-    offer: float
-    design_demand: float
-
-
 def _model(demand, label: str) -> ngc.CentralizedTE:
     model = demand.config.routing
     if not isinstance(model, ngc.CentralizedTE) or model.tunnel_count is None:
@@ -174,44 +163,6 @@ def _group_key(model: ngc.CentralizedTE) -> tuple:
     # Native models compare by identity; equal declarations share one call. The
     # key holds the support itself (it compares by structure), never its id().
     return (model.source_allocation, model.prefer_headroom, model.support)
-
-
-def count_splits(
-    prepared: PreparedScenario, query: TunnelCountQuery, label, mask, results=None
-):
-    """The rows' split constraints, declared from the offer, design and live heads.
-
-    One reverse search per demand finds its live heads for all its rows; no
-    traffic is solved.
-    """
-    topology = prepared.topology
-    precision = prepared.units_report.precision
-    specs = query.specs
-    splits, extra = [], []
-    for index, demand in enumerate(query.demands.demands):
-        model = _model(demand, label)
-        facts = _Searched(
-            topology, prepared._named, model, demand.endpoints, mask, demand.pool
-        )
-        for count, up_to in specs:
-            local, other = query_splits(
-                topology,
-                prepared._named,
-                _Question(
-                    _counted(model, count, up_to), query.offer, query.design_demand
-                ),
-                demand.endpoints,
-                0,
-                mask,
-                f"{label}.demand[{demand.id}].{'up_to' if up_to else 'count'}[{count}]",
-                precision,
-                demand.pool,
-                facts,
-                result=None if results is None else results[(index, count, up_to)],
-            )
-            splits.extend(local)
-            extra.extend(other)
-    return splits, extra
 
 
 def tunnel_counts(
@@ -292,16 +243,8 @@ def tunnel_counts(
                     cost,
                 )
             )
-    splits, extra = count_splits(prepared, query, label, mask, results)
-    samples, constraints = query_inputs(prepared, query, label)
-    miss = precision_miss(
-        ReportLocation(None, "baseline", None),
-        samples,
-        (*constraints, *splits, *extra),
-    )
     return TunnelCountAnalysis(
         prepared,
-        () if miss is None else (miss,),
         analysis_metadata(workers),
         OutputSelection(query.outputs, False, query.export_details),
         tuple(rows),

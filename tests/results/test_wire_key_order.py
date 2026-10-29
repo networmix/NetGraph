@@ -120,21 +120,25 @@ def test_exported_keys_keep_their_hand_written_order():
 def test_every_plain_record_writes_its_constants_and_fields_in_declared_order():
     from fractions import Fraction
 
-    from ngraph.results import ExactAlpha, PoolHead, PoolMetadata, SplitConstraint
+    from ngraph.results import ExactAlpha, PoolHead, PoolMetadata, SplitCountConstraint
 
-    split = SplitConstraint(
-        "router", "x", Fraction(3, 2), "observed", 2, Fraction(1), True
+    split = SplitCountConstraint(
+        "link.x.capacity", 4.0, 2, 2, None, 0, 0, Fraction(3), Fraction(1, 3), False
     )
     assert list(project(split)) == [
         "kind",
-        "label",
-        "incoming_physical",
-        "basis",
-        "members",
+        "capacity_label",
+        "capacity",
+        "nodes",
+        "directed_links",
+        "group",
+        "demands",
+        "tunnels",
+        "count",
         "q_upper_bound",
         "met",
     ]
-    assert project(split)["incoming_physical"] == {"numerator": 3, "denominator": 2}
+    assert project(split)["count"] == {"numerator": 3, "denominator": 1}
     pool = project(PoolMetadata(PoolHead("p", ("a", "b"))))
     assert pool == {
         "head": {"pool_id": "p", "physical_sources": ["a", "b"]},

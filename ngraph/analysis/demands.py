@@ -389,15 +389,6 @@ def declared_split(
     return None, None
 
 
-def residual_weights(named: NamedRoutes, parents) -> bool:
-    """Whether any declared demand weights its split by the residual snapshot."""
-    return any(
-        declared_split(named, parent.config, parent.policy)[1]
-        == ngc.WeightBasis.RESIDUAL_SNAPSHOT
-        for parent in parents
-    )
-
-
 def expand_units(
     root: ExpansionSplit | ExpansionLeaf, total: int
 ) -> tuple[tuple[ExpansionLeaf, int], ...]:
@@ -504,15 +495,40 @@ def bind_plans(
     # Retain references with identity keys: model subclasses need not be hashable,
     # and their equality must not suppress validation of a different configuration.
     checked_models = {}
+    checked_rosters = set()
 
-    def check(config, plan):
+    def check(config, plan, leaf=None):
         key = id(config)
-        if key not in checked_models:
+        model = config.routing
+        pairs = ()
+        roster = None
+        if (
+            leaf is not None
+            and isinstance(model, ngc.CentralizedTE)
+            and model.tunnel_count is not None
+        ):
+            sources = (
+                [topology.pool_heads[leaf.id]]
+                if leaf.id in topology.pool_heads
+                else [topology.node_id_by_name[n] for n in leaf.endpoints.sources]
+            )
+            destinations = [
+                topology.node_id_by_name[n] for n in leaf.endpoints.destinations
+            ]
+            # Native argument checks depend on roster arity; graph/options checks
+            # are shared by the materialized model as for all other declarations.
+            roster = (key, len(sources), len(destinations))
+            pairs = ((sources, destinations),)
+        if key not in checked_models or (
+            roster is not None and roster not in checked_rosters
+        ):
             try:
-                validate_model(topology, config)
+                validate_model(topology, config, pairs=pairs)
             except (ValueError, TypeError) as exc:
                 raise type(exc)(f"{_plan_label(plan, name)}: {exc}") from exc
             checked_models[key] = config
+            if roster is not None:
+                checked_rosters.add(roster)
 
     for plan in plans:
         error_label = plan.spec.yaml_label
@@ -542,7 +558,7 @@ def bind_plans(
                     raise
                 raise type(exc)(f"{error_label}: {exc}") from exc
             first_config = first_config or config
-            check(config, plan)
+            check(config, plan, leaf)
             pool = None
             if leaf.id in topology.pool_heads:
                 pool = PoolMetadata(

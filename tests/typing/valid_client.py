@@ -50,7 +50,6 @@ from ngraph import (
     PlacementAnalysis,
     PlacementQuery,
     PlacementRow,
-    PoolHead,
     RangeConstraint,
     ResolvedDemandSet,
     RouteSpec,
@@ -61,16 +60,14 @@ from ngraph import (
     SelfPair,
     SensitivityAnalysis,
     SensitivityQuery,
-    SplitConstraint,
+    SplitCountConstraint,
     StepContext,
     StepOutput,
     SupportSpec,
     TunnelCountAnalysis,
     TunnelCountQuery,
-    TunnelResolutionConstraint,
     UnitsReport,
     UnitsSettings,
-    UnverifiedConstraint,
     WCMPController,
     WeightSpec,
     WorkflowStep,
@@ -221,38 +218,28 @@ def read_units(report: UnitsReport) -> float:
     sets: tuple[str, ...] = report.scope.library_demand_sets
     for name in sets:
         assert isinstance(name, str)
-    maximum: Fraction = report.max_absolute_input_error
-    relative: Fraction = report.max_relative_input_error
-    assert maximum >= 0 and relative >= 0
-    for constraint in report.binding_constraints:
-        label: str = constraint.label
-        assert label
-        if isinstance(constraint, (InputConstraint, SplitConstraint)):
-            bound: Fraction = constraint.q_upper_bound
-            assert bound >= 0
-            if isinstance(constraint, SplitConstraint):
-                assert constraint.basis in ("declared", "observed")
-                incoming: Fraction = constraint.incoming_physical
-                assert incoming >= 0
-        elif isinstance(constraint, RangeConstraint):
-            integer: int = constraint.units_value
-            assert integer >= 0
-        elif isinstance(constraint, TunnelResolutionConstraint):
-            observed_q: float = constraint.q
-            heads: tuple[str | PoolHead, ...] = constraint.heads
-            unmet: Literal[False] = constraint.met
-            assert observed_q in (q, 2 * q) and heads and not unmet
-        else:
-            opaque: UnverifiedConstraint = constraint
-            assert opaque.reason == "opaque_program"
-    for miss in report.misses:
-        case: str | None = miss.location.case_id
-        index: int | None = miss.location.probe_index
-        assert case is None or isinstance(case, str)
-        assert index is None or index >= 0
-        for sample in miss.examples:
-            error: Fraction = sample.error
-            assert sample.binary64_hex and isinstance(error, Fraction)
+    achieved: Fraction | None = report.achieved_precision
+    assert achieved is None or achieved >= 0
+    input_bound: InputConstraint | None = report.input_bound
+    split_bound: SplitCountConstraint | None = report.split_bound
+    range_limit: RangeConstraint | None = report.range_limit
+    if input_bound is not None:
+        label: str = input_bound.label
+        bound: Fraction = input_bound.q_upper_bound
+        assert label and bound > 0
+    if split_bound is not None:
+        count: Fraction = split_bound.count
+        group: str | None = split_bound.group
+        assert count > 0 and (group is None or isinstance(group, str))
+        assert split_bound.nodes >= 0 and split_bound.directed_links >= 0
+        assert (
+            split_bound.capacity > 0
+            and split_bound.demands >= 0
+            and split_bound.tunnels >= 0
+        )
+    if range_limit is not None:
+        integer: int = range_limit.units_value
+        assert integer >= 0 and report.limited_by == "range"
     for approximation in report.weight_approximations:
         kind: Literal["weight_approximation"] = approximation.kind
         relative_error: Fraction = approximation.max_relative_error

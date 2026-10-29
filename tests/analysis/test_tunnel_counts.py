@@ -780,31 +780,3 @@ def test_a_query_mask_keeps_the_scenario_disabled_elements():
         plan.total_tunnel_cost,
         row.result.delivered,
     ) == (10, 10, 10, 8)
-
-
-def test_split_misses_read_the_query_mask():
-    prep = prepared(
-        [("S1", "X", 96), ("S2", "X", 96), ("X", "T", 96)],
-        [spec("^S", "^T$", t2(1), id="te")],
-        q="auto",
-    )
-    assert prep.topology.q == 1 / 8
-    s2_out = prep.topology.graph.eligibility(
-        excluded_edges=list(prep.topology.edges_by_link["S2|X|0"])
-    )
-
-    def unmet(**fields):
-        (miss,) = ask(prep, (1,), 3, 3, **fields).misses
-        return sorted(c.label for c in miss.constraints if not c.met)
-
-    # D = O = 3: atoms need q <= 2 * 0.001 * 3; two live heads split 3 at 0.001 * 3.
-    assert unmet() == [
-        "tunnel_counts.demand[te|0].count[1].sources",
-        "tunnel_counts.design_demand",
-        "tunnel_counts.offer",
-    ]
-    # With S2's only link excluded one head is live: no sources split.
-    assert unmet(eligibility=s2_out) == [
-        "tunnel_counts.design_demand",
-        "tunnel_counts.offer",
-    ]

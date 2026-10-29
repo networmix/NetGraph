@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **BREAKING**: preparation chooses `q` once from a split count (nodes, links, equal-split demands placed together, tunnels) and the smallest amounts, without re-preparing candidates; analyses no longer check splits or report precision misses. `units_report` replaces `binding_constraints`, `nominal_split_count`, `nominal_splits`, `misses` and the input-rounding samples and maxima with `limited_by`, `achieved_precision`, `input_bound`, `split_bound` and `range_limit`. `q` is finer on equal-split workloads and can change on others; the documented precision promise is in Precision and the choice of q. `units.precision` must now be at most 0.5.
+
 ## [0.25.0] - 2026-10-27
 
 ### Added

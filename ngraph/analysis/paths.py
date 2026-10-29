@@ -246,7 +246,6 @@ def paths(prepared: PreparedScenario, query: PathQuery) -> PathAnalysis:
         )
     return PathAnalysis(
         prepared,
-        (),
         analysis_metadata(1),
         algorithm,
         query.mode,

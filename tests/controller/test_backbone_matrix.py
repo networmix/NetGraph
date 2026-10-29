@@ -5,7 +5,7 @@ three DC routers as the BGP edge, the six ordered DC pairs on SHORTEST_PATHS_WCM
 at 25,312.5 each (alpha 1.6875), forwarded together as fixed programs. The failure
 is the three metro1/pop2 leaf uplinks of metro1's DC. At q = 1/4096 the deliveries
 are those of an independent prototype (separate filling solver, one weighted
-program per demand); at the recipe's q the test checks the exact native identities
+program per demand); at a declared coarse q the test checks the exact native identities
 (conservation, capacity, losses) and the figures at that q.
 """
 
@@ -182,8 +182,13 @@ BASELINE = [Fraction(50625, 2)] * 6
         ),
     ],
 )
-def test_at_q_1_over_4096_the_matrix_matches_the_independent_prototype(scope, witness):
-    prep = backbone(scope, q=1 / 4096)
+@pytest.mark.parametrize("declared_q", [None, 1 / 4096], ids=["auto", "manual"])
+def test_at_q_1_over_4096_the_matrix_matches_the_independent_prototype(
+    scope, witness, declared_q
+):
+    prep = backbone(scope, q=declared_q)
+    # L=physical nodes+2*links and c_min=100 give the static bound q=2^-12.
+    assert prep.topology.q == 1 / 4096
     baseline, failed = matrix(prep)
     for state in (baseline, failed):
         check_identities(prep.topology, state)
@@ -225,8 +230,8 @@ def test_at_q_1_over_4096_the_matrix_matches_the_independent_prototype(scope, wi
         ),
     ],
 )
-def test_at_the_recipes_q_the_matrix_keeps_its_identities(scope, witness, drops):
-    prep = backbone(scope)
+def test_at_declared_coarse_q_the_matrix_keeps_its_identities(scope, witness, drops):
+    prep = backbone(scope, q=0.25)
     assert prep.topology.q == 0.25
     baseline, failed = matrix(prep)
     for state in (baseline, failed):

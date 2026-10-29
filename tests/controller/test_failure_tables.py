@@ -934,31 +934,6 @@ def test_a_zero_share_group_whose_member_fails_changes_nothing():
     assert states["converged"].dead_caps == (DeadCap("T", "S", "s", 0, Fraction(1, 2)),)
 
 
-def test_precision_misses_describe_published_converged_rows_by_their_case_table():
-    # q = 1 misses the local target at S's router split. The failure case's row
-    # splits over its case table's three members, the baseline's over four.
-    prep = r30()
-    failures = request("link", "^S\\|A1$")
-    analysis = place(
-        prep,
-        PlacementQuery(prep.demand_sets["d"], failures=failures, workers=1, states=ALL),
-    )
-    routers = {
-        miss.location.case_id: [
-            c.members for c in miss.constraints if getattr(c, "kind", None) == "router"
-        ]
-        for miss in analysis.misses
-    }
-    assert routers == {"baseline": [4], "failure-000001": [3]}
-    stale = place(
-        prep,
-        PlacementQuery(
-            prep.demand_sets["d"], failures=failures, workers=1, states=["stale"]
-        ),
-    )
-    assert stale.misses == ()
-
-
 def test_dead_caps_reach_the_wire_on_converged_and_repair_only():
     prep = r30()
     analysis = place(

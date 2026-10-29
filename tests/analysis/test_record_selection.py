@@ -102,10 +102,7 @@ def test_report_record_selection_has_numerical_and_getter_controls(
     (row,) = result.cases[0].states["converged"].rows
     assert row.result.delivered == row.reference_request_units == 4
     assert row.result.source_drops == 0 and not row.result.edge_drops
-    assert len(calls) == int(
-        kind in ("split", "residual", "equal", "weighted")
-        or (kind == "optimized_spf" and costs)
-    )
+    assert len(calls) == int(costs and kind in ("split", "residual", "optimized_spf"))
     report = row.cost_distribution
     if not costs:
         assert report is None and not row.unavailable_outputs
@@ -120,7 +117,7 @@ def test_report_record_selection_has_numerical_and_getter_controls(
         ] == [(3, 3, 4)]
 
 
-def test_later_residual_weights_keep_earlier_controller_records():
+def test_later_residual_weights_use_capacity_left_by_earlier_demand():
     network = Network(nodes={name: Node(name) for name in ("s", "a", "b", "t")})
     for source, target, capacity in (
         ("s", "a", 4),
@@ -179,7 +176,7 @@ def test_later_residual_weights_keep_earlier_controller_records():
             if reference.direction == "forward" and reference.link in ("s|b|0", "b|t|0")
             else 0
         )
-    # The second policy has one positive member at each router after the first
-    # consumes a's branch. Using nominal 4/8 would invent a two-member split
-    # with q bound 2*.2*4/3 < 1, falsely missing the precision target.
-    assert result.units_report.target_met
+    # The report is the preparation's input/count budget: L=12, Gamma=5,
+    # c_min=4 and q1 give 5/4, outside p=1/5 even with exact routing.
+    assert result.units_report.achieved_precision == 5 / 4
+    assert not result.units_report.target_met

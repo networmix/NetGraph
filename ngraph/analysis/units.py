@@ -4,22 +4,20 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from fractions import Fraction
-from types import MappingProxyType
-from typing import Literal, TypeAlias, TypeVar
+from typing import Literal, TypeAlias
 
 import netgraph_core as ngc
 
+from ngraph.model.demand import _DistributedTEInput, _ParsedModel
 from ngraph.results import (
     InputConstraint,
-    InputQuantization,
-    PrecisionMiss,
     RangeConstraint,
+    SplitCountConstraint,
     UnitsReport,
-    UnverifiedConstraint,
 )
-from ngraph.utils.values import _located_error, integer, physical
+from ngraph.utils.values import _located_error, _shown, integer, physical
 
 LIMIT = 1 << 62
 _InputKind: TypeAlias = Literal[
@@ -53,11 +51,16 @@ class UnitsSettings:
     precision: float = 0.001
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "precision",
-            physical(self.precision, "units.precision", positive=True),
-        )
+        try:
+            precision = physical(self.precision, "units.precision", positive=True)
+            if precision > 0.5:
+                raise ValueError
+        except ValueError:
+            raise ValueError(
+                "units.precision: expected a number greater than 0 and at most 0.5, "
+                f"got {_shown(self.precision)}"
+            ) from None
+        object.__setattr__(self, "precision", precision)
         if isinstance(self.resolution, str) and self.resolution == "auto":
             object.__setattr__(self, "resolution", "auto")
         else:
@@ -106,83 +109,67 @@ def split_units(total: int, members: int) -> tuple[int, ...]:
     return tuple(quotient + (i < remainder) for i in range(members))
 
 
-def input_samples(
-    inputs: Mapping[str, tuple[_InputKind, float]], q: float
-) -> tuple[InputQuantization, ...]:
-    """Describe all input errors exactly, before truncating report examples."""
-    samples = []
-    for label, (kind, raw) in sorted(inputs.items()):
-        value = physical(raw, label)
-        units = quantize(value, q, label)
-        exact = Fraction(value)
-        error = units * Fraction(q) - exact
-        samples.append(
-            InputQuantization(
-                label,
-                kind,
-                value,
-                value.hex(),
-                units,
-                error,
-                error / exact if exact else None,
-            )
+def question_inputs(offer, design_demand, declaration):
+    """A capacity question's physical atoms, by field, known before evaluation."""
+    values = {}
+    if offer is not None:
+        values["offer"] = ("offer", offer)
+    if design_demand is not None:
+        values["design_demand"] = ("design", design_demand)
+    if isinstance(declaration, _ParsedModel) and isinstance(
+        declaration.routing, _DistributedTEInput
+    ):
+        values["min_unreserved"] = (
+            "min_unreserved",
+            declaration.routing.min_unreserved_bandwidth,
         )
-    return tuple(samples)
+    return values
 
 
-def input_constraint(
-    label: str, value: float, q: float, precision: float
-) -> InputConstraint | None:
-    """Positive inputs retain their precision constraint even if rounded to zero."""
+def input_constraint(label, value, q, precision) -> InputConstraint | None:
+    """The input bound of one positive binary64 amount, even if rounded to zero."""
     amount = physical(value, label)
-    target = physical(precision, "units.precision", positive=True)
     if not amount:
         return None
-    bound = 2 * Fraction(target) * Fraction(amount)
+    bound = 2 * Fraction(precision) * Fraction(amount)
     return InputConstraint(label, bound, Fraction(q) <= bound)
 
 
-def input_observations(inputs, q, precision):
-    """Own one complete set of exact input samples and constraints per unit."""
-    return MappingProxyType(
-        {
-            sample.label: (
-                sample,
-                input_constraint(sample.label, sample.binary64_value, q, precision),
-            )
-            for sample in input_samples(inputs, q)
-        }
-    )
+def split_count(
+    nodes: int, directed_links: int, groups: Iterable[tuple[str, int, int]]
+):
+    """Choose the largest static group count; the floor and then first group win ties."""
+    floor = Fraction(nodes + directed_links, 4) + 2
+    chosen = (None, 0, 0, floor)
+    for name, demands, tunnels in groups:
+        count = max(demands, 1) * floor + tunnels
+        if count > chosen[3]:
+            chosen = (name, demands, tunnels, count)
+    return chosen
 
 
-def _binding(q, constraints):
-    """Constraints that are unverified, missed, or would miss at twice q."""
-    return tuple(
-        c
-        for c in constraints
-        if isinstance(c, UnverifiedConstraint)
-        or not c.met
-        or (hasattr(c, "q_upper_bound") and Fraction(q) * 2 > c.q_upper_bound)
-    )
-
-
-def _met(constraints) -> bool:
-    return all(not isinstance(c, UnverifiedConstraint) and c.met for c in constraints)
-
-
-def with_splits(report, splits, extra):
-    """Complete the existing input report without observing its inputs again."""
-    constraints = (*splits, *extra)
-    return replace(
-        report,
-        binding_constraints=(
-            *report.binding_constraints,
-            *_binding(report.q, constraints),
+def _minimum(inputs, *, capacities=False):
+    # min keeps the first equal value, preserving preparation's insertion order.
+    return min(
+        (
+            (label, value)
+            for label, (kind, value) in inputs.items()
+            if value > 0
+            and (not capacities or (kind == "capacity" and label.startswith("link.")))
         ),
-        target_met=report.target_met and _met(constraints),
-        nominal_split_count=len(splits),
-        nominal_splits=tuple(splits),
+        key=lambda atom: atom[1],
+        default=None,
     )
+
+
+def _bounds(inputs, precision, count):
+    smallest = _minimum(inputs)
+    capacity = _minimum(inputs, capacities=True)
+    input_bound = 2 * Fraction(precision) * Fraction(smallest[1]) if smallest else None
+    split_bound = (
+        Fraction(precision) * Fraction(capacity[1]) / count if capacity else None
+    )
+    return smallest, capacity, input_bound, split_bound
 
 
 def make_report(
@@ -190,101 +177,71 @@ def make_report(
     settings,
     scope,
     inputs,
+    nodes,
+    directed_links,
+    group_count,
+    limited_by,
+    range_limit,
     capacity_sum,
     cost_sum,
-    splits=(),
-    extra=(),
-    misses=(),
-    *,
-    observations=None,
 ):
-    """Build a report from complete observations; examples are only a sample."""
-    if observations is None:
-        observations = input_observations(inputs, q, settings.precision)
-    samples = tuple(sample for sample, _ in observations.values())
-    constraints = tuple(c for _, c in observations.values() if c is not None)
-    all_constraints = (*constraints, *splits, *extra)
-    inexact = tuple(s for s in samples if s.error)
-    zeroed = tuple(s for s in samples if s.binary64_value > 0 and s.units == 0)
-    positive = tuple(s for s in samples if s.binary64_value > 0)
+    """Describe the selected unit's input/count budget and range; never observe traffic."""
+    group, demands, tunnels, count = group_count
+    smallest, capacity, _, upper = _bounds(inputs, settings.precision, count)
+    split_bound = None
+    if capacity is not None:
+        assert upper is not None
+        split_bound = SplitCountConstraint(
+            capacity[0],
+            capacity[1],
+            nodes,
+            directed_links,
+            group,
+            demands,
+            tunnels,
+            count,
+            upper,
+            Fraction(q) <= upper,
+        )
+    terms = []
+    if smallest:
+        terms.append(Fraction(q) / (2 * Fraction(smallest[1])))
+    if capacity:
+        terms.append(Fraction(q) * count / Fraction(capacity[1]))
+    achieved = max(terms) if terms else None
     return UnitsReport(
         q=q,
         exponent=math.frexp(q)[1] - 1,
         mode="auto" if settings.resolution == "auto" else "manual",
-        precision=float(settings.precision),
-        target_met=not misses and _met(all_constraints),
+        precision=settings.precision,
+        target_met=achieved is None or achieved <= Fraction(settings.precision),
         scope=scope,
-        binding_constraints=_binding(q, all_constraints),
-        input_count=len(samples),
-        inexact_inputs=len(inexact),
-        zeroed_inputs=len(zeroed),
-        inexact_examples=inexact[:16],
-        zeroed_examples=zeroed[:16],
-        max_absolute_input_error=max(
-            (abs(s.error) for s in positive), default=Fraction(0)
-        ),
-        max_relative_input_error=max(
-            (abs(s.relative_error) for s in positive if s.relative_error is not None),
-            default=Fraction(0),
-        ),
+        limited_by=limited_by,
+        achieved_precision=achieved,
+        input_bound=input_constraint(*smallest, q, settings.precision)
+        if smallest
+        else None,
+        split_bound=split_bound,
+        range_limit=range_limit,
         augmented_capacity_sum_units=capacity_sum,
         augmented_cost_sum=cost_sum,
-        nominal_split_count=len(splits),
-        nominal_splits=tuple(splits),
-        misses=tuple(misses),
     )
-
-
-def precision_miss(location, samples, constraints) -> PrecisionMiss | None:
-    """One observation's missed local targets, or None when all are met."""
-    missed = tuple(
-        c for c in constraints if isinstance(c, UnverifiedConstraint) or not c.met
-    )
-    if not missed:
-        return None
-    inexact = tuple(s for s in samples if s.error)
-    zeroed = tuple(s for s in samples if s.binary64_value > 0 and s.units == 0)
-    return PrecisionMiss(location, missed, len(inexact), len(zeroed), inexact[:16])
-
-
-Candidate = TypeVar("Candidate")
 
 
 def choose_resolution(
     settings: UnitsSettings,
     inputs: Mapping[str, tuple[_InputKind, float]],
     coefficients: Mapping[str, int],
-    split_bounds: Iterable[Fraction],
-    candidate: Callable[[float], tuple[Candidate, bool]],
+    count: Fraction,
     extra: Callable[[float], int] | None = None,
-) -> tuple[Candidate, RangeConstraint | None]:
-    """Choose q by the fixed recipe and return the chosen candidate.
+):
+    """Select the largest power below both static bounds, then coarsen only for range.
 
-    ``coefficients`` counts each link capacity's directed copies in the
-    augmented graph; ``split_bounds`` are the declared expansion bounds, which
-    like the input bounds do not depend on q. ``candidate(q)`` prepares one
-    resolution and says whether it meets the target; ``extra(q)`` adds the
-    capacity that pool offer budgets add above their sources' outgoing
-    capacity. Automatic choice takes the
-    coarsest range-valid q within the declared bounds that meets the target,
-    else the finest range-valid one. The second value is the range failure of
-    the next finer q, which the caller reports as binding.
+    ``coefficients`` counts each capacity's copies in the augmented graph;
+    ``extra`` adds pool offer budgets above the sources' outgoing capacity.
+    No graph or traffic candidate is constructed.
     """
     failures = {}
-    candidates = (
-        RESOLUTIONS
-        if settings.resolution == "auto"
-        else (validate_resolution(settings.resolution),)
-    )
-    declared_limit = None
-    if settings.resolution == "auto":
-        input_bounds = (
-            c.q_upper_bound
-            for label, (_, value) in inputs.items()
-            if (c := input_constraint(label, value, 1.0, settings.precision))
-            is not None
-        )
-        declared_limit = min((*input_bounds, *split_bounds), default=None)
 
     def range_valid(q):
         try:
@@ -320,35 +277,34 @@ def choose_resolution(
             return False
         return True
 
-    valid, skipped = [], []
-    last = None
-    for q in candidates:
-        if declared_limit is not None and Fraction(q) > declared_limit:
-            skipped.append(q)
-            continue
-        if not range_valid(q):
-            continue
-        valid.append(q)
-        value, met = candidate(q)
-        last = (q, value)
-        if settings.resolution != "auto" or met:
-            return value, None
-    if not valid:
-        # Precision may conflict with range. Find the finest range-valid excluded
-        # candidate, without doing its input conversions on the normal path.
-        for q in reversed(skipped):
-            if range_valid(q):
-                valid.append(q)
-                break
-    if not valid:
-        detail = failures[max(failures)]
-        reason = (
-            "no legal resolution represents the complete prepared input/augmented graph"
-        )
-        error = ValueError(f"{detail.label}: {reason}")
-        if detail.kind == "amount":
-            _located_error(error, detail.label, inputs[detail.label][1])
-        raise error
-    q = valid[-1]
-    value = last[1] if last is not None and last[0] == q else candidate(q)[0]
-    return value, failures.get(q / 2)
+    if settings.resolution != "auto":
+        q = validate_resolution(settings.resolution)
+        limited_by = "declared"
+    else:
+        _, _, input_bound, split_bound = _bounds(inputs, settings.precision, count)
+        bounds = [bound for bound in (input_bound, split_bound) if bound is not None]
+        if not bounds:
+            q, limited_by = RESOLUTIONS[0], "unbounded"
+        else:
+            bound = min(bounds)
+            q = next((q for q in RESOLUTIONS if Fraction(q) <= bound), RESOLUTIONS[-1])
+            if Fraction(q) > bound:
+                limited_by = "resolution_floor"
+            else:
+                limited_by = (
+                    "input"
+                    if input_bound is not None and input_bound == bound
+                    else "split_count"
+                )
+    while not range_valid(q):
+        if settings.resolution != "auto" or q == RESOLUTIONS[0]:
+            detail = failures[q]
+            error = ValueError(
+                f"{detail.label}: no legal resolution represents the complete prepared input/augmented graph"
+            )
+            if detail.kind == "amount":
+                _located_error(error, detail.label, inputs[detail.label][1])
+            raise error
+        q *= 2
+        limited_by = "range"
+    return q, limited_by, failures.get(q / 2) if limited_by == "range" else None

@@ -23,7 +23,7 @@ def test_records_share_value_methods_and_keep_frozen_field_metadata():
         and kind.__module__ == results.__name__
         and dataclasses.is_dataclass(kind)
     ]
-    assert len(records) == 67
+    assert results.SplitCountConstraint in records
     for kind in records:
         assert kind.__dataclass_params__.frozen
         names = tuple(field.name for field in dataclasses.fields(kind))

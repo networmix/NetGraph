@@ -13,7 +13,7 @@ units:
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `resolution` | `auto` | The bandwidth unit `q`: `auto`, or one power of two from 2^-32 through 2^32 |
-| `precision` | `0.001` | The relative precision target; the units report states whether it is met |
+| `precision` | `0.001` | The relative precision target, greater than 0 and at most 0.5, from which preparation chooses `q`; the units report states the input/count budget and whether its bounds hold |
 
 Capacities, demand volumes, finite offers and designs and minimum unreserved bandwidth are physical amounts, converted to whole units of `q` at preparation ([Units and the resolution q](../concepts.md#units-and-the-resolution-q)); [Precision and the choice of q](../concepts.md#precision-and-the-choice-of-q) says how `q` is chosen and what the units report records. Costs are positive integers ([link keys](#direct-node-and-link-definitions)); counts and weights are integers.
 

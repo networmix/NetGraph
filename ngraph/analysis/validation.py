@@ -1,9 +1,9 @@
-"""Graph-dependent model checks independent of selected traffic pairs."""
+"""Model checks on the prepared graph, with no eligible traffic and no solve."""
 
 import netgraph_core as ngc
 
 
-def validate_model(topology, config, options=None):
+def validate_model(topology, config, options=None, *, pairs=()):
     """Check one materialized model with no eligible traffic and no solve."""
     graph = topology.graph
     nothing = graph.eligibility(excluded_nodes=range(graph.num_nodes()))
@@ -24,4 +24,4 @@ def validate_model(topology, config, options=None):
         program = config.routing.program
         ngc.evaluate_demand(graph, program.sources, program.destinations, checked)
     else:
-        ngc.evaluate_pairs(graph, (), checked, workers=1)
+        ngc.evaluate_pairs(graph, pairs, checked, workers=1)

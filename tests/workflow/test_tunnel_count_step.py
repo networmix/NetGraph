@@ -26,7 +26,6 @@ from ngraph import (
     tunnel_counts,
     write_json,
 )
-from ngraph.analysis import counts
 from ngraph.workflow import TunnelCountAnalysis
 from ngraph.workflow.parse import build_workflow_steps
 from tests.controller.test_owner_figures import ebb_links
@@ -80,23 +79,6 @@ def heads(volume=0, count=1):
     return DemandSpec(Selector("^(A|B)$"), Selector("^T$"), volume, t2(count), id="te")
 
 
-def test_a_count_step_moves_q_by_its_own_splits_only():
-    # The declared set (exact count 1, volume 0) binds nothing: capacities give 2^-3.
-    assert active(scenario(TWO_HEADS, [heads()])).topology.q == 1 / 8
-    prep = prepare(scenario(TWO_HEADS, [heads()], (step(),)))
-    # Rows: sources split 0.001 * 100 / 1; each head's 4 tunnels 0.001 * 50 / 3 -> 2^-6.
-    assert prep.topology.q == 1 / 64
-    labels = {c.label: c for c in prep.units_report.nominal_splits}
-    assert labels["workflow.c.demand[te|0].count[4].sources"].q_upper_bound == P * 100
-    head = labels["workflow.c.demand[te|0].count[4].head[0]"]
-    assert (head.q_upper_bound, head.members, head.basis) == (P * 50 / 3, 4, "declared")
-    # The step's offer and design join the input atoms of the recipe.
-    bare = active(scenario(TWO_HEADS, [heads()])).units_report.input_count
-    assert prep.units_report.input_count == bare + 2
-    inputs = {c.label for c in prep.units_report.binding_constraints}
-    assert "workflow.c.demand[te|0].count[4].head[0]" in inputs
-
-
 EBB_S2 = ebb_links("S2")
 
 
@@ -113,200 +95,10 @@ def ebb_counts(**fields):
     return prepare(scenario(EBB_S2, [spec], (step(**{**values, **fields}),)))
 
 
-def test_count_rows_bind_q_through_their_largest_split():
-    spec = DemandSpec(
-        Selector("^DC_A$"), Selector("^DC_B$"), 2400, t2(1, headroom=True), id="te"
-    )
-    # The declared exact count 1 has no tunnel split: link capacities give 2^-4.
-    assert active(scenario(EBB_S2, [spec])).topology.q == 1 / 16
-    prep = ebb_counts()
-    # The up-to row's 256 members bind: 0.001 * 2400 / 255 -> 2^-7.
-    assert prep.topology.q == 1 / 128
-    binding = [c for c in prep.units_report.binding_constraints if "up_to" in c.label]
-    head = prep.topology.node_id_by_name["DC_A"]
-    assert [c.label for c in binding] == [
-        f"workflow.c.demand[te|0].up_to[256].head[{head}]"
-    ]
-    assert binding[0].q_upper_bound == P * 2400 / 255
-    assert {c.basis for c in prep.units_report.nominal_splits if ".c." in c.label} == {
-        "declared"
-    }
-    # Without the up-to row, the k = 128 row binds: 0.001 * 2400 / 127 -> 2^-6.
-    assert ebb_counts(up_to=None).topology.q == 1 / 64
-
-
-def test_count_splits_solve_no_traffic_and_search_once_per_leaf(monkeypatch):
-    calls = {"evaluate": 0, "validations": 0, "searches": 0, "candidates": 0}
-    real_pairs, real_demand = ngc.evaluate_pairs, ngc.evaluate_demand
-    real_spf, real_splits = ngc.spf, counts.count_splits
-
-    def pairs(*args, **kwargs):
-        calls["evaluate" if args[1] else "validations"] += 1
-        return real_pairs(*args, **kwargs)
-
-    def demand(*args, **kwargs):
-        calls["evaluate"] += 1
-        return real_demand(*args, **kwargs)
-
-    def search(*args, **kwargs):
-        calls["searches"] += 1
-        return real_spf(*args, **kwargs)
-
-    def splits(*args, **kwargs):
-        calls["candidates"] += 1
-        return real_splits(*args, **kwargs)
-
-    monkeypatch.setattr(ngc, "evaluate_pairs", pairs)
-    monkeypatch.setattr(ngc, "evaluate_demand", demand)
-    monkeypatch.setattr(ngc, "spf", search)
-    monkeypatch.setattr(counts, "count_splits", splits)
-    leaves = [heads(), DemandSpec(Selector("^A$"), Selector("^T$"), 0, t2(), id="one")]
-    assert active(scenario(TWO_HEADS, leaves)).topology.q == 2**-3
-    assert calls == {"evaluate": 0, "validations": 2, "searches": 0, "candidates": 0}
-    prep = prepare(scenario(TWO_HEADS, leaves, (step(counts=(2, 4), up_to=8),)))
-    assert calls["evaluate"] == 0
-    # The recipe tries each q from the capacities' 2^-3 down to 2^-8 (te's heads at
-    # up to 8: 0.001 * 50 / 7), and at each one reverse search per leaf serves all
-    # three of its rows: 2 leaves x 6 candidates.
-    assert prep.topology.q == 2**-8
-    assert (calls["candidates"], calls["searches"]) == (6, 2 * 6)
-    # Two distinct configurations per candidate, plus the initial active-only bind.
-    assert calls["validations"] == 2 + 2 * 6
-
-
 def library(prep, offer, count=4, **fields):
     return tunnel_counts(
         prep, TunnelCountQuery(prep.demand_sets["d"], (count,), offer, offer, **fields)
     )
-
-
-def test_a_library_question_outside_what_preparation_declared_misses():
-    prep = prepare(scenario(TWO_HEADS, [heads()], (step(),)))
-    assert prep.topology.q == 1 / 64
-    assert library(prep, 100).misses == ()
-
-    def unmet(analysis):
-        (miss,) = analysis.misses
-        assert (
-            miss.location.step,
-            miss.location.case_id,
-            miss.location.probe_index,
-        ) == (
-            None,
-            "baseline",
-            None,
-        )
-        return sorted(c.label for c in miss.constraints)
-
-    # O = D = 10: sources 0.001 * 10 and heads 0.001 * 5 / 3 are below q = 1/64.
-    assert unmet(library(prep, 10)) == [
-        "tunnel_counts.demand[te|0].count[4].head[0]",
-        "tunnel_counts.demand[te|0].count[4].head[1]",
-        "tunnel_counts.demand[te|0].count[4].sources",
-    ]
-    # k = 16: heads 0.001 * 50 / 15 are below q; the sources split still meets it.
-    assert unmet(library(prep, 100, count=16)) == [
-        "tunnel_counts.demand[te|0].count[16].head[0]",
-        "tunnel_counts.demand[te|0].count[16].head[1]",
-    ]
-    # A removed head only raises the other head's share: no miss.
-    mask = prep.topology.graph.eligibility(
-        excluded_nodes=[prep.topology.node_id_by_name["B"]]
-    )
-    assert library(prep, 100, eligibility=mask).misses == ()
-
-
-def test_design_splits_bind_when_the_design_is_below_the_offer():
-    prep = prepare(scenario(TWO_HEADS, [heads()], (step(design_demand=10, offer=100),)))
-    # Design 10 over heads A, B and 4 tunnels each: 0.001 * 5 / 3 -> 2^-10 (the
-    # offer's 0.001 * 50 / 3 alone gives 2^-6).
-    assert prep.topology.q == 2**-10
-    assert sorted(c.label for c in prep.units_report.binding_constraints) == [
-        "workflow.c.demand[te|0].count[4].design.head[0]",
-        "workflow.c.demand[te|0].count[4].design.head[1]",
-    ]
-    # Prepared for D = O = 100 (q = 2^-6), a library D = 10 misses its design splits:
-    # heads 0.001 * 5 / 3 and sources 0.001 * 10; the atoms 2 * 0.001 * 10 are met.
-    prep = prepare(scenario(TWO_HEADS, [heads()], (step(),)))
-    analysis = tunnel_counts(
-        prep, TunnelCountQuery(prep.demand_sets["d"], (4,), 10, 100)
-    )
-    (miss,) = analysis.misses
-    assert sorted(c.label for c in miss.constraints if not c.met) == [
-        "tunnel_counts.demand[te|0].count[4].design.head[0]",
-        "tunnel_counts.demand[te|0].count[4].design.head[1]",
-        "tunnel_counts.demand[te|0].count[4].design.sources",
-    ]
-
-
-@pytest.mark.parametrize(
-    ("design", "offer", "atom"),
-    [(0.001, 1000, "design_demand"), (1000, 0.001, "offer")],
-)
-def test_the_smaller_amount_binds_its_own_input_atom(design, offer, atom):
-    counted = step(counts=(1,), design_demand=design, offer=offer)
-    prep = prepare(scenario([("A", "T", 100)], [heads()], (counted,)))
-    # One head at count 1 has no split; q <= 2 * 0.001 * 0.001 -> 2^-19.
-    assert prep.topology.q == 2**-19
-    assert [c.label for c in prep.units_report.binding_constraints] == [
-        f"workflow.c.{atom}"
-    ]
-
-
-def test_a_pooled_leaf_splits_at_its_pool_head():
-    pooled = DemandSpec(
-        Selector("^S[12]$"), Selector("^T$"), 0, FlowPolicyPreset.TE_ECMP_16_LSP, id="p"
-    )
-    links = [("S1", "X", 100), ("S2", "X", 100), ("X", "T", 200)]
-    prep = prepare(scenario(links, [pooled], (step(),)))
-    # The pool's private head (node 4, after S1, S2, T, X) is the leaf's one head: its
-    # 4 tunnels split 100 at 0.001 * 100 / 3 -> 2^-5, and one head has no sources split.
-    assert prep.topology.q == 2**-5
-    assert [c.label for c in prep.units_report.binding_constraints] == [
-        "workflow.c.demand[p|0].count[4].head[4]"
-    ]
-    assert {
-        c.label: c.q_upper_bound
-        for c in prep.units_report.nominal_splits
-        if ".c." in c.label
-    } == {"workflow.c.demand[p|0].count[4].head[4]": P * 100 / 3}
-
-
-def test_each_leaf_searches_its_own_heads():
-    leaves = [
-        DemandSpec(Selector("^A$"), Selector("^T$"), 0, t2(), id="one"),
-        DemandSpec(Selector("^(A|B)$"), Selector("^T$"), 0, t2(), id="two"),
-    ]
-    prep = prepare(scenario(TWO_HEADS, leaves, (step(),)))
-    # two's heads A and B: 50 each over 4 tunnels, 0.001 * 50 / 3 -> 2^-6 (one's
-    # single head alone: 0.001 * 100 / 3 -> 2^-5).
-    assert prep.topology.q == 2**-6
-    assert sorted(c.label for c in prep.units_report.binding_constraints) == [
-        "workflow.c.demand[two|0].count[4].head[0]",
-        "workflow.c.demand[two|0].count[4].head[1]",
-    ]
-    assert {
-        c.label: c.q_upper_bound
-        for c in prep.units_report.nominal_splits
-        if "[two|" in c.label
-    } == {
-        "workflow.c.demand[two|0].count[4].head[0]": P * 50 / 3,
-        "workflow.c.demand[two|0].count[4].head[1]": P * 50 / 3,
-        "workflow.c.demand[two|0].count[4].sources": P * 100,
-    }
-
-
-def test_a_library_miss_keeps_the_query_input_atoms():
-    counted = step(counts=(1,), design_demand=10, offer=10)
-    prep = prepare(scenario([("A", "T", 100)], [heads()], (counted,)))
-    # One head at count 1 has no split; design 10 is met, offer 0.01 needs
-    # q <= 2 * 0.001 * 0.01.
-    assert prep.topology.q > 2 * 0.001 * 0.01
-    analysis = tunnel_counts(
-        prep, TunnelCountQuery(prep.demand_sets["d"], (1,), 10, 0.01)
-    )
-    (miss,) = analysis.misses
-    assert [c.label for c in miss.constraints if not c.met] == ["tunnel_counts.offer"]
 
 
 def test_the_step_is_a_numerical_step_of_the_units_report():
@@ -314,20 +106,13 @@ def test_the_step_is_a_numerical_step_of_the_units_report():
     assert prep.units_report.scope.workflow_steps == ("c",)
 
 
-def test_a_run_reports_its_count_step_misses_under_the_step():
-    prep = prepare(scenario(TWO_HEADS, [heads()], (step(),), q=1 / 8))
-    (result,) = run(prep).steps
-    (miss,) = result.result.misses
-    assert miss.location.case_id == "baseline"
-    report_misses = run(prep).units_report.misses
-    assert [m.location.step for m in report_misses] == ["c"]
-
-
 def test_the_declared_set_still_takes_part_in_choosing_q():
+    # L=7, floor=15/4. Two heads give t=2*count. Count-step t=8
+    # competes with the set, not a replacement for its declared tunnel count.
     for volume, count, bare, stepped in (
-        (1, 16, 2**-15, 2**-15),
-        (100, 2, 2**-5, 2**-6),
-        (0, 16, 2**-3, 2**-6),
+        (1, 16, 2**-9, 2**-9),
+        (100, 1, 2**-6, 2**-7),
+        (0, 16, 2**-9, 2**-9),
     ):
         assert active(scenario(TWO_HEADS, [heads(volume, count)])).topology.q == bare
         prep = prepare(scenario(TWO_HEADS, [heads(volume, count)], (step(),)))

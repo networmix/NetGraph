@@ -398,22 +398,6 @@ class FailureCase(_ResultRecord):
 
 
 @_record
-class ReportLocation(_ResultRecord):
-    """Where a precision miss happened: the step, the failure case and the MSD probe,
-    where they apply.
-    """
-
-    step: str | None = field(metadata={"null_when": "the report is outside a workflow"})
-    """The step."""
-    case_id: str | None = field(
-        metadata={"null_when": "the report is outside failure cases"}
-    )
-    """The case."""
-    probe_index: int | None = field(metadata={"null_when": "the report is outside MSD"})
-    """The MSD probe."""
-
-
-@_record
 class PreparationScope(_ResultRecord):
     """What a preparation covered: its workflow steps, and the demand sets bound for the
     workflow and for library callers.
@@ -425,28 +409,6 @@ class PreparationScope(_ResultRecord):
     """The demand sets the workflow names."""
     library_demand_sets: tuple[str, ...]
     """The demand sets the library caller named."""
-
-
-@_record
-class InputQuantization(_ResultRecord):
-    """One physical input converted to units: its binary64 value, its units and the
-    rounding error.
-    """
-
-    label: str
-    """The input or constraint label: where the value is declared."""
-    kind: Literal["capacity", "demand", "offer", "design", "min_unreserved"]
-    """What the input is: a capacity, demand, offer, design or minimum unreserved bandwidth."""
-    binary64_value: float
-    """The physical input as given."""
-    binary64_hex: str
-    """The physical input in hexadecimal."""
-    units: int
-    """Its value in units (integer units of q)."""
-    error: Fraction
-    """The signed rounding error, units times q minus the input (physical, a fraction): positive when rounded up."""
-    relative_error: Fraction | None = field(metadata={"null_when": "the input is zero"})
-    """The signed relative error, the error divided by the input."""
 
 
 @_record
@@ -466,44 +428,6 @@ class InputConstraint(_ResultRecord):
 
 
 @_record
-class SplitConstraint(_ResultRecord):
-    """The split bound of a positive amount v over m members at precision p (q at most
-    pv/(m - 1)), and whether q meets it.
-    """
-
-    kind: Literal["expansion", "source", "router", "tunnel"]
-    """Where the split is: expansion, sources, a router or tunnels."""
-    label: str
-    """The input or constraint label: where the value is declared."""
-    incoming_physical: Fraction
-    """The physical amount split (a fraction)."""
-    basis: Literal["declared", "observed"]
-    """declared (from the demands) or observed (from an analysis)."""
-    members: int = field(metadata={"minimum": 2})
-    """The members the amount is split over."""
-    q_upper_bound: Fraction
-    """The q bound this split records: the precision times the incoming amount divided by (members - 1). It bounds q, not the split's own error."""
-    met: bool
-    """Whether the chosen q meets it."""
-
-
-@_record
-class TunnelResolutionConstraint(_ResultRecord):
-    """A native tunnel plan whose live heads cannot receive a whole unit per tunnel."""
-
-    kind: ClassVar[Literal["tunnel_resolution"]] = "tunnel_resolution"
-    """The record kind, a fixed tag."""
-    label: str
-    """The demand or question whose native plan was observed."""
-    q: float
-    """The bandwidth unit at which the plan was observed."""
-    heads: tuple[str | PoolHead, ...] = field(metadata={"minItems": 1})
-    """Every live head, in native node order: a physical node name or a structured TE ingress pool head."""
-    met: ClassVar[Literal[False]] = False
-    """Always false: the observed plan cannot give its live heads whole-unit tunnels."""
-
-
-@_record
 class RangeConstraint(_ResultRecord):
     """A range limit: a value in units against its exclusive limit 2^62 at the tested q."""
 
@@ -519,52 +443,6 @@ class RangeConstraint(_ResultRecord):
     """The exclusive native limit (2^62)."""
     met: bool
     """Whether the value is below the limit."""
-
-
-@_record
-class UnverifiedConstraint(_ResultRecord):
-    """A supplied program whose splits cannot be checked against the precision target."""
-
-    kind: ClassVar[Literal["unverified"]] = "unverified"
-    """The record kind, a fixed tag."""
-    label: str
-    """The input or constraint label: where the value is declared."""
-    reason: ClassVar[Literal["opaque_program"]] = "opaque_program"
-    """The split is inside a supplied native program NetGraph cannot inspect."""
-
-
-UnitConstraint: TypeAlias = (
-    InputConstraint
-    | SplitConstraint
-    | TunnelResolutionConstraint
-    | RangeConstraint
-    | UnverifiedConstraint
-)
-"""One precision or range constraint of a units report."""
-
-
-@_record
-class PrecisionMiss(_ResultRecord):
-    """One place an analysis missed the precision target: its location, the constraints
-    it missed and its input rounding.
-    """
-
-    location: ReportLocation
-    """Where the miss was observed: step, case and probe."""
-    constraints: tuple[
-        InputConstraint
-        | SplitConstraint
-        | TunnelResolutionConstraint
-        | UnverifiedConstraint,
-        ...,
-    ]
-    """The constraints the chosen q does not meet there."""
-    inexact_inputs: int
-    """Inputs not exact at q there."""
-    zeroed_inputs: int
-    """Positive inputs that round to zero units there."""
-    examples: tuple[InputQuantization, ...]
-    """Example inputs that miss."""
 
 
 @_record
@@ -587,21 +465,47 @@ class WeightApproximation(_ResultRecord):
 
 
 @_record
+class SplitCountConstraint(_ResultRecord):
+    """The prepared split-count bound, not a certificate for arbitrary answers."""
+
+    kind: ClassVar[Literal["split_count"]] = "split_count"
+    """The record kind, a fixed tag."""
+    capacity_label: str
+    """The first smallest positive link capacity in link insertion order."""
+    capacity: float
+    """The smallest positive physical link capacity, including disabled links."""
+    nodes: int
+    """The physical network's node count, including disabled nodes."""
+    directed_links: int
+    """Twice the physical link count, including disabled links and excluding pool attachments."""
+    group: str | None = field(metadata={"null_when": "the floor sets the count"})
+    """The demand set or workflow.<step> that sets the count; the floor wins ties."""
+    demands: int
+    """Lossless shared equal-split leaves in the winning group, or zero for the floor."""
+    tunnels: int
+    """Heads times declared tunnels per head in the winning group, or zero for the floor."""
+    count: Fraction
+    """The maximum of the floor L/4 + 2 and max(k, 1) times that floor plus t over prepared groups."""
+    q_upper_bound: Fraction
+    """The split-count upper bound on q: precision times the smallest positive capacity divided by the count."""
+    met: bool
+    """Whether the prepared q meets this bound; the delivery theorem has additional premises."""
+
+
+@_record
 class UnitsReport(_ResultRecord):
-    """How preparation chose q: the mode and target, the bounds that set q, input
-    rounding, the range sums and every precision miss.
-    """
+    """The prepared unit, its input/count bounds and augmented graph range sums."""
 
     q: float
     """The bandwidth unit: one unit is q in physical terms."""
     exponent: int
     """q as a power of two: q = 2^exponent."""
     mode: Literal["auto", "manual"]
-    """auto (chosen by the recipe) or manual (declared)."""
+    """auto (chosen from static bounds) or manual (declared)."""
     precision: float
-    """The relative precision target."""
+    """The target input/count budget, greater than zero and at most 0.5."""
     target_met: bool
-    """Whether every input and split meets its precision bound at q and every native tunnel plan observed at q has sufficient resolution for its live heads. Bounds are checked, not the rounding: false is possible with no input rounded."""
+    """Whether both present input/count bounds hold at q; this does not certify arbitrary analysis answers."""
     input_convention: ClassVar[Literal["promoted_binary64_half_up"]] = (
         "promoted_binary64_half_up"
     )
@@ -612,47 +516,39 @@ class UnitsReport(_ResultRecord):
     """Units are authoritative; physical values are binary64 displays."""
     scope: PreparationScope
     """What the preparation covered."""
-    binding_constraints: tuple[UnitConstraint, ...]
-    """The constraints that limited q, including observed tunnel plans with insufficient resolution for their live heads: at q, or at 2q when automatic preparation rejected that coarser candidate and meets the target at q. Each tunnel record's q identifies its observation."""
-    input_count: int
-    """Physical inputs converted to units."""
-    inexact_inputs: int
-    """Inputs not exact at q."""
-    zeroed_inputs: int
-    """Positive inputs that round to zero units."""
-    inexact_examples: tuple[InputQuantization, ...]
-    """Example inexact inputs."""
-    zeroed_examples: tuple[InputQuantization, ...]
-    """Example zeroed inputs."""
-    max_absolute_input_error: Fraction
-    """The largest absolute input error (physical, a fraction)."""
-    max_relative_input_error: Fraction
-    """The largest absolute relative input error (a fraction)."""
+    limited_by: Literal[
+        "input", "split_count", "range", "resolution_floor", "declared", "unbounded"
+    ]
+    """Which bound selected q; input wins an equal input/split bound."""
+    achieved_precision: Fraction | None = field(
+        metadata={"null_when": "there is no positive input or capacity"}
+    )
+    """The maximum of q/(2*v_min) and q*count/c_min over present denominators; an input/count budget, not a general answer guarantee."""
+    input_bound: InputConstraint | None = field(
+        metadata={"null_when": "there is no positive prepared bandwidth input"}
+    )
+    """The smallest positive input's bound, with ties in preparation insertion order."""
+    split_bound: SplitCountConstraint | None = field(
+        metadata={"null_when": "there is no positive link capacity"}
+    )
+    """The prepared split-count bound, subject to the documented delivery theorem's premises."""
+    range_limit: RangeConstraint | None = field(
+        metadata={"null_when": "limited_by is not range"}
+    )
+    """The range failure at the next finer q when range forced a coarser unit."""
     augmented_capacity_sum_units: int
     """The graph's capacity sum with pool attachments (integer units of q)."""
     augmented_cost_sum: int
     """The graph's cost sum with pool attachments."""
-    nominal_split_count: int
-    """Splits of the demands at alpha 1 without failures."""
-    nominal_splits: tuple[SplitConstraint, ...]
-    """Those splits with their bounds on q."""
-    misses: tuple[PrecisionMiss, ...]
-    """Precision misses observed in analyses."""
     weight_approximations: tuple[WeightApproximation, ...] = ()
     """Controller weights apportioned because they reached 2^62."""
-
-    def with_misses(self, misses: tuple[PrecisionMiss, ...]) -> UnitsReport:
-        """This report with further precision misses appended."""
-        if not misses:
-            return self
-        return replace(self, target_met=False, misses=(*self.misses, *misses))
 
     def with_approximations(
         self, entries: tuple[WeightApproximation, ...]
     ) -> UnitsReport:
         """This report with the controller's weight approximations, each once.
 
-        They change neither ``target_met`` nor the binding constraints.
+        They change neither ``target_met`` nor the input/count bounds.
         """
         known = {entry.label for entry in self.weight_approximations}
         new = tuple(entry for entry in entries if entry.label not in known)
@@ -904,15 +800,13 @@ class CaseResult(_ResultRecord, Generic[RowT]):
 
 
 class _PreparedResult(_ResultRecord):
-    """An analysis of one prepared scenario, with its own precision misses.
+    """An analysis using the preparation's unit and report.
 
-    Each analysis record declares ``prepared`` and ``misses`` first;
-    ``units_report`` is the preparation's report with these misses appended.
+    A later-bound demand set adds its controller weight approximations.
     """
 
     __slots__ = ()
     prepared: PreparedScenario
-    misses: tuple[PrecisionMiss, ...]
 
     @property
     def topology(self) -> PreparedTopology:
@@ -920,7 +814,7 @@ class _PreparedResult(_ResultRecord):
 
     @property
     def units_report(self) -> UnitsReport:
-        report = self.prepared.units_report.with_misses(self.misses)
+        report = self.prepared.units_report
         # A demand set bound after preparation brings its own approximations.
         demands = getattr(getattr(self, "query", None), "demands", None)
         if demands is None:
@@ -934,7 +828,6 @@ class CapacityAnalysis(_PreparedResult):
 
     kind: ClassVar[Literal["capacity"]] = "capacity"
     prepared: PreparedScenario
-    misses: tuple[PrecisionMiss, ...]
     metadata: AnalysisMetadata
     outputs: OutputSelection
     question: Literal["lossless_bound", "fixed_offer_delivery", "first_hop_experiment"]
@@ -951,7 +844,6 @@ class PlacementAnalysis(_PreparedResult):
 
     kind: ClassVar[Literal["placement"]] = "placement"
     prepared: PreparedScenario
-    misses: tuple[PrecisionMiss, ...]
     metadata: AnalysisMetadata
     outputs: OutputSelection
     alpha: ExactAlpha
@@ -968,7 +860,6 @@ class SensitivityAnalysis(_PreparedResult):
 
     kind: ClassVar[Literal["sensitivity"]] = "sensitivity"
     prepared: PreparedScenario
-    misses: tuple[PrecisionMiss, ...]
     metadata: AnalysisMetadata
     outputs: OutputSelection
     endpoints: Endpoints
@@ -995,7 +886,6 @@ class PathAnalysis(_PreparedResult):
 
     kind: ClassVar[Literal["paths"]] = "paths"
     prepared: PreparedScenario
-    misses: tuple[PrecisionMiss, ...]
     metadata: AnalysisMetadata
     algorithm: Literal["spf", "ksp"]
     mode: Literal["combine", "pairwise"]
@@ -1096,7 +986,6 @@ class MSDAnalysis(_PreparedResult):
 
     kind: ClassVar[Literal["msd"]] = "msd"
     prepared: PreparedScenario
-    misses: tuple[PrecisionMiss, ...]
     metadata: AnalysisMetadata
     outputs: OutputSelection
     alpha_feasible: ExactAlpha | None
@@ -1142,7 +1031,6 @@ class TunnelCountAnalysis(_PreparedResult):
 
     kind: ClassVar[Literal["tunnel_counts"]] = "tunnel_counts"
     prepared: PreparedScenario
-    misses: tuple[PrecisionMiss, ...]
     metadata: AnalysisMetadata
     outputs: OutputSelection
     rows: tuple[TunnelCountRow, ...]
@@ -1354,7 +1242,7 @@ class RunMetadata(_ResultRecord):
 
 @_record
 class RunResult(_ResultRecord):
-    """One run; ``units_report`` adds every step's precision misses, by step."""
+    """One run with the preparation's units report."""
 
     metadata: RunMetadata
     units_report: UnitsReport

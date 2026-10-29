@@ -24,7 +24,7 @@ from ngraph import (
     run,
     write_json,
 )
-from ngraph.results import PreparationScope
+from ngraph.results import InputConstraint, PreparationScope, SplitCountConstraint
 from ngraph.workflow.build_graph import BuildGraph
 
 
@@ -45,16 +45,14 @@ def fixture():
         demand_sets=("load",),
     )
     value = run(prepared)
-    # One physical capacity and one physical parent input are both exactly4.
-    # Their input bounds are2*1/4*4=2, so q1 is met and not binding (2q=2).
-    # One source, one edge and no expansion fork produce no split constraints.
-    # Both directions give capacity sum8 and cost sum6.
+    # v_min=c_min=4, L=4 and Gamma=3. Manual q1 has input bound2 met,
+    # split bound1/3 unmet, achieved3/4. Directed capacity/cost sums are8/6.
     expected_units = {
         "q": 1.0,
         "exponent": 0,
         "mode": "manual",
         "precision": 0.25,
-        "target_met": True,
+        "target_met": False,
         "input_convention": "promoted_binary64_half_up",
         "display_convention": "units_authoritative_binary64_display",
         "scope": {
@@ -62,19 +60,30 @@ def fixture():
             "workflow_demand_sets": [],
             "library_demand_sets": ["load"],
         },
-        "binding_constraints": [],
-        "input_count": 2,
-        "inexact_inputs": 0,
-        "zeroed_inputs": 0,
-        "inexact_examples": [],
-        "zeroed_examples": [],
-        "max_absolute_input_error": {"numerator": 0, "denominator": 1},
-        "max_relative_input_error": {"numerator": 0, "denominator": 1},
+        "limited_by": "declared",
+        "achieved_precision": {"numerator": 3, "denominator": 4},
+        "input_bound": {
+            "kind": "input",
+            "label": "link.S|T|0.capacity",
+            "q_upper_bound": {"numerator": 2, "denominator": 1},
+            "met": True,
+        },
+        "split_bound": {
+            "kind": "split_count",
+            "capacity_label": "link.S|T|0.capacity",
+            "capacity": 4.0,
+            "nodes": 2,
+            "directed_links": 2,
+            "group": None,
+            "demands": 0,
+            "tunnels": 0,
+            "count": {"numerator": 3, "denominator": 1},
+            "q_upper_bound": {"numerator": 1, "denominator": 3},
+            "met": False,
+        },
+        "range_limit": None,
         "augmented_capacity_sum_units": 8,
         "augmented_cost_sum": 6,
-        "nominal_split_count": 0,
-        "nominal_splits": [],
-        "misses": [],
         "weight_approximations": [],
     }
     expected = {
@@ -143,17 +152,14 @@ def fixture():
     # The two conventions are class constants of every report, not its fields.
     del expected_python["input_convention"], expected_python["display_convention"]
     expected_python["scope"] = PreparationScope((), (), ("load",))
-    for name in (
-        "binding_constraints",
-        "inexact_examples",
-        "zeroed_examples",
-        "nominal_splits",
-        "misses",
-        "weight_approximations",
-    ):
-        expected_python[name] = ()
-    for name in ("max_absolute_input_error", "max_relative_input_error"):
-        expected_python[name] = Fraction(0)
+    expected_python["weight_approximations"] = ()
+    expected_python["achieved_precision"] = Fraction(3, 4)
+    expected_python["input_bound"] = InputConstraint(
+        "link.S|T|0.capacity", Fraction(2), True
+    )
+    expected_python["split_bound"] = SplitCountConstraint(
+        "link.S|T|0.capacity", 4.0, 2, 2, None, 0, 0, Fraction(3), Fraction(1, 3), False
+    )
     return value, expected, expected_python
 
 

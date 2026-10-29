@@ -44,7 +44,6 @@ TARGET = ROOT / "ngraph/schemas/results.json"
 PAGE = ROOT / "docs/reference/results.md"
 EXPLICIT = ROOT / "dev/explicit_results_schema.json"
 ALIASES = (
-    "UnitConstraint",
     "CostReport",
     "CostUnavailableReason",
     "MSDStatus",
@@ -554,7 +553,7 @@ def page(document: dict) -> str:
         "  units of the run's resolution `q` (the units report holds `q`); units × `q` is the",
         "  physical amount.",
         "- **Physical amounts:** inputs, question offers and designs, `NetworkStats`",
-        "  capacities and the units report's input samples, as declared.",
+        "  capacities and `split_bound.capacity` in the units report, as declared.",
         "- **Ratios:** delivery ratios, alpha, shares and caps, with no unit.",
         "- **Routing costs:** path costs, tunnel costs and their sums, which never take `q`.",
         "  `total_cost` is cost × bandwidth units, so `total_cost` × `q` is cost × physical",

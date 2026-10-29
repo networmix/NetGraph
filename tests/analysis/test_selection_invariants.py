@@ -1,4 +1,4 @@
-"""Router-only precision conflicts and direct shared-group membership."""
+"""Range/input conflicts and direct shared-group membership."""
 
 from ngraph import (
     Condition,
@@ -20,7 +20,7 @@ from ngraph import (
 )
 
 
-def test_finest_range_valid_q_when_only_router_split_conflicts():
+def test_static_input_bound_and_range_can_both_be_satisfied():
     n = Network(
         nodes={k: Node(k) for k in ["A", "D", "X", "Y", *(f"M{i}" for i in range(8))]}
     )
@@ -34,11 +34,11 @@ def test_finest_range_valid_q_when_only_router_split_conflicts():
         demand_sets=("d",),
     )
     report = p.units_report
-    # Eight equal branches: q<=0.5*4/(8-1)=2/7, so power-of-two q<=0.25; directed capacity
-    # sum at q=0.25 exceeds2^62, while q=0.5 is range-valid.
-    assert report.q == 0.5 and report.target_met is False
-    assert any(c.kind == "router" for c in report.binding_constraints)
-    assert any(c.kind == "capacity_sum" for c in report.binding_constraints)
+    # v_min=4 gives B_in=4; L=12+34=46, Gamma=13.5 and c_min=64
+    # give B_split=64/27>2. q=2 fits range as well as both numeric bounds.
+    assert report.q == 2 and report.target_met is True
+    assert report.limited_by == "split_count" and report.range_limit is None
+    assert report.split_bound.count == 27 / 2
 
 
 def test_shared_group_expansion_uses_direct_not_child_members():

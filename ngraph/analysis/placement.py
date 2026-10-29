@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 import netgraph_core as ngc
 
-from ngraph.analysis.demands import controlled, residual_weights, scaled_expansion
+from ngraph.analysis.demands import controlled, scaled_expansion
 from ngraph.analysis.failures import (
     FailureRequest,
     Workers,
@@ -19,14 +19,13 @@ from ngraph.analysis.failures import (
     schedule_cases,
 )
 from ngraph.analysis.metadata import analysis_metadata
-from ngraph.analysis.precision import placement_inputs, placement_miss
 from ngraph.analysis.states import (
     Baseline,
     forwarding_failure,
     participants,
     simultaneous_role,
 )
-from ngraph.analysis.topology import NamedRoutes, PreparedTopology
+from ngraph.analysis.topology import PreparedTopology
 from ngraph.analysis.totals import placement_totals
 from ngraph.results import (
     STATE_ORDER,
@@ -35,7 +34,6 @@ from ngraph.results import (
     OutputSelection,
     PlacementAnalysis,
     PlacementRow,
-    ReportLocation,
     ResolvedDemand,
     ResolvedDemandSet,
     StateName,
@@ -218,37 +216,6 @@ def _apply_matrix(ledger, policies, requests, outputs=None):
     )
 
 
-def _observation_records(
-    named: NamedRoutes, demands: ResolvedDemandSet, policies, *, costs=False
-):
-    """Read records only for split descriptions, residual weights or SPF costs."""
-    residual = residual_weights(named, demands.expansion_template)
-
-    def needed(policy):
-        model = policy.config.routing
-        return (
-            residual
-            or isinstance(model, ngc.Pinned)
-            or (
-                isinstance(model, ngc.ShortestPaths)
-                and (costs or model.allocation != ngc.RouteAllocation.OPTIMIZED)
-            )
-            or (
-                isinstance(model, ngc.CentralizedTE)
-                and model.tunnel_count is None
-                and model.source_allocation
-                in (
-                    ngc.SourceAllocation.EQUAL,
-                    ngc.SourceAllocation.WEIGHTED,
-                )
-            )
-        )
-
-    return tuple(
-        tuple(policy.records()) if needed(policy) else () for policy in policies
-    )
-
-
 def _forward_simultaneous(
     topology, demands, ledger, owners, entries, roles, held, outputs
 ):
@@ -339,13 +306,16 @@ def _place_state(prepared, query, case, state, entries, tables, shared):
             failure = forwarding_failure(exc)
             if failure is None:
                 raise
-            return CaseState((), None, failure), None
+            return CaseState((), None, failure)
         observed = state == "converged" and state in query.states
         records = (
-            _observation_records(
-                prepared._named, demands, owners, costs=query.export_cost_distribution
+            tuple(
+                tuple(policy.records())
+                if isinstance(policy.config.routing, ngc.ShortestPaths)
+                else ()
+                for policy in owners
             )
-            if observed
+            if observed and query.export_cost_distribution
             else ((),) * len(owners)
         )
         costs = shared.costs if observed else None
@@ -380,24 +350,10 @@ def _place_state(prepared, query, case, state, entries, tables, shared):
                     unavailable,
                 )
             )
-        miss = None
-        if observed:
-            miss = placement_miss(
-                prepared,
-                demands,
-                results,
-                records,
-                case.eligibility,
-                query.alpha,
-                ReportLocation(None, case.id, None),
-                shared.inputs,
-                tables,
-                ordered,
-            )
         totals = placement_totals(
             (row.id, row.reference_request_units, row.result) for row in rows
         )
-        return CaseState(tuple(rows), totals), miss
+        return CaseState(tuple(rows), totals)
     finally:
         remove_policies(held)
 
@@ -411,7 +367,6 @@ class _Shared:
     """
 
     amounts: Mapping[str, int]
-    inputs: object
     costs: object
     programmed: frozenset[str]
     live: tuple[bool, ...]
@@ -441,7 +396,6 @@ def _place_case(prepared, query, case, shared, baseline):
         computed = ("converged", *(s for s in computed if s != "converged"))
     group = demands.controller is not None and setup.scope == "group"
     states: dict[StateName, CaseState] = {}
-    miss = None
     for state in computed:
         if state != "converged" and baseline is None:
             baseline = Baseline.of(states["converged"])
@@ -469,17 +423,13 @@ def _place_case(prepared, query, case, shared, baseline):
             baseline,
             tables,
         )
-        value, observed = _place_state(
-            prepared, query, case, state, entries, tables, shared
-        )
+        value = _place_state(prepared, query, case, state, entries, tables, shared)
         if group and state != "stale":
             dead = tuple(c for t in (tables or {}).values() for c in t.dead_caps)
             value = replace(value, dead_caps=dead)
         states[state] = value
-        if observed is not None:
-            miss = observed
     published = MappingProxyType({s: states[s] for s in query.states})
-    return CaseResult(case, published), miss, baseline
+    return CaseResult(case, published), baseline
 
 
 def place(prepared: PreparedScenario, query: PlacementQuery) -> PlacementAnalysis:
@@ -518,7 +468,6 @@ def place(prepared: PreparedScenario, query: PlacementQuery) -> PlacementAnalysi
     workers = resolve_workers(query.workers)
     shared = _Shared(
         amounts,
-        placement_inputs(prepared, query.demands, alpha.value),
         cost_distribution,
         _programmed(query.demands),
         tuple(
@@ -535,19 +484,18 @@ def place(prepared: PreparedScenario, query: PlacementQuery) -> PlacementAnalysi
         first = solve(cases[0])
         observed = (
             first,
-            *schedule_cases(cases[1:], lambda case: solve(case, first[2]), workers),
+            *schedule_cases(cases[1:], lambda case: solve(case, first[1]), workers),
         )
     else:
         observed = schedule_cases(cases, solve, workers)
     return PlacementAnalysis(
         prepared,
-        tuple(miss for _, miss, _ in observed if miss is not None),
         analysis_metadata(workers, query.failures),
         OutputSelection(
             query.outputs, query.export_cost_distribution, query.export_details
         ),
         alpha,
-        tuple(case for case, _, _ in observed),
+        tuple(case for case, _ in observed),
         accounting,
         query,
     )

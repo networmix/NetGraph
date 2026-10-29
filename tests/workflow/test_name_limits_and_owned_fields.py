@@ -214,7 +214,6 @@ def test_preparation_only_uses_the_refusing_readers_field(phase, label):
         ("export_details", "yes", "expected bool, got 'yes'", " = 'yes'"),
         ("workers", 0, "integer outside [1, inf), got 0", " = 0"),
         ("counts", (), "give at least one count or up_to, got ()", ""),
-        ("counts", 3, "expected a sequence of integers, got 3", " = 3"),
         ("outputs", 3, "expected native OutputOptions, got 3", " = 3"),
         ("offer", -1, "expected a finite nonnegative amount, got -1", " = -1"),
     ],
@@ -249,6 +248,16 @@ def test_count_query_owns_the_field_it_refuses(field, bad, reason, suffix):
     )
 
 
+def test_count_sequence_shape_is_refused_at_step_construction():
+    fields = dict(name="bad", demand_set="d", offer=1, design_demand=1)
+    assert TunnelCountAnalysis(counts=(1,), **fields).counts == (1,)
+    with pytest.raises(TypeError) as error:
+        TunnelCountAnalysis(counts=3, **fields)
+    assert str(error.value) == (
+        "workflow step bad: tunnel_counts.counts: expected a sequence of integers, got 3"
+    )
+
+
 @pytest.mark.parametrize("resolution", [1, "auto"])
 def test_distributed_minimum_names_the_declared_field(resolution):
     doc = {
@@ -280,7 +289,10 @@ def test_distributed_minimum_names_the_declared_field(resolution):
     )
     doc["workflow"][0]["model"]["routing"]["min_unreserved_bandwidth"] = 1
     prepared = prepare(Scenario.from_yaml(yaml.safe_dump(doc)))
-    assert prepared._inputs["workflow.bad.min_unreserved"] == ("min_unreserved", 1.0)
+    assert prepared.scenario.workflow[0].needs().inputs["min_unreserved"] == (
+        "min_unreserved",
+        1.0,
+    )
 
 
 def test_reason_resolver_has_no_call_site_field_or_dead_reason_fallback():

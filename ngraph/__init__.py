@@ -71,7 +71,6 @@ if TYPE_CHECKING:
         FailureTrace,
         HardwareRow,
         InputConstraint,
-        InputQuantization,
         JSONValue,
         MarginalCostBin,
         MarginalCurve,
@@ -90,11 +89,9 @@ if TYPE_CHECKING:
         PlacementTotals,
         PoolHead,
         PoolMetadata,
-        PrecisionMiss,
         PreparationScope,
         RangeConstraint,
         RangeRefusal,
-        ReportLocation,
         ResolvedDemand,
         ResolvedDemandSet,
         RunMetadata,
@@ -102,7 +99,7 @@ if TYPE_CHECKING:
         SamplingMetadata,
         SelfPair,
         SensitivityAnalysis,
-        SplitConstraint,
+        SplitCountConstraint,
         StepContext,
         StepOutput,
         StepQuestion,
@@ -110,10 +107,7 @@ if TYPE_CHECKING:
         SyntheticIngress,
         TunnelCountAnalysis,
         TunnelCountRow,
-        TunnelResolutionConstraint,
-        UnitConstraint,
         UnitsReport,
-        UnverifiedConstraint,
         UpperCertificate,
     )
     from ngraph.scenario import PreparedScenario, Scenario, prepare, run
@@ -149,19 +143,19 @@ _MODULES = {
         "DomainResult Endpoints ExactAlpha ExpansionAccounting "
         "ExpansionLeaf ExpansionParent ExpansionSplit ExportContext FailureCase "
         "FailurePattern FailureSelection FailureTrace "
-        "HardwareRow InputConstraint InputQuantization JSONValue "
+        "HardwareRow InputConstraint SplitCountConstraint JSONValue "
         "MarginalCostBin MarginalCurve MSDAnalysis MSDProbe MSDProof "
         "MSDStatus MSDStopReason "
         "NetworkStatsResult OutputSelection PathAnalysis "
         "PathCostBin PathRow PlacementAnalysis "
-        "PlacementRow PlacementTotals PoolHead PoolMetadata PrecisionMiss "
-        "PreparationScope RangeConstraint RangeRefusal ReportLocation "
+        "PlacementRow PlacementTotals PoolHead PoolMetadata "
+        "PreparationScope RangeConstraint RangeRefusal "
         "ResolvedDemand ResolvedDemandSet RunMetadata RunResult "
         "SamplingMetadata SelfPair SensitivityAnalysis "
-        "SplitConstraint StepContext StepOutput StepQuestion "
-        "StepResult SyntheticIngress TunnelCountAnalysis TunnelCountRow TunnelResolutionConstraint "
-        "UnitConstraint UnitsReport "
-        "UnverifiedConstraint UpperCertificate"
+        "StepContext StepOutput StepQuestion "
+        "StepResult SyntheticIngress TunnelCountAnalysis TunnelCountRow "
+        "UnitsReport "
+        "UpperCertificate"
     ),
     "ngraph.scenario": "PreparedScenario Scenario prepare run",
     "ngraph.workflow.base": "WorkflowStep register_workflow_step",
@@ -234,7 +228,7 @@ __all__ = [
     "GroupChild",
     "HardwareRow",
     "InputConstraint",
-    "InputQuantization",
+    "SplitCountConstraint",
     "JSONValue",
     "Link",
     "MSDAnalysis",
@@ -263,13 +257,11 @@ __all__ = [
     "PlacementTotals",
     "PoolHead",
     "PoolMetadata",
-    "PrecisionMiss",
     "PreparationScope",
     "PreparedScenario",
     "PreparedTopology",
     "RangeConstraint",
     "RangeRefusal",
-    "ReportLocation",
     "ResolvedDemand",
     "ResolvedDemandSet",
     "RiskGroup",
@@ -283,7 +275,6 @@ __all__ = [
     "SelfPair",
     "SensitivityAnalysis",
     "SensitivityQuery",
-    "SplitConstraint",
     "StepContext",
     "StepOutput",
     "StepQuestion",
@@ -293,11 +284,8 @@ __all__ = [
     "TunnelCountAnalysis",
     "TunnelCountQuery",
     "TunnelCountRow",
-    "TunnelResolutionConstraint",
-    "UnitConstraint",
     "UnitsReport",
     "UnitsSettings",
-    "UnverifiedConstraint",
     "UpperCertificate",
     "WCMPController",
     "WeightSpec",

@@ -1469,62 +1469,6 @@
       ],
       "additionalProperties": false
     },
-    "InputQuantizationJSON": {
-      "type": "object",
-      "properties": {
-        "label": {
-          "description": "The input or constraint label: where the value is declared.",
-          "type": "string"
-        },
-        "kind": {
-          "description": "What the input is: a capacity, demand, offer, design or minimum unreserved bandwidth.",
-          "enum": [
-            "capacity",
-            "demand",
-            "offer",
-            "design",
-            "min_unreserved"
-          ]
-        },
-        "binary64_value": {
-          "description": "The physical input as given.",
-          "type": "number"
-        },
-        "binary64_hex": {
-          "description": "The physical input in hexadecimal.",
-          "type": "string"
-        },
-        "units": {
-          "description": "Its value in units (integer units of q).",
-          "type": "integer"
-        },
-        "error": {
-          "description": "The signed rounding error, units times q minus the input (physical, a fraction): positive when rounded up.",
-          "$ref": "#/$defs/FractionJSON"
-        },
-        "relative_error": {
-          "description": "The signed relative error, the error divided by the input. Null when the input is zero.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FractionJSON"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "label",
-        "kind",
-        "binary64_value",
-        "binary64_hex",
-        "units",
-        "error",
-        "relative_error"
-      ],
-      "additionalProperties": false
-    },
     "JSONValue": {
       "anyOf": [
         {
@@ -4066,58 +4010,6 @@
       ],
       "additionalProperties": false
     },
-    "PrecisionMissJSON": {
-      "type": "object",
-      "properties": {
-        "location": {
-          "description": "Where the miss was observed: step, case and probe.",
-          "$ref": "#/$defs/ReportLocationJSON"
-        },
-        "constraints": {
-          "description": "The constraints the chosen q does not meet there.",
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/InputConstraintJSON"
-              },
-              {
-                "$ref": "#/$defs/SplitConstraintJSON"
-              },
-              {
-                "$ref": "#/$defs/TunnelResolutionConstraintJSON"
-              },
-              {
-                "$ref": "#/$defs/UnverifiedConstraintJSON"
-              }
-            ]
-          }
-        },
-        "inexact_inputs": {
-          "description": "Inputs not exact at q there.",
-          "type": "integer"
-        },
-        "zeroed_inputs": {
-          "description": "Positive inputs that round to zero units there.",
-          "type": "integer"
-        },
-        "examples": {
-          "description": "Example inputs that miss.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/InputQuantizationJSON"
-          }
-        }
-      },
-      "required": [
-        "location",
-        "constraints",
-        "inexact_inputs",
-        "zeroed_inputs",
-        "examples"
-      ],
-      "additionalProperties": false
-    },
     "PreparationScopeJSON": {
       "type": "object",
       "properties": {
@@ -4272,50 +4164,6 @@
       ],
       "additionalProperties": false
     },
-    "ReportLocationJSON": {
-      "type": "object",
-      "properties": {
-        "step": {
-          "description": "The step. Null when the report is outside a workflow.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "case_id": {
-          "description": "The case. Null when the report is outside failure cases.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "probe_index": {
-          "description": "The MSD probe. Null when the report is outside MSD.",
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "step",
-        "case_id",
-        "probe_index"
-      ],
-      "additionalProperties": false
-    },
     "RunJSON": {
       "type": "object",
       "properties": {
@@ -4331,7 +4179,7 @@
           }
         },
         "units_report": {
-          "description": "The units report of the preparation: q, its reasons, rounding and misses.",
+          "description": "The units report of the preparation: q, its input/count bounds and range sums.",
           "$ref": "#/$defs/UnitsReportJSON"
         }
       },
@@ -4918,53 +4766,73 @@
       ],
       "additionalProperties": false
     },
-    "SplitConstraintJSON": {
+    "SplitCountConstraintJSON": {
       "type": "object",
       "properties": {
         "kind": {
-          "description": "Where the split is: expansion, sources, a router or tunnels.",
+          "description": "The record kind, a fixed tag.",
           "enum": [
-            "expansion",
-            "source",
-            "router",
-            "tunnel"
+            "split_count"
           ]
         },
-        "label": {
-          "description": "The input or constraint label: where the value is declared.",
+        "capacity_label": {
+          "description": "The first smallest positive link capacity in link insertion order.",
           "type": "string"
         },
-        "incoming_physical": {
-          "description": "The physical amount split (a fraction).",
-          "$ref": "#/$defs/FractionJSON"
+        "capacity": {
+          "description": "The smallest positive physical link capacity, including disabled links.",
+          "type": "number"
         },
-        "basis": {
-          "description": "declared (from the demands) or observed (from an analysis).",
-          "enum": [
-            "declared",
-            "observed"
+        "nodes": {
+          "description": "The physical network's node count, including disabled nodes.",
+          "type": "integer"
+        },
+        "directed_links": {
+          "description": "Twice the physical link count, including disabled links and excluding pool attachments.",
+          "type": "integer"
+        },
+        "group": {
+          "description": "The demand set or workflow.<step> that sets the count; the floor wins ties. Null when the floor sets the count.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
-        "members": {
-          "description": "The members the amount is split over.",
-          "type": "integer",
-          "minimum": 2
+        "demands": {
+          "description": "Lossless shared equal-split leaves in the winning group, or zero for the floor.",
+          "type": "integer"
+        },
+        "tunnels": {
+          "description": "Heads times declared tunnels per head in the winning group, or zero for the floor.",
+          "type": "integer"
+        },
+        "count": {
+          "description": "The maximum of the floor L/4 + 2 and max(k, 1) times that floor plus t over prepared groups.",
+          "$ref": "#/$defs/FractionJSON"
         },
         "q_upper_bound": {
-          "description": "The q bound this split records: the precision times the incoming amount divided by (members - 1). It bounds q, not the split's own error.",
+          "description": "The split-count upper bound on q: precision times the smallest positive capacity divided by the count.",
           "$ref": "#/$defs/FractionJSON"
         },
         "met": {
-          "description": "Whether the chosen q meets it.",
+          "description": "Whether the prepared q meets this bound; the delivery theorem has additional premises.",
           "type": "boolean"
         }
       },
       "required": [
         "kind",
-        "label",
-        "incoming_physical",
-        "basis",
-        "members",
+        "capacity_label",
+        "capacity",
+        "nodes",
+        "directed_links",
+        "group",
+        "demands",
+        "tunnels",
+        "count",
         "q_upper_bound",
         "met"
       ],
@@ -4991,7 +4859,7 @@
           ]
         },
         "units_report": {
-          "description": "The units report of the preparation: q, its reasons, rounding and misses.",
+          "description": "The units report of the preparation: q, its input/count bounds and range sums.",
           "$ref": "#/$defs/UnitsReportJSON"
         }
       },
@@ -6158,54 +6026,6 @@
       ],
       "additionalProperties": false
     },
-    "TunnelResolutionConstraintJSON": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "description": "The record kind, a fixed tag.",
-          "enum": [
-            "tunnel_resolution"
-          ]
-        },
-        "label": {
-          "description": "The demand or question whose native plan was observed.",
-          "type": "string"
-        },
-        "q": {
-          "description": "The bandwidth unit at which the plan was observed.",
-          "type": "number"
-        },
-        "heads": {
-          "description": "Every live head, in native node order: a physical node name or a structured TE ingress pool head.",
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/$defs/PoolHeadJSON"
-              }
-            ]
-          },
-          "minItems": 1
-        },
-        "met": {
-          "description": "Always false: the observed plan cannot give its live heads whole-unit tunnels.",
-          "enum": [
-            false
-          ]
-        }
-      },
-      "required": [
-        "kind",
-        "label",
-        "q",
-        "heads",
-        "met"
-      ],
-      "additionalProperties": false
-    },
     "UnavailableOutputsJSON": {
       "type": "object",
       "properties": {
@@ -6216,25 +6036,6 @@
       },
       "required": [],
       "additionalProperties": false
-    },
-    "UnitConstraintJSON": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/InputConstraintJSON"
-        },
-        {
-          "$ref": "#/$defs/SplitConstraintJSON"
-        },
-        {
-          "$ref": "#/$defs/TunnelResolutionConstraintJSON"
-        },
-        {
-          "$ref": "#/$defs/RangeConstraintJSON"
-        },
-        {
-          "$ref": "#/$defs/UnverifiedConstraintJSON"
-        }
-      ]
     },
     "UnitsReportJSON": {
       "type": "object",
@@ -6248,18 +6049,18 @@
           "type": "integer"
         },
         "mode": {
-          "description": "auto (chosen by the recipe) or manual (declared).",
+          "description": "auto (chosen from static bounds) or manual (declared).",
           "enum": [
             "auto",
             "manual"
           ]
         },
         "precision": {
-          "description": "The relative precision target.",
+          "description": "The target input/count budget, greater than zero and at most 0.5.",
           "type": "number"
         },
         "target_met": {
-          "description": "Whether every input and split meets its precision bound at q and every native tunnel plan observed at q has sufficient resolution for its live heads. Bounds are checked, not the rounding: false is possible with no input rounded.",
+          "description": "Whether both present input/count bounds hold at q; this does not certify arbitrary analysis answers.",
           "type": "boolean"
         },
         "input_convention": {
@@ -6278,46 +6079,60 @@
           "description": "What the preparation covered.",
           "$ref": "#/$defs/PreparationScopeJSON"
         },
-        "binding_constraints": {
-          "description": "The constraints that limited q, including observed tunnel plans with insufficient resolution for their live heads: at q, or at 2q when automatic preparation rejected that coarser candidate and meets the target at q. Each tunnel record's q identifies its observation.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/UnitConstraintJSON"
-          }
+        "limited_by": {
+          "description": "Which bound selected q; input wins an equal input/split bound.",
+          "enum": [
+            "input",
+            "split_count",
+            "range",
+            "resolution_floor",
+            "declared",
+            "unbounded"
+          ]
         },
-        "input_count": {
-          "description": "Physical inputs converted to units.",
-          "type": "integer"
+        "achieved_precision": {
+          "description": "The maximum of q/(2*v_min) and q*count/c_min over present denominators; an input/count budget, not a general answer guarantee. Null when there is no positive input or capacity.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FractionJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "inexact_inputs": {
-          "description": "Inputs not exact at q.",
-          "type": "integer"
+        "input_bound": {
+          "description": "The smallest positive input's bound, with ties in preparation insertion order. Null when there is no positive prepared bandwidth input.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InputConstraintJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "zeroed_inputs": {
-          "description": "Positive inputs that round to zero units.",
-          "type": "integer"
+        "split_bound": {
+          "description": "The prepared split-count bound, subject to the documented delivery theorem's premises. Null when there is no positive link capacity.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplitCountConstraintJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "inexact_examples": {
-          "description": "Example inexact inputs.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/InputQuantizationJSON"
-          }
-        },
-        "zeroed_examples": {
-          "description": "Example zeroed inputs.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/InputQuantizationJSON"
-          }
-        },
-        "max_absolute_input_error": {
-          "description": "The largest absolute input error (physical, a fraction).",
-          "$ref": "#/$defs/FractionJSON"
-        },
-        "max_relative_input_error": {
-          "description": "The largest absolute relative input error (a fraction).",
-          "$ref": "#/$defs/FractionJSON"
+        "range_limit": {
+          "description": "The range failure at the next finer q when range forced a coarser unit. Null when limited_by is not range.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RangeConstraintJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "augmented_capacity_sum_units": {
           "description": "The graph's capacity sum with pool attachments (integer units of q).",
@@ -6326,24 +6141,6 @@
         "augmented_cost_sum": {
           "description": "The graph's cost sum with pool attachments.",
           "type": "integer"
-        },
-        "nominal_split_count": {
-          "description": "Splits of the demands at alpha 1 without failures.",
-          "type": "integer"
-        },
-        "nominal_splits": {
-          "description": "Those splits with their bounds on q.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SplitConstraintJSON"
-          }
-        },
-        "misses": {
-          "description": "Precision misses observed in analyses.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/PrecisionMissJSON"
-          }
         },
         "weight_approximations": {
           "description": "Controller weights apportioned because they reached 2^62.",
@@ -6362,47 +6159,14 @@
         "input_convention",
         "display_convention",
         "scope",
-        "binding_constraints",
-        "input_count",
-        "inexact_inputs",
-        "zeroed_inputs",
-        "inexact_examples",
-        "zeroed_examples",
-        "max_absolute_input_error",
-        "max_relative_input_error",
+        "limited_by",
+        "achieved_precision",
+        "input_bound",
+        "split_bound",
+        "range_limit",
         "augmented_capacity_sum_units",
         "augmented_cost_sum",
-        "nominal_split_count",
-        "nominal_splits",
-        "misses",
         "weight_approximations"
-      ],
-      "additionalProperties": false
-    },
-    "UnverifiedConstraintJSON": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "description": "The record kind, a fixed tag.",
-          "enum": [
-            "unverified"
-          ]
-        },
-        "label": {
-          "description": "The input or constraint label: where the value is declared.",
-          "type": "string"
-        },
-        "reason": {
-          "description": "The split is inside a supplied native program NetGraph cannot inspect.",
-          "enum": [
-            "opaque_program"
-          ]
-        }
-      },
-      "required": [
-        "kind",
-        "label",
-        "reason"
       ],
       "additionalProperties": false
     },

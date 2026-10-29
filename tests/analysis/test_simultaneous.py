@@ -31,7 +31,7 @@ from ngraph import (
     run,
 )
 from ngraph.analysis.topology import compile_topology
-from ngraph.model.network import DirectedLink, Link
+from ngraph.model.network import Link
 from ngraph.results import ForwardingFailure, SyntheticIngress
 from ngraph.workflow.maximum_supported_demand_step import MaximumSupportedDemand
 from ngraph.workflow.traffic_matrix_placement_step import TrafficMatrixPlacement
@@ -462,47 +462,6 @@ def test_a_simultaneous_baseline_outcome_with_converged_only():
     ]
 
 
-def test_precision_reads_the_common_view_in_a_simultaneous_list():
-    # a is pinned to the second link and fills it (20 of 20); b weighs both links by
-    # residual snapshot and sends one unit, which H puts on the first link. Ordered:
-    # b reads the second link's residual 0, prunes it and does not split. In one
-    # simultaneous list b reads the common view (a released): two members, as b
-    # alone. Reading a's flow out of the view would prune the second link again.
-    links = [("S", "T", 20), ("S", "T", 20)]
-    second = DirectedLink("S|T|1", "forward")
-    pinned = PinnedRoutes(("a",), admission=LOSSY)
-    routes = {"a": RouteSpec("S", edges=(second,))}
-    both = prepared(
-        links,
-        [
-            demand("^S$", "^T$", 20, pinned, id="a"),
-            demand("^S$", "^T$", 1, RESIDUAL, id="b", priority=1),
-        ],
-        routes=routes,
-    )
-    alone = prepared(links, [demand("^S$", "^T$", 1, RESIDUAL, id="b")])
-
-    def bounds(analysis):
-        return sorted(
-            c.q_upper_bound
-            for miss in analysis.misses
-            for c in miss.constraints
-            if getattr(c, "kind", None) == "router" and c.label.startswith("demand.b")
-        )
-
-    ordered = place(
-        both, PlacementQuery(both.demand_sets["d"], workers=1, states=["converged"])
-    )
-    together = simultaneous(both, states=["converged"])
-    single = place(
-        alone, PlacementQuery(alone.demand_sets["d"], workers=1, states=["converged"])
-    )
-    rows = together.cases[0].states["converged"].rows
-    assert [r.result.delivered for r in rows] == [20, 1]
-    assert bounds(ordered) == []
-    assert bounds(together) == bounds(single) != []
-
-
 # --- pool offer budgets ------------------------------------------------------------------------------------------
 
 
@@ -681,10 +640,7 @@ def test_a_budget_counts_in_the_range_check():
     assert int(lossy.topology.graph.edge_capacity_units().sum()) < 2**62
     (pooled,) = lossy.demand_sets["d"].demands
     assert pooled.pool.offer_limit_units > 0
-    assert any(
-        c.label == "topology.augmented_capacity_sum"
-        for c in lossy.units_report.binding_constraints
-    )
+    assert lossy.units_report.range_limit.label == "topology.augmented_capacity_sum"
 
 
 def test_automatic_resolution_passes_a_q_whose_budget_does_not_fit():

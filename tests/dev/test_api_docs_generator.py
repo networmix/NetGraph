@@ -83,14 +83,14 @@ def _entry_text(page: str, path: str) -> str:
 def test_multiline_alias_definition_is_valid_python():
     import ast
 
-    definition, _ = _MODULE._defined_value("ngraph", "UnitConstraint")
-    ast.parse("UnitConstraint = " + definition)
-    page = _entry_text(PAGE.read_text(), "ngraph.UnitConstraint")
+    definition, _ = _MODULE._defined_value("ngraph", "AnalysisResult")
+    ast.parse("AnalysisResult = " + definition)
+    page = _entry_text(PAGE.read_text(), "ngraph.AnalysisResult")
     block = re.search(r"```python\n(.*?)\n```", page, re.S)
     assert block is not None
     ast.parse(block[1])
     with pytest.raises(SyntaxError):
-        ast.parse("UnitConstraint = A\n    | B")
+        ast.parse("AnalysisResult = A\n    | B")
 
 
 @pytest.mark.parametrize(

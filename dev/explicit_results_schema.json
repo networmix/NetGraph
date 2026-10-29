@@ -3099,7 +3099,7 @@
           }
         },
         "units_report": {
-          "description": "The units report of the preparation: q, its reasons, rounding and misses.",
+          "description": "The units report of the preparation: q, its input/count bounds and range sums.",
           "$ref": "#/$defs/UnitsReportJSON"
         }
       },
@@ -3131,7 +3131,7 @@
           ]
         },
         "units_report": {
-          "description": "The units report of the preparation: q, its reasons, rounding and misses.",
+          "description": "The units report of the preparation: q, its input/count bounds and range sums.",
           "$ref": "#/$defs/UnitsReportJSON"
         }
       },

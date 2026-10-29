@@ -1,7 +1,5 @@
 """Physical expansion and exact candidate selection, independent expected bounds."""
 
-from fractions import Fraction
-
 import pytest
 
 from ngraph.analysis.demands import resolve_demands, scaled_expansion
@@ -35,31 +33,6 @@ def spec(volume=0.25, *, name="load", policy=FlowPolicyPreset.SHORTEST_PATHS_ECM
     return DemandSet(
         name, (DemandSpec(Selector("^s$"), Selector("^t$"), volume, policy),)
     )
-
-
-def test_auto_candidate_is_coarsest_legal_power_with_exact_input_target():
-    # For capacity1 and volume1/4, precision1/1000 demands q<=1/2000.
-    # The largest legal power is2^-11; the next coarser2^-10 fails.
-    result = prepared(line(), [spec()], UnitsSettings())
-    topology, sets = result.topology, result.demand_sets
-    assert topology.q == 2**-11
-    report = result.units_report
-    assert report.target_met
-    assert report.input_count == 2
-    assert report.nominal_split_count == 0
-    assert report.augmented_capacity_sum_units == 4096
-    assert report.augmented_cost_sum == 6
-    assert report.scope.library_demand_sets == ("load",)
-    assert sets["load"].demands[0].nominal_units == 512
-    bound = [
-        constraint
-        for constraint in report.binding_constraints
-        if constraint.kind == "input"
-    ]
-    assert len(bound) == 1
-    assert bound[0].label == "demand.load|0.volume"
-    assert bound[0].q_upper_bound == 2 * Fraction(float(0.001)) * Fraction(1, 4)
-    assert Fraction(topology.q) <= bound[0].q_upper_bound < Fraction(topology.q * 2)
 
 
 def test_alpha_scales_physical_total_and_preserves_zero_policy_identity():
@@ -108,7 +81,6 @@ def test_nested_expansion_uses_one_parent_round_then_declared_rr():
         f"nested|0|{i}" for i in range(4)
     ]
     assert resolved["nested"].accounting[0].declared_units == 10
-    assert result.units_report.nominal_split_count >= 2
 
 
 def test_duplicate_explicit_and_generated_ids_across_sets_refuse_with_control():
@@ -125,39 +97,10 @@ def test_duplicate_explicit_and_generated_ids_across_sets_refuse_with_control():
 
 def test_zero_parent_counts_but_does_not_constrain_auto_resolution():
     result = prepared(line(), [spec(0)], UnitsSettings())
-    # Capacity1 is the only positive input: q<=.002, hence2^-9.
-    assert result.topology.q == 2**-9
-    assert result.units_report.input_count == 2
-    assert result.units_report.zeroed_inputs == 0
+    # Zero volume remains an in-scope leaf: floor3 gives q<=.001/3.
+    assert result.topology.q == 2**-12
+    assert result.units_report.input_bound.label == "link.s|t|0.capacity"
     assert result.demand_sets["load"].demands[0].nominal_units == 0
-
-
-def test_equal_zero_capacity_member_and_capacity_weighted_member_count_differ():
-    network = Network()
-    for name in ("s", "a", "b", "t"):
-        network.add_node(Node(name))
-    for source, target, capacity in (
-        ("s", "a", 0),
-        ("a", "t", 5),
-        ("s", "b", 5),
-        ("b", "t", 5),
-    ):
-        network.add_link(Link(source, target, capacity, 1))
-    source = Selector("^s$")
-    target = Selector("^t$")
-    reports = []
-    for preset in (
-        FlowPolicyPreset.SHORTEST_PATHS_ECMP,
-        FlowPolicyPreset.SHORTEST_PATHS_WCMP,
-    ):
-        demands = DemandSet("load", (DemandSpec(source, target, 10, preset),))
-        reports.append(prepared(network, [demands], UnitsSettings(1)).units_report)
-    assert [
-        (split.members, split.incoming_physical)
-        for split in reports[0].nominal_splits
-        if split.kind == "router"
-    ] == [(2, Fraction(10))]
-    assert not [split for split in reports[1].nominal_splits if split.kind == "router"]
 
 
 @pytest.mark.parametrize("zero_link", [("s", "a"), ("a", "t")])
@@ -199,33 +142,7 @@ def test_explicit_positive_weight_on_zero_capacity_prunes_the_dead_branch(zero_l
         network, [demands], UnitsSettings(1), weights={"configured": weights}
     )
     resolved = result.demand_sets
-    assert not [
-        split for split in result.units_report.nominal_splits if split.kind == "router"
-    ]
     assert resolved["load"].demands[0].config.routing.edge_weights is not None
-
-
-def test_observation_miss_counts_its_active_capacity_inputs_too():
-    from ngraph.analysis.placement import PlacementQuery, place
-
-    network = line()
-    network.replace_link("s|t|0", capacity=0.25)
-    preparation = prepared(network, [spec()], UnitsSettings(1))
-    result = place(
-        preparation,
-        PlacementQuery(preparation.demand_sets["load"], alpha=4, workers=1),
-    )
-    (miss,) = result.misses
-    assert result.units_report.misses == (*preparation.units_report.misses, miss)
-    assert miss.location.case_id == "baseline" and miss.location.probe_index is None
-    assert miss.inexact_inputs == miss.zeroed_inputs == 1
-    assert [sample.label for sample in miss.examples] == ["link.s|t|0.capacity"]
-    assert miss.examples[0].error == Fraction(-1, 4)
-    assert {
-        constraint.label
-        for constraint in miss.constraints
-        if constraint.kind == "input"
-    } == {"demand.load|0.volume", "link.s|t|0.capacity"}
 
 
 def test_totals_above_2_53_are_summed_in_exact_units_not_physical_floats():

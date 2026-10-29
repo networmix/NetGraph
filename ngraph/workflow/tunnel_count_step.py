@@ -7,8 +7,8 @@ import netgraph_core as ngc
 from ngraph import results
 from ngraph.analysis.counts import TunnelCountQuery, tunnel_counts
 from ngraph.analysis.failures import Workers
-from ngraph.analysis.precision import question_inputs
 from ngraph.analysis.preparation import PreparedScenario, StepNeeds
+from ngraph.analysis.units import question_inputs
 from ngraph.utils.values import _located_error, flag, own, shared_copy, text
 from ngraph.workflow.base import (
     WorkflowStep,

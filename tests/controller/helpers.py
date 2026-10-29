@@ -216,11 +216,14 @@ def filling_oracle(columns, capacity):
 
 
 def highest_averages(x, weights):
-    """Highest averages H(x, w): one unit at a time to the largest w/(a+1), earlier on ties."""
-    a = [0] * len(weights)
-    if not any(weights):
-        return a
-    for _ in range(x):
+    """Highest averages, starting at guaranteed lower quotas, with earlier ties."""
+    total = sum(weights)
+    if not total:
+        return [0] * len(weights)
+    # The final divisor is at most total/x, so every floor(x*w/total)
+    # seat is guaranteed. Only fewer than len(weights) seats remain to rank.
+    a = [x * w // total for w in weights]
+    for _ in range(x - sum(a)):
         best = None
         for i, w in enumerate(weights):
             if w and (best is None or w * (a[best] + 1) > weights[best] * (a[i] + 1)):

@@ -30,7 +30,6 @@ CASES = [
     ("capacity", "ngraph.analysis.capacity", "CapacityRow", 5),
     ("capacity", "ngraph.analysis.capacity", "CaseState", 1),
     ("capacity", "ngraph.analysis.capacity", "CaseResult", 1),
-    ("capacity", "ngraph.analysis.capacity", "query_miss", 1),
     ("capacity", "ngraph.analysis.capacity", "CapacityAnalysis", 1),
     ("spf", "netgraph_core", "spf", 5),
     ("spf", "netgraph_core", "resolve_to_paths", 5),
@@ -40,7 +39,6 @@ CASES = [
     ("ksp", "ngraph.analysis.paths", "PathRow", 5),
     ("ksp", "ngraph.analysis.paths", "PathAnalysis", 1),
     ("sensitivity", "netgraph_core", "evaluate_edge_failures", 1),
-    ("sensitivity", "ngraph.analysis.sensitivity", "query_miss", 1),
     ("sensitivity", "ngraph.analysis.sensitivity", "SensitivityAnalysis", 1),
 ]
 
@@ -104,7 +102,7 @@ def test_query_publication_failure_keeps_previous_result_and_same_thread_retry(
     previous = call()
     expected = project(previous)
     capacities = tuple(int(v) for v in prepared.topology.graph.edge_capacity_units())
-    observations = prepared._input_observations
+    report = prepared.units_report
     if grown:
         assert project(call()) == expected
     with monkeypatch.context() as patch:
@@ -119,6 +117,6 @@ def test_query_publication_failure_keeps_previous_result_and_same_thread_retry(
         tuple(int(v) for v in prepared.topology.graph.edge_capacity_units())
         == capacities
     )
-    assert prepared._input_observations is observations
+    assert prepared.units_report is report
     assert project(previous) == expected
     assert project(call()) == expected

@@ -9,8 +9,8 @@ import netgraph_core as ngc
 from ngraph.analysis.capacity import CapacityQuery, capacity
 from ngraph.analysis.demands import materialize_config, pooled, selected_pairs
 from ngraph.analysis.failures import FailureRequest, Workers, checked_workers
-from ngraph.analysis.precision import question_inputs
 from ngraph.analysis.preparation import PreparedScenario, StepNeeds
+from ngraph.analysis.units import question_inputs
 from ngraph.model.demand import FlowPolicyPreset, PinnedRoutes, _ParsedModel
 from ngraph.model.selectors import Selector
 from ngraph.results import StepContext, StepOutput

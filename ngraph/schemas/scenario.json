@@ -2107,6 +2107,7 @@
         },
         "precision": {
           "type": "number",
+          "maximum": 0.5,
           "exclusiveMinimum": 0
         }
       },

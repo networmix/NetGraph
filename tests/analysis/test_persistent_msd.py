@@ -214,10 +214,10 @@ def test_every_probe_is_quantized_at_the_prepared_q():
     probed = [p for p in result.history if p.totals is not None]
     assert [p.alpha.value for p in probed][:7] == [1, 2, 4, 8, 16, 32, 64]
     for probe in probed:
-        # Half-up of the exact scaled request at the prepared q (q = 1/8 here: alpha
-        # 64.0625 asks 512.5 -> 513 units).
+        # Half-up of the exact scaled request at the prepared q (q = 1/64 here: alpha
+        # 64.0078125 asks 4096.5 -> 4097 units).
         exact = Fraction(probe.alpha.numerator, probe.alpha.denominator) / Fraction(q)
         assert probe.totals.reference_request_units == int(exact + Fraction(1, 2))
-    # The capacity is 64 / q = 512 units: the best probe asks exactly those.
+    # The capacity is 64 / q = 4096 units: the best probe asks exactly those.
     best = result.history[result.best_probe_index]
-    assert best.totals.reference_request_units == 512 == best.totals.delivered_units
+    assert best.totals.reference_request_units == 4096 == best.totals.delivered_units

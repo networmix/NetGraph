@@ -319,7 +319,7 @@ def run(
         raise TypeError("run: expected PreparedScenario")
     scenario = prepared.scenario
     completed = {}
-    results, misses = [], []
+    results = []
     for order, (step, (name, seed, seed_source)) in enumerate(
         zip(scenario.workflow, prepared._steps, strict=True)
     ):
@@ -346,15 +346,11 @@ def run(
                 raise ValueError(
                     f"step {name}: analysis units/topology do not belong to this preparation"
                 )
-            misses.extend(
-                replace(miss, location=replace(miss.location, step=name))
-                for miss in value.misses
-            )
         completed[name] = result
         results.append(result)
     return RunResult(
         run_metadata(scenario.seed),
-        prepared.units_report.with_misses(tuple(misses)),
+        prepared.units_report,
         tuple(results),
         prepared,
     )

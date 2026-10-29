@@ -57,10 +57,6 @@ def test_a_te_preset_over_combined_sources_asks_its_private_pool():
     # Preparation observes one head (node 3, after a1, a2 and t) splitting
     # the delivered 16 units over its 16 tunnels; no source split.
     assert prepared.topology.pool_heads == {"workflow.m.pair[0]": 3}
-    assert [
-        (c.kind, c.label, c.incoming_physical, c.members, c.basis)
-        for c in prepared.units_report.nominal_splits
-    ] == [("tunnel", "workflow.m.pair[0].head[3]", 16, 16, "observed")]
 
 
 def test_a_pooled_capacity_row_exports_its_pool_and_cost_domain():

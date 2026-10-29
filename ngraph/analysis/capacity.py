@@ -18,7 +18,6 @@ from ngraph.analysis.failures import (
     schedule_cases,
 )
 from ngraph.analysis.metadata import analysis_metadata
-from ngraph.analysis.precision import query_has_splits, query_inputs, query_miss
 from ngraph.analysis.units import quantize
 from ngraph.analysis.validation import validate_model
 from ngraph.model.selectors import Selector
@@ -30,7 +29,6 @@ from ngraph.results import (
     OutputSelection,
     PoolHead,
     PoolMetadata,
-    ReportLocation,
     SelfPair,
     SyntheticIngress,
 )
@@ -244,9 +242,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
     endpoints, jobs, native_pairs, pools = question_pairs(prepared, query, "capacity")
     workers = resolve_workers(query.workers)
     cases = failure_cases(prepared, query.failures)
-    completed, misses = [], []
-    check_splits = query_has_splits(query)
-    inputs = query_inputs(prepared, query, "capacity")
+    completed = []
     for case in cases:
         options = evaluation_options(
             topology,
@@ -302,31 +298,9 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
                 case, MappingProxyType({"converged": CaseState(tuple(rows), None)})
             )
         )
-        miss = query_miss(
-            prepared,
-            query,
-            tuple(
-                (
-                    pair,
-                    indexed[index].delivered,
-                    case.eligibility,
-                    f"capacity.pair[{index}]",
-                    pools.get(index),
-                    indexed[index],
-                )
-                for index, pair in jobs
-            )
-            if check_splits
-            else (),
-            ReportLocation(None, case.id, None),
-            inputs,
-        )
-        if miss is not None:
-            misses.append(miss)
     question, source = question_kind(query.config, query.offer, query.design_demand)
     return CapacityAnalysis(
         prepared,
-        tuple(misses),
         analysis_metadata(workers, query.failures),
         OutputSelection(
             query.outputs, query.export_cost_distribution, query.export_details

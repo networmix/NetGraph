@@ -43,7 +43,7 @@ def units(volume, alpha, q):
 
 
 @pytest.mark.parametrize(
-    "small,capacity,q,control", [(100, 7, 1, 0.006), (0.99, 1.01, "auto", 0.001)]
+    "small,capacity,q,control", [(100, 7, 1, 0.006), (0.99, 1.01, 2**-9, 0.001)]
 )
 def test_narrow_feasible_window_probes_the_first_resolvable_alpha(
     small, capacity, q, control, monkeypatch
@@ -51,7 +51,9 @@ def test_narrow_feasible_window_probes_the_first_resolvable_alpha(
     import ngraph.analysis.msd as msd
 
     p = prepared(small, capacity, q)
-    assert p.topology.q == (1 if q == 1 else 2**-9)
+    # This window is deliberately narrower than the search step. Fix q so
+    # the test continues to exercise the first-resolvable fallback.
+    assert p.topology.q == q
     calls = []
     original = msd._apply_matrix
 
@@ -158,7 +160,7 @@ def test_unit_threshold_at_infeasible_upper_reuses_the_recorded_probe(monkeypatc
     n.add_link(Link("A", "C", 3))
     d = DemandSet("d", (DemandSpec(Selector("^A$"), Selector("^B$"), 4),))
     p = prepare(Scenario(n, demand_sets={"d": d}), demand_sets=("d",))
-    assert p.topology.q == 2**-8
+    assert p.topology.q == 2**-11
     calls = []
     original = msd._apply_matrix
 
@@ -169,7 +171,7 @@ def test_unit_threshold_at_infeasible_upper_reuses_the_recorded_probe(monkeypatc
 
     monkeypatch.setattr(msd, "_apply_matrix", observed)
     result = maximum_supported_demand(p, MSDQuery(p.demand_sets["d"]))
-    # half-up(4*alpha/q) first reaches1 at alpha=2^-11, already tested infeasible.
+    # half-up(4*alpha/q) first reaches1 at alpha=2^-14, already tested infeasible.
     assert (
         result.search_status == "none_feasible"
         and result.stop_reason == "unit_resolution"
@@ -180,9 +182,9 @@ def test_unit_threshold_at_infeasible_upper_reuses_the_recorded_probe(monkeypatc
         is result.upper_certificate
         is None
     )
-    assert [row.alpha.value for row in result.history] == [2.0**-i for i in range(13)]
+    assert [row.alpha.value for row in result.history] == [2.0**-i for i in range(16)]
     assert [row.outcome for row in result.history[-2:]] == [
         "infeasible",
         "below_resolution",
     ]
-    assert len(calls) == len(result.history) == 13
+    assert len(calls) == len(result.history) == 16

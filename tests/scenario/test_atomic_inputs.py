@@ -155,10 +155,9 @@ demands:
     assert [d.id for d in resolved.demands] == ["x|0|0|0", "x|0|1|0", "x|1|0"]
 
 
-def test_uncapped_observed_router_bound_refines_candidate_after_input_screen():
+def test_capacity_question_uses_static_graph_count():
     network = Network()
-    # At q=1/2 every capacity input meets precision=1/4. Three equal members
-    # deliver3, but q<=precision*3/(3-1)=3/8 fails. q=1/4 meets it.
+    # L=5+12=17, Gamma=25/4, so B_split=(1/4)/(25/4)=1/25 -> q=1/32.
     for name in ("s", "a", "b", "c", "t"):
         network.add_node(Node(name))
     for middle in ("a", "b", "c"):
@@ -172,15 +171,10 @@ def test_uncapped_observed_router_bound_refines_candidate_after_input_screen():
         workers=1,
     )
     prepared = prepare(Scenario(network, [step], units=UnitsSettings(precision=0.25)))
-    assert prepared.topology.q == 0.25
-    (split,) = [c for c in prepared.units_report.nominal_splits if c.kind == "router"]
-    assert split.basis == "observed" and split.incoming_physical == Fraction(3)
-    assert split.members == 3 and split.q_upper_bound == Fraction(3, 8) and split.met
+    assert prepared.topology.q == 0.03125
+    assert prepared.units_report.split_bound.count == Fraction(25, 4)
     coarse = prepare(Scenario(network, [step], units=UnitsSettings(0.5, 0.25)))
     assert coarse.topology.q == 0.5 and not coarse.units_report.target_met
-    assert any(
-        c.basis == "observed" and not c.met for c in coarse.units_report.nominal_splits
-    )
     analysis = capacity(
         coarse,
         CapacityQuery(
@@ -191,7 +185,6 @@ def test_uncapped_observed_router_bound_refines_candidate_after_input_screen():
         ),
     )
     assert analysis.cases[0].states["converged"].rows[0].result.delivered == 6
-    assert analysis.units_report.misses[0].constraints[0].basis == "observed"
 
 
 def test_default_equal_source_bound_keeps_reachable_zero_capacity_heads():
@@ -212,16 +205,12 @@ def test_default_equal_source_bound_keeps_reachable_zero_capacity_heads():
         workers=1,
     )
     prepared = prepare(Scenario(network, [step], units=UnitsSettings(precision=0.25)))
-    assert prepared.topology.q == 0.125
-    (split,) = [c for c in prepared.units_report.nominal_splits if c.kind == "source"]
-    assert (
-        split.members == 3
-        and split.incoming_physical == 1
-        and split.q_upper_bound == Fraction(1, 8)
-    )
-    assert split.basis == "declared" and split.met
+    # L=10 gives floor9/2 and 0.25/(9/2) chooses q=1/32.
+    assert prepared.topology.q == 0.03125
+    assert prepared.units_report.split_bound.demands == 0
     value = run(prepared).steps[0].result
-    assert value.cases[0].states["converged"].rows[0].result.delivered == 3
+    # 32 offered units split 11,11,10; the two zero-capacity heads lose theirs.
+    assert value.cases[0].states["converged"].rows[0].result.delivered == 11
 
 
 def test_finite_tunnel_design_split_is_bounded_separately_from_large_offer():
@@ -239,13 +228,7 @@ workflow:
    model: {routing: {type: distributed_te, tunnel_count: {per_head: 4}}, admission: lossy}
 """)
     prepared = prepare(scenario)
-    assert prepared.topology.q == 0.0625
-    (split,) = [
-        c for c in prepared.units_report.nominal_splits if ".design." in c.label
-    ]
-    assert (
-        split.basis == "declared"
-        and split.incoming_physical == 1
-        and split.members == 4
-    )
-    assert split.q_upper_bound == Fraction(1, 12)
+    assert prepared.topology.q == 0.5
+    assert prepared.units_report.input_bound.label == "workflow.tunnels.design_demand"
+    assert prepared.units_report.split_bound.tunnels == 4
+    assert prepared.units_report.split_bound.count == 7

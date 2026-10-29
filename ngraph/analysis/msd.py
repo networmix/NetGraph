@@ -13,11 +13,9 @@ from ngraph.analysis.demands import scaled_expansion
 from ngraph.analysis.metadata import analysis_metadata
 from ngraph.analysis.placement import (
     _apply_matrix,
-    _observation_records,
     policy_roster,
     remove_policies,
 )
-from ngraph.analysis.precision import placement_inputs, placement_miss
 from ngraph.analysis.totals import placement_totals
 from ngraph.analysis.units import UnitRangeError
 from ngraph.results import (
@@ -26,7 +24,6 @@ from ngraph.results import (
     OutputSelection,
     PlacementRow,
     RangeRefusal,
-    ReportLocation,
     ResolvedDemandSet,
     UpperCertificate,
     exact_alpha,
@@ -150,7 +147,7 @@ def maximum_supported_demand(
     demands = query.demands
     proof = _proof(demands)
     ledger, owners = policy_roster(topology, demands.demands, topology.disabled)
-    history, misses = [], []
+    history = []
     best = None
     best_rows = best_accounting = None
     retained = {} if query.export_probe_rows else None
@@ -189,7 +186,6 @@ def maximum_supported_demand(
             return "range"
         requests = tuple(amounts[demand.id] for demand in demands.demands)
         results = _apply_matrix(ledger, owners, requests)
-        records = _observation_records(prepared._named, demands, owners)
         totals = placement_totals(
             zip(
                 (demand.id for demand in demands.demands),
@@ -207,18 +203,6 @@ def maximum_supported_demand(
             if below_resolution
             else ("feasible" if totals.feasible else "infeasible")
         )
-        miss = placement_miss(
-            prepared,
-            demands,
-            results,
-            records,
-            topology.disabled,
-            exact.value,
-            ReportLocation(None, "baseline", index),
-            placement_inputs(prepared, demands, exact.value),
-        )
-        if miss is not None:
-            misses.append(miss)
         history.append(MSDProbe(index, exact, outcome, totals, None))
         better = outcome == "feasible" and (
             best is None or alpha > history[best].alpha.value
@@ -361,7 +345,6 @@ def maximum_supported_demand(
                 )
         return MSDAnalysis(
             prepared,
-            tuple(misses),
             analysis_metadata(1),
             OutputSelection(ngc.OutputOptions(), False, query.export_details),
             history[best].alpha if best is not None else None,

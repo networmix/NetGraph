@@ -1,7 +1,6 @@
 """Destination tables: who is programmed, in what order, by which rule, and how they forward."""
 
 import json
-from fractions import Fraction
 from io import StringIO
 
 import netgraph_core as ngc
@@ -422,35 +421,6 @@ def test_wcmp_scope_next_hop_and_group():
     assert value == 166
 
 
-def test_precision_describes_programmed_rows_with_exact_downstream_amounts():
-    links = [
-        ("S", "P", 100),
-        ("S", "Q", 100),
-        ("P", "A", 100),
-        ("P", "B", 100),
-        ("A", "T", 100),
-        ("B", "T", 100),
-        ("Q", "T", 100),
-    ]
-    prep = prepared(
-        links,
-        "^(P|Q|A|B)$",
-        "^(S|T)$",
-        [demand("^S$", "^T$", 40)],
-        scope="group",
-        trees={"g": tree("S", (1, [(1, "S|P|0")]), (3, [(1, "S|Q|0")]))},
-        q=2,
-        precision=0.1,
-    )
-    splits = {c.label: c for c in prep.units_report.nominal_splits}
-    at_p = splits["demand.d|0|0.router.P"]
-    # S sends 40 * 1/4 to P, which splits it in two: bound 0.1 * 10 / 1, below q=2.
-    assert at_p.incoming_physical == 10
-    assert at_p.q_upper_bound == Fraction(0.1) * 10
-    assert at_p.met is False
-    assert splits["demand.d|0|0.router.S"].incoming_physical == 40
-
-
 def controller_json(prep):
     _, analysis = delivered(prep)
     output = StringIO()
@@ -671,30 +641,6 @@ def test_the_controller_key_lists_routers_in_node_order():
     ]
 
 
-def test_precision_of_a_multi_source_programmed_demand():
-    links = [
-        ("S0", "P", 100),
-        ("S1", "P", 100),
-        ("P", "A", 100),
-        ("P", "B", 100),
-        ("A", "T", 100),
-        ("B", "T", 100),
-    ]
-    prep = prepared(
-        links,
-        "^(P|A|B)$",
-        "^(S0|S1|T)$",
-        [demand("^(S0|S1)$", "^T$", 40)],
-        q=2,
-        precision=0.1,
-    )
-    splits = {c.label: c for c in prep.units_report.nominal_splits}
-    # 40 splits equally over S0 and S1; their 20 + 20 meet at P, which splits in two.
-    assert set(splits) == {"demand.d|0|0.sources", "demand.d|0|0.router.P"}
-    for label in splits:
-        assert (splits[label].incoming_physical, splits[label].members) == (40, 2)
-
-
 def test_a_positive_amount_below_q_programs_its_source():
     u = demand("^U$", "^T$", 0.25, id="u", priority=1)
     prep = stacked(S_DEMAND, u, q=1)
@@ -828,23 +774,6 @@ def test_the_longest_child_orders_routers_even_when_it_finishes_first():
     order = table(prep, "T").programmed
     # Heights n30 1, n12 3, S1 4, S0 5 (through n10->n11; its child n12 gives only 4).
     assert [prep.topology.node_names[r] for r in order] == ["n30", "n12", "S1", "S0"]
-
-
-def test_precision_reads_each_demand_s_own_destination_table():
-    prep = prepared(
-        [*STACKED, ("A", "T2", 10), ("B", "T2", 10)],
-        STACKED_DOMAIN,
-        "^(S|T|T2)$",
-        [S_DEMAND, demand("^U$", "^T2$", 1, id="u", priority=1)],
-        precision=0.1,
-    )
-    splits = sorted((c.label, c.members) for c in prep.units_report.nominal_splits)
-    # U's demand splits over U-A and U-B toward T2; toward T only S and U programmed.
-    assert splits == [
-        ("demand.s|0.router.S", 2),
-        ("demand.s|0.router.U", 2),
-        ("demand.u|0.router.U", 2),
-    ]
 
 
 def test_an_unknown_destination_table_is_a_labelled_key_error():

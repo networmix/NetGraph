@@ -9,7 +9,7 @@ in five kinds:
   units of the run's resolution `q` (the units report holds `q`); units × `q` is the
   physical amount.
 - **Physical amounts:** inputs, question offers and designs, `NetworkStats`
-  capacities and the units report's input samples, as declared.
+  capacities and `split_bound.capacity` in the units report, as declared.
 - **Ratios:** delivery ratios, alpha, shares and caps, with no unit.
 - **Routing costs:** path costs, tunnel costs and their sums, which never take `q`.
   `total_cost` is cost × bandwidth units, so `total_cost` × `q` is cost × physical
@@ -381,18 +381,6 @@ One of: [BuildGraphResultJSON](#buildgraphresultjson) or [NetworkStatsResultJSON
 | `q_upper_bound` | [FractionJSON](#fractionjson) | The largest q at which rounding this input is guaranteed within the precision: 2 times the precision times the input (rounding moves it half a unit at most). |
 | `met` | boolean | Whether the chosen q meets it. |
 
-## InputQuantizationJSON
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `label` | string | The input or constraint label: where the value is declared. |
-| `kind` | `"capacity"` \| `"demand"` \| `"offer"` \| `"design"` \| `"min_unreserved"` | What the input is: a capacity, demand, offer, design or minimum unreserved bandwidth. |
-| `binary64_value` | number | The physical input as given. |
-| `binary64_hex` | string | The physical input in hexadecimal. |
-| `units` | integer | Its value in units (integer units of q). |
-| `error` | [FractionJSON](#fractionjson) | The signed rounding error, units times q minus the input (physical, a fraction): positive when rounded up. |
-| `relative_error` | [FractionJSON](#fractionjson) or null | The signed relative error, the error divided by the input. Null when the input is zero. |
-
 ## JSONValue
 
 One of: null or boolean or integer or number or string or list of [JSONValue](#jsonvalue) or object.
@@ -745,16 +733,6 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | --- | --- | --- |
 | `pool_id` | string | The pool's identifier (as PoolHeadJSON names it). |
 
-## PrecisionMissJSON
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `location` | [ReportLocationJSON](#reportlocationjson) | Where the miss was observed: step, case and probe. |
-| `constraints` | list of [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#splitconstraintjson) or [TunnelResolutionConstraintJSON](#tunnelresolutionconstraintjson) or [UnverifiedConstraintJSON](#unverifiedconstraintjson) | The constraints the chosen q does not meet there. |
-| `inexact_inputs` | integer | Inputs not exact at q there. |
-| `zeroed_inputs` | integer | Positive inputs that round to zero units there. |
-| `examples` | list of [InputQuantizationJSON](#inputquantizationjson) | Example inputs that miss. |
-
 ## PreparationScopeJSON
 
 | Field | Type | Description |
@@ -797,21 +775,13 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | `message` | string | The refusal text. |
 | `binary64_hex` | string or null | The refused binary64 value in hexadecimal. Null when the refused amount is not a binary64 value. |
 
-## ReportLocationJSON
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `step` | string or null | The step. Null when the report is outside a workflow. |
-| `case_id` | string or null | The case. Null when the report is outside failure cases. |
-| `probe_index` | integer or null | The MSD probe. Null when the report is outside MSD. |
-
 ## RunJSON
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `metadata` | [RunMetadataJSON](#runmetadatajson) | The run's metadata: versions and the seed. |
 | `steps` | list of [StepResultJSON](#stepresultjson) | The workflow steps in declaration order. |
-| `units_report` | [UnitsReportJSON](#unitsreportjson) | The units report of the preparation: q, its reasons, rounding and misses. |
+| `units_report` | [UnitsReportJSON](#unitsreportjson) | The units report of the preparation: q, its input/count bounds and range sums. |
 
 ## RunMetadataJSON
 
@@ -913,17 +883,21 @@ One of: string or [PoolHeadJSON](#poolheadjson).
 | `nominal_physical` | [FractionJSON](#fractionjson) | Its share of declared physical volumes toward the destination (a fraction, before alpha). |
 | `weight` | integer | Its integer source weight. |
 
-## SplitConstraintJSON
+## SplitCountConstraintJSON
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `kind` | `"expansion"` \| `"source"` \| `"router"` \| `"tunnel"` | Where the split is: expansion, sources, a router or tunnels. |
-| `label` | string | The input or constraint label: where the value is declared. |
-| `incoming_physical` | [FractionJSON](#fractionjson) | The physical amount split (a fraction). |
-| `basis` | `"declared"` \| `"observed"` | declared (from the demands) or observed (from an analysis). |
-| `members` | integer | The members the amount is split over. |
-| `q_upper_bound` | [FractionJSON](#fractionjson) | The q bound this split records: the precision times the incoming amount divided by (members - 1). It bounds q, not the split's own error. |
-| `met` | boolean | Whether the chosen q meets it. |
+| `kind` | `"split_count"` | The record kind, a fixed tag. |
+| `capacity_label` | string | The first smallest positive link capacity in link insertion order. |
+| `capacity` | number | The smallest positive physical link capacity, including disabled links. |
+| `nodes` | integer | The physical network's node count, including disabled nodes. |
+| `directed_links` | integer | Twice the physical link count, including disabled links and excluding pool attachments. |
+| `group` | string or null | The demand set or workflow.<step> that sets the count; the floor wins ties. Null when the floor sets the count. |
+| `demands` | integer | Lossless shared equal-split leaves in the winning group, or zero for the floor. |
+| `tunnels` | integer | Heads times declared tunnels per head in the winning group, or zero for the floor. |
+| `count` | [FractionJSON](#fractionjson) | The maximum of the floor L/4 + 2 and max(k, 1) times that floor plus t over prepared groups. |
+| `q_upper_bound` | [FractionJSON](#fractionjson) | The split-count upper bound on q: precision times the smallest positive capacity divided by the count. |
+| `met` | boolean | Whether the prepared q meets this bound; the delivery theorem has additional premises. |
 
 ## StandaloneAnalysisJSON
 
@@ -931,7 +905,7 @@ One of: string or [PoolHeadJSON](#poolheadjson).
 | --- | --- | --- |
 | `metadata` | [RunMetadataJSON](#runmetadatajson) | The export's metadata: versions. |
 | `analysis` | [AnalysisJSON](#analysisjson) (with `query`) | The exported analysis. |
-| `units_report` | [UnitsReportJSON](#unitsreportjson) | The units report of the preparation: q, its reasons, rounding and misses. |
+| `units_report` | [UnitsReportJSON](#unitsreportjson) | The units report of the preparation: q, its input/count bounds and range sums. |
 
 ## StepQuestionJSON
 
@@ -1060,25 +1034,11 @@ One of: [CapacityQueryJSON](#capacityqueryjson) or [PlacementQueryJSON](#placeme
 | `headroom_penalty` | integer or null | T2 with prefer_headroom: the headroom penalty of the plan. Null when the plan is T1's or prefer_headroom is off. |
 | `max_lossless_offer_units` | integer or null | T2: the program's lossless maximum offer F. Null when the plan is T1's. |
 
-## TunnelResolutionConstraintJSON
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `kind` | `"tunnel_resolution"` | The record kind, a fixed tag. |
-| `label` | string | The demand or question whose native plan was observed. |
-| `q` | number | The bandwidth unit at which the plan was observed. |
-| `heads` | list of string or [PoolHeadJSON](#poolheadjson) | Every live head, in native node order: a physical node name or a structured TE ingress pool head. |
-| `met` | `false` | Always false: the observed plan cannot give its live heads whole-unit tunnels. |
-
 ## UnavailableOutputsJSON
 
 | Field | Type | Description |
 | --- | --- | --- |
 | `cost_distribution` | [CostUnavailableReasonJSON](#costunavailablereasonjson) | Why the cost report is not derivable for this row. Absent when it is derivable or was not requested. |
-
-## UnitConstraintJSON
-
-One of: [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#splitconstraintjson) or [TunnelResolutionConstraintJSON](#tunnelresolutionconstraintjson) or [RangeConstraintJSON](#rangeconstraintjson) or [UnverifiedConstraintJSON](#unverifiedconstraintjson).
 
 ## UnitsReportJSON
 
@@ -1086,34 +1046,20 @@ One of: [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#sp
 | --- | --- | --- |
 | `q` | number | The bandwidth unit: one unit is q in physical terms. |
 | `exponent` | integer | q as a power of two: q = 2^exponent. |
-| `mode` | `"auto"` \| `"manual"` | auto (chosen by the recipe) or manual (declared). |
-| `precision` | number | The relative precision target. |
-| `target_met` | boolean | Whether every input and split meets its precision bound at q and every native tunnel plan observed at q has sufficient resolution for its live heads. Bounds are checked, not the rounding: false is possible with no input rounded. |
+| `mode` | `"auto"` \| `"manual"` | auto (chosen from static bounds) or manual (declared). |
+| `precision` | number | The target input/count budget, greater than zero and at most 0.5. |
+| `target_met` | boolean | Whether both present input/count bounds hold at q; this does not certify arbitrary analysis answers. |
 | `input_convention` | `"promoted_binary64_half_up"` | Physical inputs round half-up from their binary64 value. |
 | `display_convention` | `"units_authoritative_binary64_display"` | Units are authoritative; physical values are binary64 displays. |
 | `scope` | [PreparationScopeJSON](#preparationscopejson) | What the preparation covered. |
-| `binding_constraints` | list of [UnitConstraintJSON](#unitconstraintjson) | The constraints that limited q, including observed tunnel plans with insufficient resolution for their live heads: at q, or at 2q when automatic preparation rejected that coarser candidate and meets the target at q. Each tunnel record's q identifies its observation. |
-| `input_count` | integer | Physical inputs converted to units. |
-| `inexact_inputs` | integer | Inputs not exact at q. |
-| `zeroed_inputs` | integer | Positive inputs that round to zero units. |
-| `inexact_examples` | list of [InputQuantizationJSON](#inputquantizationjson) | Example inexact inputs. |
-| `zeroed_examples` | list of [InputQuantizationJSON](#inputquantizationjson) | Example zeroed inputs. |
-| `max_absolute_input_error` | [FractionJSON](#fractionjson) | The largest absolute input error (physical, a fraction). |
-| `max_relative_input_error` | [FractionJSON](#fractionjson) | The largest absolute relative input error (a fraction). |
+| `limited_by` | `"input"` \| `"split_count"` \| `"range"` \| `"resolution_floor"` \| `"declared"` \| `"unbounded"` | Which bound selected q; input wins an equal input/split bound. |
+| `achieved_precision` | [FractionJSON](#fractionjson) or null | The maximum of q/(2*v_min) and q*count/c_min over present denominators; an input/count budget, not a general answer guarantee. Null when there is no positive input or capacity. |
+| `input_bound` | [InputConstraintJSON](#inputconstraintjson) or null | The smallest positive input's bound, with ties in preparation insertion order. Null when there is no positive prepared bandwidth input. |
+| `split_bound` | [SplitCountConstraintJSON](#splitcountconstraintjson) or null | The prepared split-count bound, subject to the documented delivery theorem's premises. Null when there is no positive link capacity. |
+| `range_limit` | [RangeConstraintJSON](#rangeconstraintjson) or null | The range failure at the next finer q when range forced a coarser unit. Null when limited_by is not range. |
 | `augmented_capacity_sum_units` | integer | The graph's capacity sum with pool attachments (integer units of q). |
 | `augmented_cost_sum` | integer | The graph's cost sum with pool attachments. |
-| `nominal_split_count` | integer | Splits of the demands at alpha 1 without failures. |
-| `nominal_splits` | list of [SplitConstraintJSON](#splitconstraintjson) | Those splits with their bounds on q. |
-| `misses` | list of [PrecisionMissJSON](#precisionmissjson) | Precision misses observed in analyses. |
 | `weight_approximations` | list of [WeightApproximationJSON](#weightapproximationjson) | Controller weights apportioned because they reached 2^62. |
-
-## UnverifiedConstraintJSON
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `kind` | `"unverified"` | The record kind, a fixed tag. |
-| `label` | string | The input or constraint label: where the value is declared. |
-| `reason` | `"opaque_program"` | The split is inside a supplied native program NetGraph cannot inspect. |
 
 ## UpperCertificateJSON
 

@@ -253,8 +253,8 @@ CASES = [
         lambda v: UnitsSettings(precision=v),
         lambda o: o.precision,
         lambda s: s.units.precision,
-        [0, -1, NAN, True, "1"],
-        [0.01, 1],
+        [0, -1, NAN, True, "1", 0.50001, 1],
+        [0.01, 0.5],
     ),
     (
         "units resolution",

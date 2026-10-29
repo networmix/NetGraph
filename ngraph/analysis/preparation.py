@@ -1,7 +1,7 @@
 """Assemble one prepared graph, unit and demand binding for a scenario's questions.
 
 Preparation decides what is asked (which steps, demand sets and capacity
-questions are active) and observes each candidate resolution once; the units
+questions are active) and compiles one graph at the chosen unit; the units
 module calculates conversions, reports and the choice of resolution.
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from functools import cache
 from types import MappingProxyType
 from typing import TYPE_CHECKING, NoReturn
@@ -29,19 +29,8 @@ from ngraph.analysis.demands import (
     offer_budgets,
     pool_budgets,
     pool_requirements,
+    pooled,
     selected_pairs,
-)
-from ngraph.analysis.placement import (
-    _observation_records,
-    policy_roster,
-    remove_policies,
-    replace_matrix,
-)
-from ngraph.analysis.precision import (
-    expansion_bounds,
-    placement_splits,
-    query_has_splits,
-    query_splits,
 )
 from ngraph.analysis.topology import (
     NO_ROUTES,
@@ -55,24 +44,27 @@ from ngraph.analysis.units import (
     UnitsSettings,
     _InputKind,
     choose_resolution,
-    input_observations,
     make_report,
-    with_splits,
+    quantize,
+    split_count,
 )
-from ngraph.model.demand import _DistributedTEInput, _ParsedModel
+from ngraph.model.demand import (
+    PRESETS,
+    FlowPolicyPreset,
+    _DistributedTEInput,
+    _ParsedModel,
+    _ShortestPathsInput,
+)
 from ngraph.model.risk import MembershipIndex
 from ngraph.model.selectors import Selector
 from ngraph.results import (
-    InputConstraint,
-    InputQuantization,
     PreparationScope,
     ResolvedDemandSet,
-    TunnelResolutionConstraint,
     UnitsReport,
     approximations,
 )
 from ngraph.utils.values import _input_error, _shown, physical
-from ngraph.workflow.base import step_name
+from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, step_name
 from ngraph.workflow.diagnostics import (
     _MISSING,
     error_context,
@@ -94,13 +86,13 @@ class StepNeeds:
     ``numerical`` steps are evaluated at the prepared resolution. A step may
     name a demand set to bind, a failure policy, and an earlier step whose
     feasible alpha it uses (one that ``provides_alpha``). ``capacity`` builds
-    the step's capacity question, which preparation evaluates once per
-    candidate resolution; ``inputs`` are that question's physical amounts, by
+    the step's capacity question, which preparation validates once after
+    final compilation; ``inputs`` are that question's physical amounts, by
     field name. ``pool_endpoints`` are the source and target of a question
     whose combined sources are a pool: preparation gives them a private head.
     ``offer_budget`` is a fixed lossy offer every pool leaf of ``demand_set``
-    receives; ``counts`` builds a tunnel-count question, whose split targets
-    preparation observes once per candidate resolution. ``nodes`` and ``links``
+    receives; ``counts`` builds a tunnel-count question, which preparation
+    validates once after final binding. ``nodes`` and ``links``
     are names the step reads that must exist in the network.
     """
 
@@ -129,8 +121,7 @@ class StepNeeds:
 class PreparedScenario:
     """One graph, unit and demand binding over a read-only view of a scenario.
 
-    ``units_report`` is the preparation's report; each analysis returns its
-    own precision misses beside it.
+    ``units_report`` records the fixed input/count bounds for every analysis.
     """
 
     scenario: Scenario
@@ -139,40 +130,12 @@ class PreparedScenario:
     units_report: UnitsReport
     _named: NamedRoutes = field(repr=False, compare=False)
     _membership: MembershipIndex = field(repr=False, compare=False)
-    # Each physical input's kind and value, and its exact observation.
-    _inputs: Mapping[str, tuple[_InputKind, float]] = field(repr=False, compare=False)
-    _input_observations: Mapping[
-        str, tuple[InputQuantization, InputConstraint | None]
-    ] = field(repr=False, compare=False)
     # Each step's name, seed and seed source as prepared.
     _steps: tuple[tuple[str, int | None, SeedSource], ...] = field(
         repr=False, compare=False
     )
     # The WCMP controller resolved on this graph, if the scenario declares one.
     _controller: ControllerSetup | None = field(default=None, repr=False, compare=False)
-
-
-def _nominal_splits(prepared, demands, precision):
-    """Observe one native nominal placement on a private ledger."""
-    topology = prepared.topology
-    ledger, owners = policy_roster(topology, demands.demands, topology.disabled)
-    try:
-        results = replace_matrix(
-            ledger, owners, tuple(d.nominal_units for d in demands.demands)
-        )
-        records = _observation_records(prepared._named, demands, owners)
-        return placement_splits(
-            topology,
-            prepared._named,
-            demands,
-            results,
-            records,
-            topology.disabled,
-            1.0,
-            precision,
-        )
-    finally:
-        remove_policies(owners)
 
 
 def _options(topology, query, mask):
@@ -186,50 +149,155 @@ def _options(topology, query, mask):
     )
 
 
-def _capacity_splits(prepared, step, name, needs, precision):
-    """Observe one capacity question's nominal evaluation."""
+def _validate_capacity_questions(prepared, capacities, counting):
+    """Validate final materialized questions without eligible traffic or a solve."""
     topology = prepared.topology
-    try:
-        query = needs.capacity(prepared)
-        _, jobs, native_pairs, pools = question_pairs(
-            prepared, query, f"workflow.{name}"
-        )
-        if not query_has_splits(query):
-            # No split constraint needs this question's amounts; one call with
-            # no eligible node applies the native checks without solving.
-            nothing = topology.graph.eligibility(
-                excluded_nodes=range(topology.graph.num_nodes())
-            )
+    nothing = topology.graph.eligibility(
+        excluded_nodes=range(topology.graph.num_nodes())
+    )
+    for step, name, needs in capacities:
+        try:
+            query = needs.capacity(prepared)
+            _, _, native_pairs, _ = question_pairs(prepared, query, f"workflow.{name}")
+            if isinstance(query.config.routing, ngc.Pinned):
+                # A supplied program checks endpoint identities, not just counts.
+                checked_pairs = native_pairs
+            else:
+                arities = {}
+                for pair in native_pairs:
+                    arities.setdefault((len(pair[0]), len(pair[1])), pair)
+                checked_pairs = tuple(arities.values())
             evaluate(
-                topology, query, native_pairs[:1], _options(topology, query, nothing), 1
+                topology, query, checked_pairs, _options(topology, query, nothing), 1
             )
-            return [], []
-        splits, extra = [], []
-        observations = evaluate(
-            topology,
-            query,
-            native_pairs,
-            _options(topology, query, topology.disabled),
-            1,
-        )
-        for (index, pair), result in zip(jobs, observations, strict=True):
-            local, other = query_splits(
-                topology,
-                prepared._named,
-                query,
-                pair,
-                result.delivered,
-                topology.disabled,
-                f"workflow.{name}.pair[{index}]",
-                precision,
-                pools.get(index),
-                result=result,
-            )
-            splits.extend(local)
-            extra.extend(other)
-        return splits, extra
-    except (ValueError, TypeError) as exc:
-        raise _labelled(step, exc, prepared.scenario) from exc
+        except (ValueError, TypeError) as exc:
+            raise _labelled(step, exc, prepared.scenario) from exc
+    if not counting:
+        return
+    from ngraph.analysis.counts import _counted, _group_key, _model
+    from ngraph.analysis.placement import _endpoints
+
+    for step, name, needs in counting:
+        try:
+            query = needs.counts(prepared)
+            label = f"workflow.{name}"
+            offer = quantize(query.offer, topology.q, f"{label}.offer")
+            design = quantize(query.design_demand, topology.q, f"{label}.design_demand")
+            checked = set()
+            for demand in query.demands.demands:
+                model = _model(demand, label)
+                if demand.pool is not None and offer > demand.pool.offer_limit_units:
+                    raise ValueError(
+                        f"{label}.offer: demand {demand.id}: offer {offer} units exceeds the "
+                        f"prepared lossy budget {demand.pool.offer_limit_units} units of TE "
+                        f"ingress pool {demand.pool.head.pool_id}"
+                    )
+                pair = _endpoints(topology, demand)
+                for count, up_to in query.specs:
+                    key = (
+                        _group_key(model),
+                        tuple(pair[0]),
+                        tuple(pair[1]),
+                        count,
+                        up_to,
+                    )
+                    if key in checked:
+                        continue
+                    config = _counted(model, count, up_to)
+                    ngc.evaluate_pairs(
+                        topology.graph,
+                        [pair],
+                        ngc.EvaluationOptions(
+                            config,
+                            eligibility=nothing,
+                            outputs=query.outputs,
+                            offer=offer,
+                            design_demand=design,
+                        ),
+                        workers=1,
+                    )
+                    checked.add(key)
+        except (ValueError, TypeError) as exc:
+            raise _labelled(step, exc, prepared.scenario) from exc
+
+
+def _declared_counts(declaration, heads):
+    """Classify a declaration without materializing graph-bound routes or weights."""
+    if isinstance(declaration, FlowPolicyPreset):
+        declaration = PRESETS[declaration]
+    if not isinstance(declaration, (ngc.FlowPolicyConfig, _ParsedModel)):
+        return 0, 0
+    model = declaration.routing
+    count = getattr(model, "tunnel_count", None)
+    if count is not None:
+        return 0, heads * count.per_head
+    equal = (
+        isinstance(model, (ngc.ShortestPaths, _ShortestPathsInput))
+        and model.allocation == ngc.RouteAllocation.EQUAL
+        and model.source_allocation in (None, ngc.SourceAllocation.EQUAL)
+        and declaration.admission == ngc.Admission.LOSSLESS
+    )
+    return int(equal), 0
+
+
+def _static_groups(scenario, entries, plans_by_name, requested):
+    """Read known workflow declarations and expansion leaves before compilation."""
+    declared_sets = set(requested)
+    declared_sets.update(
+        needs.demand_set
+        for _, _, needs in entries
+        if needs.demand_set is not None and needs.interaction != "simultaneous"
+    )
+    groups = []
+    for name, plans in plans_by_name.items():
+        if name not in declared_sets:
+            continue
+        k = t = 0
+        for plan in plans:
+            for leaf in leaves(plan.root):
+                if leaf.endpoints is None:
+                    continue
+                heads = (
+                    1
+                    if pooled(plan.spec.mode, plan.spec.policy)
+                    else len(leaf.endpoints.sources)
+                )
+                local_k, local_t = _declared_counts(plan.spec.policy, heads)
+                k += local_k
+                t += local_t
+        groups.append((name, k, t))
+    for step, name, _ in entries:
+        if type(step) is WORKFLOW_STEP_REGISTRY.get("MaxFlow"):
+            k, tunnels_per_head = _declared_counts(step.declaration, 1)
+            if not tunnels_per_head:
+                # Each pair contributes exactly the floor, which wins ties.
+                # Final question validation still checks every endpoint.
+                continue
+            try:
+                pairs = selected_pairs(
+                    scenario.network,
+                    step.source,
+                    step.target,
+                    step.mode,
+                    f"step {name}",
+                )
+            except (ValueError, TypeError) as exc:
+                raise _labelled(step, exc, scenario) from exc
+            for pair in pairs:
+                heads = 1 if pooled(step.mode, step.declaration) else len(pair.sources)
+                groups.append((f"workflow.{name}", k, heads * tunnels_per_head))
+        elif type(step) is WORKFLOW_STEP_REGISTRY.get("TunnelCountAnalysis"):
+            count = max((*step.counts, step.up_to or 0))
+            for plan in plans_by_name[step.demand_set]:
+                for leaf in leaves(plan.root):
+                    if leaf.endpoints is not None:
+                        heads = (
+                            1
+                            if pooled(plan.spec.mode, plan.spec.policy)
+                            else len(leaf.endpoints.sources)
+                        )
+                        groups.append((f"workflow.{name}", 0, heads * count))
+    return groups
 
 
 def _labelled(step, exc, scenario, value=_MISSING):
@@ -311,7 +379,7 @@ def prepare_scenario(
 ) -> PreparedScenario:
     """Prepare a read-only scenario view; the steps' needs decide what is bound."""
     numerical, active, capacities, providers, failing = [], [], [], set(), []
-    simultaneous, counting, declared_inputs = [], [], []
+    simultaneous, counting, declared_inputs, entries = [], [], [], []
     for index, step in enumerate(scenario.workflow):
         name = step_name(step)
         location = workflow_location(index, step.name)
@@ -321,6 +389,7 @@ def prepare_scenario(
             raise _labelled(step, exc, scenario) from exc
         if needs is None:
             continue
+        entries.append((step, name, needs))
         if needs.numerical:
             numerical.append(name)
         for kind, names, known in (
@@ -391,16 +460,16 @@ def prepare_scenario(
     lossy_plans = []
     for step, name, demand_set, alpha, source in simultaneous:
         values = plans_by_name[demand_set]
-        pooled = [
+        pooled_leaves = [
             leaf.id for plan in values for leaf in leaves(plan.root) if leaf.id in pools
         ]
-        if alpha is None and pooled:
+        if alpha is None and pooled_leaves:
             raise _labelled(
                 step,
                 _input_error(
                     f"workflow.{name}.interaction",
-                    f"demand {pooled[0]}: its scale comes from MSD step {source}, unknown at "
-                    f"preparation, so TE ingress pool {pooled[0]} has no lossy offer budget",
+                    f"demand {pooled_leaves[0]}: its scale comes from MSD step {source}, unknown at "
+                    f"preparation, so TE ingress pool {pooled_leaves[0]} has no lossy offer budget",
                 ),
                 scenario,
             )
@@ -481,7 +550,9 @@ def prepare_scenario(
     )
     if cost_sum >= LIMIT:
         raise ValueError(f"topology augmented cost sum {cost_sum} must be below 2^62")
-    expansion, _ = expansion_bounds(plans, 1.0, settings.precision)
+    groups = _static_groups(scenario, entries, plans_by_name, requested)
+    nodes, directed_links = len(network.nodes), 2 * len(network.links)
+    group_count = split_count(nodes, directed_links, groups)
     steps: tuple[tuple[str, int | None, SeedSource], ...] = tuple(
         (
             step_name(step),
@@ -491,127 +562,62 @@ def prepare_scenario(
         for step in scenario.workflow
     )
     declared = (scenario.routes, scenario.supports, scenario.weights)
-    membership = None
-    unresolved: dict[float, tuple[TunnelResolutionConstraint, ...]] = {}
-
-    def candidate(q):
-        nonlocal membership
-        if membership is None:
-            membership = MembershipIndex.build(network)
-        topology = compile_topology(network, q, pools=pools, budgets=budgets(q))
-        named = NO_ROUTES
-        if any(declared):
-            # Programs load only for scenarios that declare routes or weights.
-            from ngraph.analysis.programs import compile_named
-
-            named = compile_named(
-                topology,
-                routes=scenario.routes,
-                supports=scenario.supports,
-                weights=scenario.weights,
-            )
-        setup = None
-        if scenario.wcmp_controller is not None:
-            # The controller loads only for scenarios that declare it.
-            from ngraph.analysis.controller import compile_setup
-
-            setup = compile_setup(topology, scenario)
-        resolved = {
-            name: bind_plans(topology, named, name, values, setup)
-            for name, values in plans_by_name.items()
-        }
-        if setup is not None:
-            _check_controller(topology, setup, resolved, failing, scenario)
-        observations = input_observations(inputs, q, settings.precision)
-        report = make_report(
-            q,
-            settings,
-            scope,
-            inputs,
-            int(topology.graph.edge_capacity_units().sum()),
-            int(topology.graph.edge_costs().sum()),
-            observations=observations,
-        )
-        # The chosen candidate's report holds exactly its own tables' approximations.
-        report = report.with_approximations(
-            tuple(
-                entry
-                for demands in resolved.values()
-                for entry in approximations(demands)
-            )
-        )
-        prepared = PreparedScenario(
-            scenario,
-            topology,
-            MappingProxyType(resolved),
-            report,
-            named,
-            membership,
-            owned_inputs,
-            observations,
-            steps,
-            setup,
-        )
-        splits, extra = [], []
-        for demands in resolved.values():
-            local, other = _nominal_splits(prepared, demands, settings.precision)
-            splits.extend(local)
-            extra.extend(other)
-        for step, name, needs in capacities:
-            local, other = _capacity_splits(
-                prepared, step, name, needs, settings.precision
-            )
-            splits.extend(local)
-            extra.extend(other)
-        for step, name, needs in counting:
-            # Count questions load only for scenarios that ask them.
-            from ngraph.analysis.counts import count_splits
-
-            try:
-                local, other = count_splits(
-                    prepared,
-                    needs.counts(prepared),
-                    f"workflow.{name}",
-                    topology.disabled,
-                )
-            except (ValueError, TypeError) as exc:
-                raise _labelled(step, exc, scenario) from exc
-            splits.extend(local)
-            extra.extend(other)
-        report = with_splits(report, tuple(splits), tuple(extra))
-        if settings.resolution == "auto":
-            unresolved[q] = tuple(
-                c for c in extra if isinstance(c, TunnelResolutionConstraint)
-            )
-        return replace(prepared, units_report=report), report.target_met
-
     try:
-        prepared, finer_failure = choose_resolution(
-            settings,
-            inputs,
-            coefficients,
-            (c.q_upper_bound for c in expansion),
-            candidate,
-            budget_excess,
+        q, limited_by, range_limit = choose_resolution(
+            settings, owned_inputs, coefficients, group_count[3], budget_excess
         )
     except (ValueError, TypeError) as exc:
         input_refusal(exc)
-    report = prepared.units_report
-    # A plan rejected at the next coarser unit explains the automatic choice.
-    coarser = unresolved.get(report.q * 2, ()) if report.target_met else ()
-    if coarser:
-        prepared = replace(
-            prepared,
-            units_report=replace(
-                report, binding_constraints=(*report.binding_constraints, *coarser)
-            ),
+    membership = MembershipIndex.build(network)
+    topology = compile_topology(network, q, pools=pools, budgets=budgets(q))
+    named = NO_ROUTES
+    if any(declared):
+        from ngraph.analysis.programs import compile_named
+
+        named = compile_named(
+            topology,
+            routes=scenario.routes,
+            supports=scenario.supports,
+            weights=scenario.weights,
         )
-    if finer_failure is not None:
-        report = prepared.units_report
-        prepared = replace(
-            prepared,
-            units_report=replace(
-                report, binding_constraints=(*report.binding_constraints, finer_failure)
-            ),
+    setup = None
+    if scenario.wcmp_controller is not None:
+        from ngraph.analysis.controller import compile_setup
+
+        setup = compile_setup(topology, scenario)
+    resolved = {
+        name: bind_plans(topology, named, name, values, setup)
+        for name, values in plans_by_name.items()
+    }
+    if setup is not None:
+        _check_controller(topology, setup, resolved, failing, scenario)
+    report = make_report(
+        q,
+        settings,
+        scope,
+        owned_inputs,
+        nodes,
+        directed_links,
+        group_count,
+        limited_by,
+        range_limit,
+        int(topology.graph.edge_capacity_units().sum()),
+        int(topology.graph.edge_costs().sum()),
+    )
+    report = report.with_approximations(
+        tuple(
+            entry for demands in resolved.values() for entry in approximations(demands)
         )
+    )
+    prepared = PreparedScenario(
+        scenario,
+        topology,
+        MappingProxyType(resolved),
+        report,
+        named,
+        membership,
+        steps,
+        setup,
+    )
+    _validate_capacity_questions(prepared, capacities, counting)
     return prepared

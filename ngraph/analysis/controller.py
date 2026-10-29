@@ -11,6 +11,7 @@ one table through its own native program; nothing here forwards traffic.
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from fractions import Fraction
@@ -21,7 +22,6 @@ from typing import cast
 import netgraph_core as ngc
 
 from ngraph.analysis.demands import selected_groups
-from ngraph.analysis.precision import effective_rows, propagate
 from ngraph.analysis.programs import dag_from_edges, domain_dag, edge_id
 from ngraph.analysis.topology import PreparedTopology
 from ngraph.model.demand import PRESETS, FlowPolicyPreset, ForwardingGroup
@@ -845,3 +845,89 @@ def table_report(
             for source, nominal, weight in table.source_weights
         ),
     )
+
+
+def effective_rows(topology, edges, destinations, allocation, weights):
+    """Native preparation's split rows over a set of DAG edges.
+
+    Native W prunes zero-capacity members even for positive EXPLICIT weights,
+    then removes branches with no effective continuation to a destination;
+    EQUAL keeps every member. Returns each router's members in EdgeId order,
+    with their weights (1 for EQUAL).
+    """
+    graph = topology.graph
+    sources, targets = graph.edge_sources(), graph.edge_destinations()
+    capacities = graph.edge_capacity_units()
+    effective_edges = {
+        edge
+        for edge in edges
+        if int(sources[edge]) not in destinations
+        and (
+            allocation == ngc.RouteAllocation.EQUAL
+            or (capacities[edge] > 0 and weights[edge] > 0)
+        )
+    }
+    parents = [[] for _ in range(graph.num_nodes())]
+    for edge in effective_edges:
+        parents[int(targets[edge])].append(int(sources[edge]))
+    reachable = set(destinations)
+    pending = list(destinations)
+    while pending:
+        for source in parents[pending.pop()]:
+            if source not in reachable:
+                reachable.add(source)
+                pending.append(source)
+    rows: dict[int, list[tuple[int, int]]] = {}
+    for edge in sorted(effective_edges):
+        if int(targets[edge]) in reachable:
+            share = 1 if allocation == ngc.RouteAllocation.EQUAL else int(weights[edge])
+            rows.setdefault(int(sources[edge]), []).append((edge, share))
+    return rows
+
+
+def propagate(graph, rows, injections, *, reached_only=False):
+    """Exact rational propagation of injected amounts through split rows.
+
+    ``rows`` maps a router to its members (EdgeId, positive weight); a router
+    splits what it holds in proportion to the weights. Returns the nodes in
+    processing order (with ``reached_only``, only those the injections reach),
+    the amount each node holds and the amount on each edge. Amounts at a node
+    without a row stay there (a destination, or a loss).
+    """
+    targets = graph.edge_destinations()
+    indegree = [0] * graph.num_nodes()
+    if reached_only:
+        nodes, pending = set(injections), list(injections)
+        while pending:
+            for edge, _ in rows.get(pending.pop(), ()):
+                target = int(targets[edge])
+                indegree[target] += 1
+                if target not in nodes:
+                    nodes.add(target)
+                    pending.append(target)
+    else:
+        nodes = range(graph.num_nodes())
+        for members in rows.values():
+            for edge, _ in members:
+                indegree[int(targets[edge])] += 1
+    ready = deque(node for node in sorted(nodes) if indegree[node] == 0)
+    incoming: list[Fraction | int] = [0] * len(indegree)
+    for node, amount in injections.items():
+        incoming[node] += Fraction(amount)
+    order, load = [], {}
+    while ready:
+        node = ready.popleft()
+        order.append(node)
+        members = rows.get(node, ())
+        if incoming[node] > 0 and members:
+            denominator = sum(weight for _, weight in members)
+            for edge, weight in members:
+                share = incoming[node] * weight / denominator
+                load[edge] = load.get(edge, 0) + share
+                incoming[int(targets[edge])] += share
+        for edge, _ in members:
+            target = int(targets[edge])
+            indegree[target] -= 1
+            if indegree[target] == 0:
+                ready.append(target)
+    return order, incoming, load

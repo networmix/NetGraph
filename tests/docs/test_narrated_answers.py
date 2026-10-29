@@ -89,7 +89,7 @@ def test_readme_says_what_its_example_prints():
     assert result.cases[0].states["converged"].rows[0].result.delivered == int(shown)
 
 
-def test_readme_names_the_question_and_its_precision_miss():
+def test_readme_names_the_question_and_its_unmet_precision_target():
     """README: a CapacityQuery without a model asks TE_MAXFLOW_UNLIM; `cases[0]` is the
     case without failures with its one state; q = 1 misses the default target, nothing
     rounded."""
@@ -99,16 +99,16 @@ def test_readme_names_the_question_and_its_precision_miss():
     case = space["result"].cases[0]
     assert case.case.kind == "baseline" and tuple(case.states) == ("converged",)
     report = space["prepared"].units_report
-    assert not report.target_met and report.inexact_inputs == report.zeroed_inputs == 0
+    assert not report.target_met and report.limited_by == "declared"
 
 
-def test_basic_states_its_precision_miss():
+def test_basic_states_its_unmet_precision_target():
     """Basic Example: q = 1 misses the default target, nothing rounded."""
     report = examples(BASIC, "network.add_link(Link(source")["prepared"].units_report
-    assert not report.target_met and report.inexact_inputs == report.zeroed_inputs == 0
+    assert not report.target_met and report.limited_by == "declared"
 
 
-def test_the_api_and_tunnel_count_examples_state_their_precision_miss():
+def test_the_api_and_tunnel_count_examples_state_their_unmet_precision_target():
     """Python API and TunnelCountAnalysis: their examples fix q = 1, which misses the
     default precision target; nothing is rounded."""
     api = "docs/reference/api.md"
@@ -120,9 +120,7 @@ def test_the_api_and_tunnel_count_examples_state_their_precision_miss():
     for prepared in (space["prepared"], counts):
         report = prepared.units_report
         assert prepared.topology.q == 1 and report.mode == "manual"
-        assert (
-            not report.target_met and report.inexact_inputs == report.zeroed_inputs == 0
-        )
+        assert not report.target_met
 
 
 # How NetGraph computes
@@ -211,26 +209,6 @@ def test_source_roster_narration():
     assert (need, own) == (first, small) and delivered[small, big] == fit
     (after,) = ints(numbers(text, "S1's (\\w+) unit"))
     assert delivered[5, 0] == after and delivered[0, 5] == 0  # "admits nothing"
-
-
-def test_precision_narration():
-    space = examples(CONCEPTS, "alpha: 0.05")
-    text = narration(CONCEPTS, "alpha: 0.05")
-    (exponent,) = numbers(text, "`q` is 2\\^(-?\\d+)")
-    assert space["prepared"].topology.q == 2 ** int(exponent)
-    alpha, volume, bound = ints(
-        (
-            numbers(text, "alpha ([\\d.]+)")
-            + numbers(text, "volume of ([\\d.]+)")
-            + numbers(text, "`q ≤ ([\\d.]+)`")
-        )
-    )
-    [miss] = space["result"].units_report.misses
-    [step] = space["prepared"].scenario.workflow
-    [demand] = space["prepared"].scenario.demand_sets["pair"].demands
-    assert step.alpha == float(alpha) and demand.volume * step.alpha == float(volume)
-    [own] = [c for c in miss.constraints if c.label.endswith(".volume")]
-    assert own.q_upper_bound == Fraction(float(bound))
 
 
 def test_tunnel_narration():
@@ -979,25 +957,6 @@ demands:
     prepared = prepare(Scenario.from_yaml(expansion), demand_sets=("d",))
     shares = [d.nominal_units for d in prepared.demand_sets["d"].demands]
     assert shares == [int(first), *map(int, second)]
-
-
-def chain(amount):
-    return f"""
-units: {{resolution: 1}}
-network:
-  nodes: {{A: {{}}, B: {{}}, C: {{}}}}
-  links: [{{source: A, target: B, capacity: {amount}}}, {{source: B, target: C, capacity: {amount}}}]
-"""
-
-
-def test_the_precision_threshold_at_unit_resolution():
-    """Precision: "At `q` = 1 and the default `p`, every input must be at least 500"."""
-    (least,) = stated(CONCEPTS, "at least (\\d+)")
-    met = [
-        prepare(Scenario.from_yaml(chain(int(least) + d))).units_report.target_met
-        for d in (-1, 0)
-    ]
-    assert met == [False, True]
 
 
 def test_the_failure_coverage_figure():

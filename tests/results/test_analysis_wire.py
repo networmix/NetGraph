@@ -370,9 +370,7 @@ def test_run_rejects_a_forged_report_without_mutating_preparation():
         def run(self, context):
             return StepOutput(value.query, value)
 
-    for bad in (
-        replace(value.units_report, input_count=value.units_report.input_count + 1),
-    ):
+    for bad in (replace(value.units_report, exponent=value.units_report.exponent + 1),):
         forged = replace(context, units_report=bad)
 
         class Bad(WorkflowStep):
