@@ -1,0 +1,73 @@
+# A four-node full mesh, the smallest bundled scenario. Links N1-N3 and N2-N4 have
+# capacity 1, the others 2. The workflow finds the maximum supported demand of a
+# pairwise traffic matrix, places the matrix at that multiplier under 1000 draws of one
+# link failure, and computes a pairwise capacity matrix under the same failures, with
+# failure traces, cost reports and minimum cuts.
+seed: 42
+network:
+  nodes:
+    N1: {}
+    N2: {}
+    N3: {}
+    N4: {}
+  links:
+    - source: N1
+      target: N2
+      capacity: 2.0
+    - source: N1
+      target: N3
+      capacity: 1.0
+    - source: N1
+      target: N4
+      capacity: 2.0
+    - source: N2
+      target: N3
+      capacity: 2.0
+    - source: N2
+      target: N4
+      capacity: 1.0
+    - source: N3
+      target: N4
+      capacity: 2.0
+failures:
+  single_link_failure:
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: link
+            mode: choice
+            count: 1
+demands:
+  baseline_traffic_matrix:
+    - source: ^N([1-4])$
+      target: ^N([1-4])$
+      volume: 12.0
+      mode: pairwise
+workflow:
+  - type: MaximumSupportedDemand
+    name: msd_baseline
+    demand_set: baseline_traffic_matrix
+    alpha_min: 0.001
+    alpha_max: 1000000.0
+    alpha_tolerance: 0.05
+    max_bracket_iters: 16
+  - type: TrafficMatrixPlacement
+    name: tm_placement
+    demand_set: baseline_traffic_matrix
+    failure_policy: single_link_failure
+    iterations: 1000
+    seed: 42
+    failure_trace: true
+    outputs: {cost_distribution: true}
+    alpha_from_step: msd_baseline
+  - type: MaxFlow
+    name: node_to_node_capacity_matrix
+    source: ^(N[1-4])$
+    target: ^(N[1-4])$
+    mode: pairwise
+    failure_policy: single_link_failure
+    iterations: 1000
+    workers: 8
+    seed: 42
+    failure_trace: true
+    outputs: {cost_distribution: true, min_cut: true}

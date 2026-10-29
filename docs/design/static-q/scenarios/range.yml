@@ -1,0 +1,10 @@
+# Two links of 2^41 and a demand of 0.001: the rule's q is out of range.
+network:
+  nodes: {A: {}, B: {}}
+  links:
+    - {source: A, target: B, capacity: 2199023255552}
+    - {source: A, target: B, capacity: 2199023255552}
+demands:
+  d: [{source: ^A$, target: ^B$, volume: 0.001}]
+workflow:
+  - {type: TrafficMatrixPlacement, name: place, demand_set: d}

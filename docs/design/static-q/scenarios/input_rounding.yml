@@ -1,0 +1,8 @@
+# One link of 100 and an ECMP demand of 1.0156.
+network:
+  nodes: {A: {}, B: {}}
+  links: [{source: A, target: B, capacity: 100}]
+demands:
+  d: [{source: ^A$, target: ^B$, volume: 1.0156}]
+workflow:
+  - {type: TrafficMatrixPlacement, name: place, demand_set: d}

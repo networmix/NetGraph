@@ -1,0 +1,6 @@
+# One link of 1.00015 and a TE maximum flow (MaxFlow's default model).
+network:
+  nodes: {A: {}, B: {}}
+  links: [{source: A, target: B, capacity: 1.00015}]
+workflow:
+  - {type: MaxFlow, name: cap, source: ^A$, target: ^B$}

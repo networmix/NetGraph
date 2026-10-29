@@ -1,0 +1,14 @@
+# Two tunnels set up by their head over links of 6 and 4; each asks half of 8 + 2^-12.
+network:
+  nodes: {S: {}, T: {}}
+  links:
+    - {source: S, target: T, capacity: 6}
+    - {source: S, target: T, capacity: 4}
+demands:
+  te:
+    - source: ^S$
+      target: ^T$
+      volume: 8.000244140625
+      model: {routing: {type: distributed_te, tunnel_count: {per_head: 2}}}
+workflow:
+  - {type: TrafficMatrixPlacement, name: place, demand_set: te}

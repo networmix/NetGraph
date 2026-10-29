@@ -1,0 +1,17 @@
+# The routes of the concepts section "Routing models and admission", with the automatic q.
+network:
+  nodes: {A: {}, B: {}, C: {}, X: {}, Y: {}, D: {}}
+  links:
+    - {source: A, target: B, capacity: 100}
+    - {source: B, target: D, capacity: 100, cost: 2}
+    - {source: A, target: C, capacity: 100}
+    - {source: C, target: X, capacity: 2}
+    - {source: C, target: Y, capacity: 100}
+    - {source: X, target: D, capacity: 100}
+    - {source: Y, target: D, capacity: 100}
+demands:
+  lossless: [{source: ^A$, target: ^D$, volume: 12, preset: SHORTEST_PATHS_ECMP}]
+  lossy: [{source: ^A$, target: ^D$, volume: 12, preset: SHORTEST_PATHS_ECMP_LOSSY}]
+workflow:
+  - {type: TrafficMatrixPlacement, name: lossless, demand_set: lossless}
+  - {type: TrafficMatrixPlacement, name: lossy, demand_set: lossy}

@@ -1,0 +1,215 @@
+network:
+  nodes:
+    S00: {}
+    S01: {}
+    S02: {}
+    S03: {}
+    S04: {}
+    S05: {}
+    S06: {}
+    S07: {}
+    S08: {}
+    S09: {}
+    S10: {}
+    S11: {}
+    S12: {}
+    S13: {}
+    S14: {}
+    S15: {}
+    S16: {}
+    S17: {}
+    S18: {}
+    S19: {}
+    S20: {}
+    S21: {}
+    S22: {}
+    S23: {}
+    S24: {}
+    S25: {}
+    S26: {}
+    S27: {}
+    S28: {}
+    S29: {}
+    S30: {}
+    S31: {}
+    S32: {}
+    S33: {}
+    S34: {}
+    S35: {}
+    S36: {}
+    S37: {}
+    S38: {}
+    S39: {}
+    S40: {}
+    S41: {}
+    S42: {}
+    S43: {}
+    S44: {}
+    S45: {}
+    S46: {}
+    S47: {}
+    S48: {}
+    S49: {}
+    X1: {}
+    X2: {}
+    X3: {}
+    T: {}
+  links:
+    - {source: S00, target: X1, capacity: 1000}
+    - {source: S00, target: X2, capacity: 1000}
+    - {source: S00, target: X3, capacity: 1000}
+    - {source: S01, target: X1, capacity: 1000}
+    - {source: S01, target: X2, capacity: 1000}
+    - {source: S01, target: X3, capacity: 1000}
+    - {source: S02, target: X1, capacity: 1000}
+    - {source: S02, target: X2, capacity: 1000}
+    - {source: S02, target: X3, capacity: 1000}
+    - {source: S03, target: X1, capacity: 1000}
+    - {source: S03, target: X2, capacity: 1000}
+    - {source: S03, target: X3, capacity: 1000}
+    - {source: S04, target: X1, capacity: 1000}
+    - {source: S04, target: X2, capacity: 1000}
+    - {source: S04, target: X3, capacity: 1000}
+    - {source: S05, target: X1, capacity: 1000}
+    - {source: S05, target: X2, capacity: 1000}
+    - {source: S05, target: X3, capacity: 1000}
+    - {source: S06, target: X1, capacity: 1000}
+    - {source: S06, target: X2, capacity: 1000}
+    - {source: S06, target: X3, capacity: 1000}
+    - {source: S07, target: X1, capacity: 1000}
+    - {source: S07, target: X2, capacity: 1000}
+    - {source: S07, target: X3, capacity: 1000}
+    - {source: S08, target: X1, capacity: 1000}
+    - {source: S08, target: X2, capacity: 1000}
+    - {source: S08, target: X3, capacity: 1000}
+    - {source: S09, target: X1, capacity: 1000}
+    - {source: S09, target: X2, capacity: 1000}
+    - {source: S09, target: X3, capacity: 1000}
+    - {source: S10, target: X1, capacity: 1000}
+    - {source: S10, target: X2, capacity: 1000}
+    - {source: S10, target: X3, capacity: 1000}
+    - {source: S11, target: X1, capacity: 1000}
+    - {source: S11, target: X2, capacity: 1000}
+    - {source: S11, target: X3, capacity: 1000}
+    - {source: S12, target: X1, capacity: 1000}
+    - {source: S12, target: X2, capacity: 1000}
+    - {source: S12, target: X3, capacity: 1000}
+    - {source: S13, target: X1, capacity: 1000}
+    - {source: S13, target: X2, capacity: 1000}
+    - {source: S13, target: X3, capacity: 1000}
+    - {source: S14, target: X1, capacity: 1000}
+    - {source: S14, target: X2, capacity: 1000}
+    - {source: S14, target: X3, capacity: 1000}
+    - {source: S15, target: X1, capacity: 1000}
+    - {source: S15, target: X2, capacity: 1000}
+    - {source: S15, target: X3, capacity: 1000}
+    - {source: S16, target: X1, capacity: 1000}
+    - {source: S16, target: X2, capacity: 1000}
+    - {source: S16, target: X3, capacity: 1000}
+    - {source: S17, target: X1, capacity: 1000}
+    - {source: S17, target: X2, capacity: 1000}
+    - {source: S17, target: X3, capacity: 1000}
+    - {source: S18, target: X1, capacity: 1000}
+    - {source: S18, target: X2, capacity: 1000}
+    - {source: S18, target: X3, capacity: 1000}
+    - {source: S19, target: X1, capacity: 1000}
+    - {source: S19, target: X2, capacity: 1000}
+    - {source: S19, target: X3, capacity: 1000}
+    - {source: S20, target: X1, capacity: 1000}
+    - {source: S20, target: X2, capacity: 1000}
+    - {source: S20, target: X3, capacity: 1000}
+    - {source: S21, target: X1, capacity: 1000}
+    - {source: S21, target: X2, capacity: 1000}
+    - {source: S21, target: X3, capacity: 1000}
+    - {source: S22, target: X1, capacity: 1000}
+    - {source: S22, target: X2, capacity: 1000}
+    - {source: S22, target: X3, capacity: 1000}
+    - {source: S23, target: X1, capacity: 1000}
+    - {source: S23, target: X2, capacity: 1000}
+    - {source: S23, target: X3, capacity: 1000}
+    - {source: S24, target: X1, capacity: 1000}
+    - {source: S24, target: X2, capacity: 1000}
+    - {source: S24, target: X3, capacity: 1000}
+    - {source: S25, target: X1, capacity: 1000}
+    - {source: S25, target: X2, capacity: 1000}
+    - {source: S25, target: X3, capacity: 1000}
+    - {source: S26, target: X1, capacity: 1000}
+    - {source: S26, target: X2, capacity: 1000}
+    - {source: S26, target: X3, capacity: 1000}
+    - {source: S27, target: X1, capacity: 1000}
+    - {source: S27, target: X2, capacity: 1000}
+    - {source: S27, target: X3, capacity: 1000}
+    - {source: S28, target: X1, capacity: 1000}
+    - {source: S28, target: X2, capacity: 1000}
+    - {source: S28, target: X3, capacity: 1000}
+    - {source: S29, target: X1, capacity: 1000}
+    - {source: S29, target: X2, capacity: 1000}
+    - {source: S29, target: X3, capacity: 1000}
+    - {source: S30, target: X1, capacity: 1000}
+    - {source: S30, target: X2, capacity: 1000}
+    - {source: S30, target: X3, capacity: 1000}
+    - {source: S31, target: X1, capacity: 1000}
+    - {source: S31, target: X2, capacity: 1000}
+    - {source: S31, target: X3, capacity: 1000}
+    - {source: S32, target: X1, capacity: 1000}
+    - {source: S32, target: X2, capacity: 1000}
+    - {source: S32, target: X3, capacity: 1000}
+    - {source: S33, target: X1, capacity: 1000}
+    - {source: S33, target: X2, capacity: 1000}
+    - {source: S33, target: X3, capacity: 1000}
+    - {source: S34, target: X1, capacity: 1000}
+    - {source: S34, target: X2, capacity: 1000}
+    - {source: S34, target: X3, capacity: 1000}
+    - {source: S35, target: X1, capacity: 1000}
+    - {source: S35, target: X2, capacity: 1000}
+    - {source: S35, target: X3, capacity: 1000}
+    - {source: S36, target: X1, capacity: 1000}
+    - {source: S36, target: X2, capacity: 1000}
+    - {source: S36, target: X3, capacity: 1000}
+    - {source: S37, target: X1, capacity: 1000}
+    - {source: S37, target: X2, capacity: 1000}
+    - {source: S37, target: X3, capacity: 1000}
+    - {source: S38, target: X1, capacity: 1000}
+    - {source: S38, target: X2, capacity: 1000}
+    - {source: S38, target: X3, capacity: 1000}
+    - {source: S39, target: X1, capacity: 1000}
+    - {source: S39, target: X2, capacity: 1000}
+    - {source: S39, target: X3, capacity: 1000}
+    - {source: S40, target: X1, capacity: 1000}
+    - {source: S40, target: X2, capacity: 1000}
+    - {source: S40, target: X3, capacity: 1000}
+    - {source: S41, target: X1, capacity: 1000}
+    - {source: S41, target: X2, capacity: 1000}
+    - {source: S41, target: X3, capacity: 1000}
+    - {source: S42, target: X1, capacity: 1000}
+    - {source: S42, target: X2, capacity: 1000}
+    - {source: S42, target: X3, capacity: 1000}
+    - {source: S43, target: X1, capacity: 1000}
+    - {source: S43, target: X2, capacity: 1000}
+    - {source: S43, target: X3, capacity: 1000}
+    - {source: S44, target: X1, capacity: 1000}
+    - {source: S44, target: X2, capacity: 1000}
+    - {source: S44, target: X3, capacity: 1000}
+    - {source: S45, target: X1, capacity: 1000}
+    - {source: S45, target: X2, capacity: 1000}
+    - {source: S45, target: X3, capacity: 1000}
+    - {source: S46, target: X1, capacity: 1000}
+    - {source: S46, target: X2, capacity: 1000}
+    - {source: S46, target: X3, capacity: 1000}
+    - {source: S47, target: X1, capacity: 1000}
+    - {source: S47, target: X2, capacity: 1000}
+    - {source: S47, target: X3, capacity: 1000}
+    - {source: S48, target: X1, capacity: 1000}
+    - {source: S48, target: X2, capacity: 1000}
+    - {source: S48, target: X3, capacity: 1000}
+    - {source: S49, target: X1, capacity: 1000}
+    - {source: S49, target: X2, capacity: 1000}
+    - {source: S49, target: X3, capacity: 1000}
+    - {source: X1, target: T, capacity: 1}
+    - {source: X2, target: T, capacity: 1}
+    - {source: X3, target: T, capacity: 1}
+demands:
+  d: [{source: ^S, target: ^T$, volume: 100, mode: combine, preset: SHORTEST_PATHS_ECMP}]
+workflow:
+  - {type: MaximumSupportedDemand, name: msd, demand_set: d, alpha_tolerance: 0.0001}
+  - {type: TrafficMatrixPlacement, name: place, demand_set: d}

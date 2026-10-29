@@ -1,0 +1,39 @@
+units: {precision: 0.1}
+network:
+  nodes:
+    H: {}
+    T: {}
+    S00: {}
+    S01: {}
+    S02: {}
+    S03: {}
+    S04: {}
+    S05: {}
+    S06: {}
+    S07: {}
+    S08: {}
+    S09: {}
+    S10: {}
+    S11: {}
+  links:
+    - {source: S00, target: H, capacity: 1000}
+    - {source: S01, target: H, capacity: 1000}
+    - {source: S02, target: H, capacity: 1000}
+    - {source: S03, target: H, capacity: 1000}
+    - {source: S04, target: H, capacity: 1000}
+    - {source: S05, target: H, capacity: 1000}
+    - {source: S06, target: H, capacity: 1000}
+    - {source: S07, target: H, capacity: 1000}
+    - {source: S08, target: H, capacity: 1000}
+    - {source: S09, target: H, capacity: 1000}
+    - {source: S10, target: H, capacity: 1000}
+    - {source: S11, target: H, capacity: 1000}
+    - {source: H, target: T, capacity: 10}
+demands:
+  te:
+    - source: ^S
+      target: ^T$
+      volume: 1000
+      model: {routing: {type: centralized_te, source_allocation: equal, tunnel_count: {per_head: 16}}}
+workflow:
+  - {type: TrafficMatrixPlacement, name: place, demand_set: te}

@@ -1,0 +1,10 @@
+# Two parallel links, the second of capacity 0; equal splitting gives it every other unit.
+network:
+  nodes: {A: {}, B: {}}
+  links:
+    - {source: A, target: B, capacity: 5}
+    - {source: A, target: B, capacity: 0}
+demands:
+  d: [{source: ^A$, target: ^B$, volume: 5}]
+workflow:
+  - {type: TrafficMatrixPlacement, name: place, demand_set: d}

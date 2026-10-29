@@ -40,6 +40,8 @@ nav:
       - Architecture: reference/design.md
 plugins:
   - search
+exclude_docs: |
+  /design/
 strict: true
 validation:
   anchors: warn

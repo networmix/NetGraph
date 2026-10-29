@@ -1,0 +1,45 @@
+# Two Clos sites built from one blueprint and joined spine to spine. The workflow finds
+# the largest tested feasible demand multiplier (alpha), then places the demands at that
+# alpha under 100 draws of one random link failure.
+seed: 42
+
+# A reusable topology template
+blueprints:
+  Clos_Fabric:
+    nodes:
+      spine: {count: 2, template: "spine{n}"}
+      leaf: {count: 4, template: "leaf{n}"}
+    links:
+      - {source: /leaf, target: /spine, pattern: mesh, capacity: 100}
+
+# Two instances of the template, linked spine to spine
+network:
+  nodes:
+    site1: {blueprint: Clos_Fabric}
+    site2: {blueprint: Clos_Fabric}
+  links:
+    - {source: site1/spine, target: site2/spine, pattern: one_to_one, capacity: 50}
+
+# One random link fails per draw
+failures:
+  random_link:
+    modes:
+      - weight: 1
+        rules:
+          - {scope: link, mode: choice, count: 1}
+
+# Traffic from the leaves of site1 to the leaves of site2
+demands:
+  global_traffic:
+    - {source: ^site1/leaf/, target: ^site2/leaf/, volume: 100, preset: SHORTEST_PATHS_ECMP}
+
+workflow:
+  - type: MaximumSupportedDemand
+    name: max_demand
+    demand_set: global_traffic
+  - type: TrafficMatrixPlacement
+    name: placement_at_max
+    demand_set: global_traffic
+    alpha_from_step: max_demand  # its largest tested feasible alpha
+    failure_policy: random_link
+    iterations: 100

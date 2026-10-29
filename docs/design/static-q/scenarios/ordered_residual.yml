@@ -1,0 +1,10 @@
+# Two ECMP demands placed in order on one link of 10.
+network:
+  nodes: {A: {}, B: {}}
+  links: [{source: A, target: B, capacity: 10}]
+demands:
+  two:
+    - {source: ^A$, target: ^B$, volume: 9.9999}
+    - {source: ^A$, target: ^B$, volume: 10}
+workflow:
+  - {type: TrafficMatrixPlacement, name: ordered, demand_set: two}
