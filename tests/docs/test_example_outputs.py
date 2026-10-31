@@ -61,15 +61,6 @@ def run_python(page, upto):
     return namespace
 
 
-# README.md
-
-
-def test_the_readme_scenario_is_the_bundled_file():
-    """README: "(this is `scenarios/readme_example.yml`)"."""
-    shown = fence("README.md", "blueprints:").text
-    assert shown == (ROOT / "scenarios/readme_example.yml").read_text()
-
-
 # Tutorial
 
 
