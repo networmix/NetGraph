@@ -2,11 +2,7 @@
 
 [![Python-test](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml/badge.svg?branch=main)](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml)
 
-Network modeling and analysis framework: Python front end, C++ graph algorithms.
-
-## What It Does
-
-NetGraph models network topologies, traffic demands and failure scenarios, and analyzes capacity and resilience. Networks are defined in Python or in YAML; max-flow and failure simulations export reproducible JSON.
+NetGraph computes how much traffic a network can carry: the capacity between sites, how much of a traffic matrix fits, and how both change when links or nodes fail. You describe the network in Python or in YAML; the graph algorithms run in C++ ([NetGraph-Core](https://github.com/networmix/NetGraph-Core)). Results come back as Python objects and export to JSON. If you are building your own tool and want to call the graph algorithms directly, on integer capacities you convert yourself, use [NetGraph-Core](https://github.com/networmix/NetGraph-Core) instead.
 
 ## Install
 
@@ -14,117 +10,119 @@ NetGraph models network topologies, traffic demands and failure scenarios, and a
 pip install ngraph
 ```
 
-## Python API
+NetGraph needs Python 3.11 or later. NetGraph-Core, the C++ engine, is installed with it.
+
+## First example: shortest path versus traffic engineering
+
+Router A reaches router C directly over a 10 Gbit/s link, or through B over two 20 Gbit/s links. Capacities are plain numbers; here they mean Gbit/s. Every link has cost 1. Cost is the routing metric, and the cost of a route is the sum of its link costs: the direct route costs 1, the route through B costs 2.
+
+```text
+                B
+    20 Gbit/s  / \  20 Gbit/s
+              /   \
+             A-----C
+            10 Gbit/s
+
+         every link: cost 1
+```
+
+With no other traffic and nothing failed, how much can A send to C when routers forward only on the lowest-cost route, and how much when traffic engineering may use both routes? The engine counts bandwidth in whole units of a size `q` that NetGraph chooses for the network, so the example multiplies each result by `prepared.topology.q` to print Gbit/s.
 
 ```python
-from ngraph import (
-    CapacityQuery, Link, Network, Node, Scenario, Selector, UnitsSettings,
-    capacity, prepare,
-)
+import netgraph_core as ngc
+from ngraph import CapacityQuery, Link, Network, Node, Scenario, Selector, capacity, prepare
 
-# Three nodes in a line, joined by links of capacity 10
 network = Network()
 for name in ("A", "B", "C"):
     network.add_node(Node(name))
-network.add_link(Link("A", "B", capacity=10))
-network.add_link(Link("B", "C", capacity=10))
+network.add_link(Link("A", "C", capacity=10, cost=1))
+network.add_link(Link("A", "B", capacity=20, cost=1))
+network.add_link(Link("B", "C", capacity=20, cost=1))
 
-# Prepare the graph once, with a bandwidth unit q of 1.
-prepared = prepare(Scenario(network, units=UnitsSettings(resolution=1)))
-result = capacity(prepared, CapacityQuery(Selector("^A$"), Selector("^C$")))
-row = result.cases[0].states["converged"].rows[0]
-print(row.result.delivered)
+prepared = prepare(Scenario(network))
+a, c = Selector("^A$"), Selector("^C$")
+shortest_path = ngc.FlowPolicyConfig(routing=ngc.ShortestPaths())
+for label, query in (
+    ("Shortest path", CapacityQuery(a, c, config=shortest_path)),
+    ("Optimized TE", CapacityQuery(a, c)),  # the default model
+):
+    result = capacity(prepared, query)
+    # A result has one case per failure pattern. cases[0] is the network with nothing
+    # failed, and its one row is the A-to-C answer.
+    row = result.cases[0].states["converged"].rows[0]
+    print(f"{label}: {row.result.delivered * prepared.topology.q:g} Gbit/s")
 ```
 
 <!-- example: output -->
 
 ```text
-10
+Shortest path: 10 Gbit/s
+Optimized TE: 30 Gbit/s
 ```
 
-It prints 10: native bandwidth results are whole units of one bandwidth unit `q`, and `UnitsSettings(resolution=1)` sets `q` to 1 ([Units and the resolution q](https://networmix.github.io/NetGraph/concepts/#units-and-the-resolution-q)). A `CapacityQuery` without a model asks for the most that optimized traffic engineering carries from the sources to the targets (`TE_MAXFLOW_UNLIM`); `cases[0]` is the case without failures, `states["converged"]` its one state and `rows[0]` the A-to-C answer ([Failures: patterns, cases and states](https://networmix.github.io/NetGraph/concepts/#failures-patterns-cases-and-states)). For capacities this small, `q` = 1 misses the default precision target although nothing is rounded, and `prepared.units_report.target_met` is false ([Precision and the choice of q](https://networmix.github.io/NetGraph/concepts/#precision-and-the-choice-of-q)).
+In the shortest-path model, each router forwards to its lowest-cost next hops and splits traffic equally when several tie. Here the direct link is the only lowest-cost route, so nothing is split: A delivers 10 Gbit/s to C, and the route through B, with twice the capacity, carries nothing because it costs more.
 
-## Scenario DSL
+Optimized traffic engineering may put traffic on any route in any split, as an ideal central controller would. It sends 10 Gbit/s over A-C and 20 Gbit/s over A-B-C. That fills both links leaving A, 10 + 20 Gbit/s, so no routing can deliver more than 30.
 
-For reproducible analysis workflows, define topology, demands, and failure policies in YAML (this is `scenarios/readme_example.yml`):
+`prepare` builds the engine's graph once, and each `capacity` call asks one question of it; `ngc.FlowPolicyConfig` selects the routing model. Preparation chooses one `q` for the whole scenario from its physical capacities and traffic, the network size, the traffic splits it prepares and the requested precision; the engine's integer range can force a different `q`. `prepared.units_report` reports that choice and whether the preparation's precision bounds were met, not the accuracy of every result. [Precision and the choice of q](https://networmix.github.io/NetGraph/concepts/#precision-and-the-choice-of-q) gives the exact rule.
+
+## Scenario YAML
+
+A study you want to rerun and share goes into a YAML file: the network, its traffic and the workflow steps that analyse it. This file asks a different question of the same triangle. A has 15 Gbit/s of traffic for C, routed by optimized traffic engineering (`TE_MAXFLOW_UNLIM`, the model a `CapacityQuery` uses by default), and the `max_demand` step finds how far that traffic can be scaled up and still fit. Save it as `triangle.yml`:
 
 ```yaml
-# Two Clos sites built from one blueprint and joined spine to spine. The workflow finds
-# the largest tested feasible demand multiplier (alpha), then places the demands at that
-# alpha under 100 draws of one random link failure.
-seed: 42
-
-# A reusable topology template
-blueprints:
-  Clos_Fabric:
-    nodes:
-      spine: {count: 2, template: "spine{n}"}
-      leaf: {count: 4, template: "leaf{n}"}
-    links:
-      - {source: /leaf, target: /spine, pattern: mesh, capacity: 100}
-
-# Two instances of the template, linked spine to spine
 network:
-  nodes:
-    site1: {blueprint: Clos_Fabric}
-    site2: {blueprint: Clos_Fabric}
+  nodes: {A: {}, B: {}, C: {}}
   links:
-    - {source: site1/spine, target: site2/spine, pattern: one_to_one, capacity: 50}
-
-# One random link fails per draw
-failures:
-  random_link:
-    modes:
-      - weight: 1
-        rules:
-          - {scope: link, mode: choice, count: 1}
-
-# Traffic from the leaves of site1 to the leaves of site2
+    - {source: A, target: C, capacity: 10, cost: 1}
+    - {source: A, target: B, capacity: 20, cost: 1}
+    - {source: B, target: C, capacity: 20, cost: 1}
 demands:
-  global_traffic:
-    - {source: ^site1/leaf/, target: ^site2/leaf/, volume: 100, preset: SHORTEST_PATHS_ECMP}
-
+  traffic:
+    - {source: ^A$, target: ^C$, volume: 15, preset: TE_MAXFLOW_UNLIM}
 workflow:
   - type: MaximumSupportedDemand
     name: max_demand
-    demand_set: global_traffic
-  - type: TrafficMatrixPlacement
-    name: placement_at_max
-    demand_set: global_traffic
-    alpha_from_step: max_demand  # its largest tested feasible alpha
-    failure_policy: random_link
-    iterations: 100
+    demand_set: traffic
 ```
+
+Run it in the directory where you saved it:
 
 ```bash
-ngraph run scenarios/readme_example.yml --output results/
-jq '.steps[] | select(.name == "max_demand") | .result.alpha_feasible.value' results/readme_example.results.json
+ngraph run triangle.yml --output results/
 ```
 
-A preset chooses routing and admission; `SHORTEST_PATHS_ECMP` splits whole units equally among equal-cost next hops at each router ([Routing models and admission](https://networmix.github.io/NetGraph/concepts/#routing-models-and-admission)). [How NetGraph computes](https://networmix.github.io/NetGraph/concepts/) explains the presets such as `SHORTEST_PATHS_ECMP`, maximum supported demand and the numbers in the results; `run(prepare(scenario))` returns the same results in Python.
+The run writes `results/triangle.results.json`. The `max_demand` step records the largest multiplier of the declared traffic that it tested and found to fit, alpha, as an exact fraction: `numerator` and `denominator` under `.result.alpha_feasible`. With jq installed, read it like this:
+
+```bash
+jq '.steps[] | select(.name == "max_demand") | .result.alpha_feasible | .numerator / .denominator' results/triangle.results.json
+```
+
+<!-- example: output -->
+
+```text
+2
+```
+
+An alpha of 2 means the 15 Gbit/s fits twice over: 30 Gbit/s, the optimized TE capacity of the first example. `run(prepare(scenario))` returns the same results in Python. Larger studies build networks from blueprints, sample failures and place whole traffic matrices; [Clos Fabric](https://networmix.github.io/NetGraph/examples/clos-fabric/) and [Bundled Scenarios](https://networmix.github.io/NetGraph/examples/bundled-scenarios/) show them, and [How NetGraph computes](https://networmix.github.io/NetGraph/concepts/) explains maximum supported demand, failure sampling and the result fields.
 
 ## Capabilities
 
-- **Declarative scenarios**: schema-validated YAML and reusable blueprints
-- **Failure analysis**: weighted failure modes, risk groups, and analysis-time exclusions that leave the base topology untouched
-- **Routing models**: cost-only IP routing and capacity-aware traffic engineering
-- **Traffic placement**: ECMP and WCMP splits, maximum flow and demand placement
-- **Reproducible results**: seeded randomness and stable link ids
-- **C++ algorithms** with the GIL released, via [NetGraph-Core](https://github.com/networmix/NetGraph-Core)
+- **Scenarios**: schema-validated YAML, with blueprints for repeated structures such as Clos fabrics.
+- **Failures**: weighted failure modes, shared-risk groups, and exclusions applied at analysis time, so the base topology is never edited.
+- **Routing models**: cost-only IP routing with ECMP or WCMP splits, and capacity-aware traffic engineering.
+- **Analyses**: maximum flow, maximum supported demand and traffic-matrix placement.
+- **Reproducibility**: seeded random sampling and stable link ids.
+- **Engine**: graph algorithms in C++ that release the Python GIL, via [NetGraph-Core](https://github.com/networmix/NetGraph-Core).
 
 ## Documentation
 
-- [**Tutorial**](https://networmix.github.io/NetGraph/getting-started/tutorial/) - Running a scenario from the CLI and from Python
-- [**How NetGraph computes**](https://networmix.github.io/NetGraph/concepts/) - How a scenario becomes numbers
-- [**Examples**](https://networmix.github.io/NetGraph/examples/basic/) - From a four-node network to the bundled scenarios
-- [**Scenario YAML**](https://networmix.github.io/NetGraph/reference/dsl/) - Every scenario key
-- [**Python API**](https://networmix.github.io/NetGraph/reference/api/) - The library by task
+- [**Tutorial**](https://networmix.github.io/NetGraph/getting-started/tutorial/): run a scenario from the CLI and from Python
+- [**How NetGraph computes**](https://networmix.github.io/NetGraph/concepts/): how a scenario becomes numbers
+- [**Examples**](https://networmix.github.io/NetGraph/examples/basic/): from a four-node network to the bundled scenarios
+- [**Scenario YAML**](https://networmix.github.io/NetGraph/reference/dsl/): every scenario key
+- [**Python API**](https://networmix.github.io/NetGraph/reference/api/): the library by task
 
 ## License
 
 [MIT License](LICENSE)
-
-## Requirements
-
-- Python 3.11+
-- NetGraph-Core (installed automatically)

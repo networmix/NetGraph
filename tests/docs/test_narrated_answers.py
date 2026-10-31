@@ -14,8 +14,7 @@ from fractions import Fraction
 import netgraph_core as ngc
 import yaml
 
-from ngraph import CapacityQuery, Scenario, Selector, capacity, prepare, run
-from ngraph.model.demand import PRESETS, FlowPolicyPreset
+from ngraph import CapacityQuery, Scenario, capacity, prepare, run
 from tests.docs.pages import ROOT, fence, fences, narration, numbers, stated
 
 CONCEPTS = "docs/concepts.md"
@@ -75,31 +74,6 @@ def flows(prepared, vector):
 
 def converged(result, step=0, case=0):
     return result.steps[step].result.cases[case].states["converged"]
-
-
-# README
-
-
-def test_readme_says_what_its_example_prints():
-    (shown,) = stated("README.md", "prints (\\d+)")
-    found = fences("README.md")
-    output = next(f for f in found if f.marker == "output")
-    assert output.text == shown + "\n"
-    result = examples("README.md", "CapacityQuery(Selector")["result"]
-    assert result.cases[0].states["converged"].rows[0].result.delivered == int(shown)
-
-
-def test_readme_names_the_question_and_its_unmet_precision_target():
-    """README: a CapacityQuery without a model asks TE_MAXFLOW_UNLIM; `cases[0]` is the
-    case without failures with its one state; q = 1 misses the default target, nothing
-    rounded."""
-    space = examples("README.md", "CapacityQuery(Selector")
-    query = CapacityQuery(Selector("^A$"), Selector("^C$"))
-    assert repr(query.config) == repr(PRESETS[FlowPolicyPreset.TE_MAXFLOW_UNLIM])
-    case = space["result"].cases[0]
-    assert case.case.kind == "baseline" and tuple(case.states) == ("converged",)
-    report = space["prepared"].units_report
-    assert not report.target_met and report.limited_by == "declared"
 
 
 def test_basic_states_its_unmet_precision_target():
