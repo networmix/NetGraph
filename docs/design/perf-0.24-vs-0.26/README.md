@@ -1,6 +1,6 @@
 # NetGraph 0.24.1 against 0.26.0: speed and memory
 
-This directory records a measured comparison of NetGraph 0.24.1 on NetGraph-Core 0.11.0 (before the 0.25 rebuild) with NetGraph 0.26.0 on Core 0.12.0, made in October 2026. It is internal documentation for maintainers, excluded from the site. It says how the two releases were made to compute the same thing, what was measured, where 0.26.0 spends its time and memory on the large data-centre workload, which changes could remove it, and how to rerun the DC-BB timings and diagnostic controls. No fix is part of it.
+This directory records a measured comparison of NetGraph 0.24.1 on NetGraph-Core 0.11.0 (before the 0.25 rebuild) with NetGraph 0.26.0 on Core 0.12.0, made in October 2026. It is internal documentation for maintainers, excluded from the site. It says how the two releases were made to compute the same thing, what was measured, where 0.26.0 spends its time and memory on the large data-centre workload, which changes could remove it, and how to rerun the DC-BB timings and diagnostic controls. No change to 0.26 is part of it.
 
 The 0.26.0 changelog's "15 to 30 times faster" compares 0.26.0 with 0.25.0. Against 0.24.1, 0.26.0 is slower on the large workload below.
 
@@ -13,6 +13,7 @@ The 0.26.0 changelog's "15 to 30 times faster" compares 0.26.0 with 0.25.0. Agai
 - **Memory and cleanup:** 0.26.0 keeps the complete forwarding program of every completed failure case until the run's result is released, with one source DAG per `combine` source and case.
 - **Compute:** a rough proxy, discarding those programs early, attributes only about 8 % (D1) and 3.5 % (D2) of 0.26.0's time to paging and retention; the exact page-stall time is unmeasured. Of the rest, two parts dominate: building a separate route and plan for every source, and attributing pooled traffic back to per-source edge records.
 - **The ranked candidates:** keep compact results instead of programs; stop building disposable per-source plans; skip source-edge attribution when nothing asks for it. Their savings overlap.
+- **The 0.24.1 reference:** NetGraph 0.24.1 on corrected Core 0.11.0 is the reference for the qualified ECMP workloads below. D1 and D2 keep their rounding-attributable qualification against 0.26.0 and run within 3 % of released 0.24.1's time and memory on the recorded machine. A change to 0.26 is timed against it.
 
 ## The workloads
 
@@ -201,6 +202,63 @@ A change to 0.26 that is meant to keep results must reproduce released 0.26.0's 
 Install the fix before judging it: `v0260` holds the released wheel, so rerunning it judges the release again. Make a third environment `vfix` with the same pins, then replace the package under test: for a NetGraph change, `vfix/bin/pip install --no-deps -e .` from this checkout; for a Core change, build that checkout's wheel by its own instructions and `vfix/bin/pip install --no-deps --force-reinstall <wheel>`.
 
 Run released 0.26.0 once on the target platform and pass that export to `--expect` (for example `vfix/bin/python -I $D/measure.py $D/inputs/dcbb96-0.26.0.yml.gz d1-fix.json --expect d1-0260.json`, and likewise for D2). The comparison records both exports' `netgraph_version`, `core_version`, `core_extension_sha256` and `python_version`, excludes exactly those four identity fields, and requires every other field to match. In particular, schema version, seed, the units report and every step and failure case remain exact. Then compare the same phase boundary on a recorded machine state, with the protocol above for a speed claim. A change that alters computed results needs its own qualification.
+
+## The 0.24.1 reference
+
+NetGraph 0.24.1, unchanged, on NetGraph-Core branch `ref/0.11.0-zerocap` (commit `d9b5595`, version `0.11.0+zerocap`, not released) is the performance reference for the qualified ECMP workloads below, subject to each row's rounding qualification. Released 0.24.1 cannot serve alone, because Core 0.11.0 departs from the ECMP rule in three ways; the branch adds two commits on the tag `v0.11.0` that correct them:
+
+- **A zero-capacity route edge stays in the equal split.** It takes its equal share and carries nothing: lossless placement then admits nothing, and lossy placement drops that share on that edge. 0.11.0 left such edges out of the split, so it reported delivery that never arrived when an ECMP branch reached a node whose onward edges all had capacity 0, and with one zero edge among several it moved that edge's share to the others.
+- **A lossy `FlowPolicy` call sends its whole volume afresh.** 0.11.0 capped the offer by the source's capacity and subtracted earlier deliveries. In 0.24.1 this reaches lossy demands pinned to static paths: a demand of 20 over two pinned paths of capacity 1 and 10 delivered 6.5; the reference delivers 11 and drops 9, as the same demand without static paths already did and as Core 0.12.0 does.
+- **Equally near destinations all stay in the route.** NetGraph joins a destination set to a pseudo sink by cost-0 links. 0.11.0's multipath search kept only the destination with the widest path, which narrowed lossy `combine`, max-flow and sensitivity towards a set; the branch keeps every tied parent of a node with no usable onward edge, so the set is reached as anycast ECMP.
+
+On a small network of three pods, each with an uplink of capacity 10 to each of two planes `pl1` and `pl2`, each plane linked to the destination `xyz1` with capacity 24, all costs 1, and one `combine` demand of 90 from the pods:
+
+| Case | 0.24.1 lossless | Reference lossless | Reference lossy (offer) |
+| --- | --- | --- | --- |
+| Healthy | 48 | 48 | 48 (49) |
+| `pl2` → `xyz1` at 0 | 48 | 0 | 24 (48) |
+| pod 3's uplinks at 0 | 60 | 0 | 40 (60) |
+| only pod 1 sends; `pl2` → `xyz1` at 0 | 20 | 0 | 10 (20) |
+| pod 1 → `pl2` at 0 | 30 | 0 | 25 (30) |
+
+In the failure cases the lossy drops fall on the zero edges. 0.26.0 delivers the same lossy amounts; its lossless deliveries in the four failure cases are 3q, 2q, q and 3q, whole-unit effects that vanish as q shrinks. With two equally near destinations behind links of 10 and 8 and a `combine` offer of 40, the reference delivers 16 lossless and 18 lossy, as 0.26.0 does (lossless to within one quantum); 0.24.1 delivered 10 lossy, all over the link of 10.
+
+**What it was checked against.** On D1 and D2 the reference's computed records (the MSD result and probe history, and every step's results by failure pattern and multiplicity) equal unmodified 0.24.1's in every step. Both rows therefore keep their "rounding-attributable" qualification against 0.26.0 above. Core's C++ and Python suites and NetGraph 0.24.1's suite pass on the reference build, and Core's CI passes on every platform it tests (Linux, macOS and Windows; Python 3.11 to 3.14).
+
+**Speed and memory.** The reference was timed on the machine above, with the same pins and Python 3.13.13, against two builds of unmodified Core 0.11.0: a local build of `v0.11.0` and the PyPI wheel. The reference and the local `v0.11.0` build came from clean exports of their commits with one toolchain (Apple clang 21.0.0, scikit-build-core 1.1.1, CMake 4.4.4, ninja 1.13.2, pybind11 3.1.0, `MACOSX_DEPLOYMENT_TARGET=15.0`). The protocol is the A/B/A one above with the comparator as A and the reference as B: each ratio is the reference's time over the mean of the comparator's two runs, so a ratio below 1 means the reference is faster, and "within margin" means the interval lies wholly within 3 % of 1. The machine was on AC power with sampled one-minute load averages of 1.9 to 3.6, 3.27 GB of swap in use throughout and a Spotlight indexer busy, with no other heavy job; comparator runs drifted at most 1.1 % (prepare + run + export) and 1.7 % (whole process).
+
+| Row | Comparator | Triples | Prepare + run + export: ratio [95 %] | Whole process: ratio [95 %] | Peak memory, comparator → reference |
+| --- | --- | --- | --- | --- | --- |
+| D1 | local `v0.11.0` build | 7 | 0.988 [0.986, 0.991], within margin | 0.995 [0.994, 0.999], within margin | 0.484 → 0.482 GiB |
+| D1 | PyPI 0.11.0 wheel | 3 | 1.006 [1.003, 1.011], within margin | 1.001 [0.988, 1.009], within margin | 0.476 → 0.471 GiB |
+| D2 | local `v0.11.0` build | 7 | 0.951 [0.951, 0.953], faster | 0.978 [0.974, 0.981], within margin | 0.417 → 0.416 GiB |
+| D2 | PyPI 0.11.0 wheel | 3 | 1.007 [1.004, 1.027], within margin | 1.002 [1.000, 1.016], within margin | 0.419 → 0.424 GiB |
+
+Peak memory is the mean over each side's runs; every reference mean is within 3 % of its comparator's. Against the released wheel, the reference is within the 3 % margin on both rows. The D2 "faster" against the local build is a build effect, not the corrections: the local build of the same `v0.11.0` source ran D2 about 5 % slower than the PyPI wheel. Builds of different source therefore cannot be told apart below about 5 % on D2. In absolute terms the reference took 5.51 to 5.63 s on D1 (whole process 31.2 to 31.4 s, peak 0.476 to 0.489 GiB) and 38.19 to 38.64 s on D2 (76.3 to 77.0 s, 0.413 to 0.419 GiB); the 0.24.1 rows in "Measurements" were taken in another machine state.
+
+**Building and using it.** These macOS commands use the recorded Xcode toolchain and deployment target. Start from a fresh clone so no previous CMake cache is reused. Other platforms need their own recorded toolchain and a fresh local comparison. In the shell session of "Reproducing", make an environment with that section's pins, build the branch's Core wheel and install it over the released one:
+
+```sh
+git clone --branch ref/0.11.0-zerocap https://github.com/networmix/NetGraph-Core ngcore-ref
+git -C ngcore-ref switch --detach d9b5595a16006e3d2be9c1efde42cbca9ab28c05
+python3.13 -m venv vref
+vref/bin/pip install ngraph==0.24.1 netgraph-core==0.11.0 numpy==2.5.4 pyyaml==6.0.3 networkx==3.7 jsonschema==4.26.0
+vref/bin/pip install scikit-build-core==1.1.1 pybind11==3.1.0 cmake==4.4.4 ninja==1.13.2
+CC="$(xcrun --find clang)" CXX="$(xcrun --find clang++)" MACOSX_DEPLOYMENT_TARGET=15.0 vref/bin/pip wheel --no-deps --no-build-isolation -w ngcore-ref/dist ./ngcore-ref
+vref/bin/pip install --no-deps --force-reinstall ngcore-ref/dist/netgraph_core-0.11.0+zerocap-*.whl
+vref/bin/python -I $D/measure.py $D/inputs/dcbb96-0.24.1.yml.gz d1-ref.json
+```
+
+`measure.py` prints `netgraph_core` as `0.11.0+zerocap` when the reference is installed; run D2 likewise with the `dcbb192` input. To time a change to 0.26, install it as in "Judging a fix" and run it against the reference build in A/B/A triples on the same machine, under the protocol above, with the reference built on that machine. The ratios against PyPI 0.24.1 in "Measurements" stay as historical records; a change's ratio is measured afresh against the reference.
+
+**Scope and limitations.**
+
+- The reference covers ECMP shortest-path placement, lossless and lossy (`SHORTEST_PATHS_ECMP`, `SHORTEST_PATHS_ECMP_LOSSY`), and the default export. Traffic engineering and WCMP are outside it: their rules changed in 0.25.
+- A reference row holds for its qualified workload: its input, source roster, ordered demands, failure replay and quantum, with that row's qualification against 0.26.0. No general equality with 0.26.0 is claimed. A changed workload is requalified as in "How the computations were made the same" before its ratio is used.
+- A user link of cost 0 into a node that has onward links keeps 0.11.0's rule: settle order decides which equal-cost alternatives are kept, so ECMP can narrow there. Core 0.12.0 rejects zero costs, so 0.26.0 has no answer to match.
+- Lossy `FlowPolicy` placement reports aggregate delivery only, without per-link drops.
+- In Core's `FlowPolicy`, an explicit `target_per_flow` with `shortest_path=true` reaches the first record only, so `rebalance_demand` can shed volume; and lossy reoptimisation (`reoptimize_flows_on_each_placement`) can leave the ledger below the returned delivery. NetGraph 0.24.1 never calls `rebalance_demand`, and none of its lossy presets reoptimises.
+- Capacities below 2^-12 are below the engine's resolution: such an edge can block lossless admission as a capacity of 0 does.
 
 ## Open questions
 
