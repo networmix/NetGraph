@@ -1,0 +1,2052 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://networmix.github.io/NetGraph/concepts/">
+      
+      
+        <link rel="prev" href="../getting-started/tutorial/">
+      
+      
+        <link rel="next" href="../examples/basic/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>How NetGraph computes - NetGraph</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#how-netgraph-computes" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="NetGraph" class="md-header__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NetGraph
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              How NetGraph computes
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How NetGraph computes
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../examples/basic/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/dsl/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="NetGraph" class="md-nav__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    NetGraph
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How NetGraph computes
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How NetGraph computes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-preparation-and-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario, preparation and run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#links-directions-and-what-is-enabled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Links, directions and what is enabled
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#units-and-the-resolution-q" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Units and the resolution q
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#routing-models-and-admission" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routing models and admission
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#demands-how-traffic-enters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Demands: how traffic enters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#precision-and-the-choice-of-q" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Precision and the choice of q
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnels-and-te-ingress-pools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tunnels and TE ingress pools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#routing-domains-and-the-wcmp-controller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routing domains and the WCMP controller
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forwarding-groups-and-their-caps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forwarding groups and their caps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failures-patterns-cases-and-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failures: patterns, cases and states
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ordered-and-simultaneous-placement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ordered and simultaneous placement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#maximum-supported-demand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maximum supported demand
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results-and-their-units" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results and their units
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#glossary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Glossary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/basic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basic Example
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/clos-fabric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clos Fabric
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/bundled-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bundled Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/dsl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenario YAML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow Steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command Line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/api-full/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API (generated)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/schemas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schemas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-preparation-and-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario, preparation and run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#links-directions-and-what-is-enabled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Links, directions and what is enabled
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#units-and-the-resolution-q" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Units and the resolution q
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#routing-models-and-admission" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routing models and admission
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#demands-how-traffic-enters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Demands: how traffic enters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#precision-and-the-choice-of-q" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Precision and the choice of q
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnels-and-te-ingress-pools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tunnels and TE ingress pools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#routing-domains-and-the-wcmp-controller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routing domains and the WCMP controller
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forwarding-groups-and-their-caps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forwarding groups and their caps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failures-patterns-cases-and-states" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failures: patterns, cases and states
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ordered-and-simultaneous-placement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ordered and simultaneous placement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#maximum-supported-demand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maximum supported demand
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results-and-their-units" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results and their units
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#glossary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Glossary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="how-netgraph-computes">How NetGraph computes<a class="headerlink" href="#how-netgraph-computes" title="Permanent link">&para;</a></h1>
+<p>How a scenario becomes numbers. Each section explains one idea in plain words, then states the exact rule, then runs one small example; the documentation tests run every example and check its numbers. Each section uses only the ones before it, so read the page in order.</p>
+<p>The examples are Python. Most build their scenario from YAML text, so YAML users can read the scenario as they would write it. Most also fix <code>q</code> to 1, so that units equal physical bandwidth; for amounts this small that misses the default precision target, and their units reports say so (<a href="#precision-and-the-choice-of-q">Precision and the choice of q</a>). They share this setup:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scenario</span><span class="p">,</span> <span class="n">prepare</span><span class="p">,</span> <span class="n">run</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">converged</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="sd">"""One step's answer without failures: its baseline case, converged state (see Failures below)."""</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="n">step</span><span class="p">]</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">cases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">[</span><span class="s2">"converged"</span><span class="p">]</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward_flows</span><span class="p">(</span><span class="n">prepared</span><span class="p">,</span> <span class="n">vector</span><span class="p">):</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="sd">"""A per-edge vector (one entry per link direction) as {link id: units}, forward only."""</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="k">return</span> <span class="p">{</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="n">ref</span><span class="o">.</span><span class="n">link</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">units</span><span class="p">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="k">for</span> <span class="n">ref</span><span class="p">,</span> <span class="n">units</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">prepared</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">edge_refs</span><span class="p">,</span> <span class="n">vector</span><span class="p">)</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        <span class="k">if</span> <span class="n">units</span> <span class="ow">and</span> <span class="n">ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">ref</span><span class="o">.</span><span class="n">direction</span> <span class="o">==</span> <span class="s2">"forward"</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="p">}</span>
+</span></code></pre></div>
+<h2 id="scenario-preparation-and-run">Scenario, preparation and run<a class="headerlink" href="#scenario-preparation-and-run" title="Permanent link">&para;</a></h2>
+<p>A scenario is a description: a network, the traffic on it and an ordered list of questions. Preparation reads it once and builds the graph that every question runs on, read-only, with one bandwidth unit. A run asks the questions in order and returns immutable result envelopes. Editing the network after preparation does not change a prepared graph: prepare again to see the edit.</p>
+<p>Four terms first, so that later sections can use them:</p>
+<ul>
+<li><strong>Network:</strong> named nodes and the physical links between them.</li>
+<li><strong>Demand:</strong> a volume of traffic from a set of source nodes to a set of destination nodes.</li>
+<li><strong>Workflow step:</strong> one question the run asks, such as a maximum flow or a placement of a demand set.</li>
+<li><strong><code>q</code>:</strong> the size of one bandwidth unit; <a href="#units-and-the-resolution-q">Units and the resolution q</a> gives the rule.</li>
+</ul>
+<p><strong>The rule.</strong></p>
+<ul>
+<li><code>Scenario</code> declares inputs. <code>prepare</code> takes a read-only view of the scenario, builds one immutable native graph, chooses <code>q</code> and binds the demand sets the steps need. It changes nothing in its input, and later edits of the scenario or its network do not reach the prepared scenario.</li>
+<li><code>run</code> executes the steps in declaration order and returns immutable result envelopes that belong to that run. Each step records the question it asked (an analysis's own typed query, or a built-in domain step's configuration), its order and where its seed came from. Built-in results and plain JSON custom results are read-only. A registered custom result is published as it is, so its own type controls whether it can change.</li>
+<li>A custom step's own data is not frozen (<a href="../reference/api/#records-and-editing">Records and editing</a>). A failed call publishes nothing partial (<a href="../reference/design/#guarantees">Guarantees</a>).</li>
+</ul>
+<p><strong>Example.</strong> A capacity question asks how much can flow from one set of nodes to another. The prepared scenario keeps the capacity it was prepared with:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph</span><span class="w"> </span><span class="kn">import</span> <span class="n">CapacityQuery</span><span class="p">,</span> <span class="n">Link</span><span class="p">,</span> <span class="n">Network</span><span class="p">,</span> <span class="n">Node</span><span class="p">,</span> <span class="n">Selector</span><span class="p">,</span> <span class="n">UnitsSettings</span><span class="p">,</span> <span class="n">capacity</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">network</span> <span class="o">=</span> <span class="n">Network</span><span class="p">()</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"A"</span><span class="p">,</span> <span class="s2">"B"</span><span class="p">,</span> <span class="s2">"C"</span><span class="p">):</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">network</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">Node</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">network</span><span class="o">.</span><span class="n">add_link</span><span class="p">(</span><span class="n">Link</span><span class="p">(</span><span class="s2">"A"</span><span class="p">,</span> <span class="s2">"B"</span><span class="p">,</span> <span class="n">capacity</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">network</span><span class="o">.</span><span class="n">add_link</span><span class="p">(</span><span class="n">Link</span><span class="p">(</span><span class="s2">"B"</span><span class="p">,</span> <span class="s2">"C"</span><span class="p">,</span> <span class="n">capacity</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">question</span> <span class="o">=</span> <span class="n">CapacityQuery</span><span class="p">(</span><span class="n">Selector</span><span class="p">(</span><span class="s2">"^A$"</span><span class="p">),</span> <span class="n">Selector</span><span class="p">(</span><span class="s2">"^C$"</span><span class="p">))</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">most_from_a_to_c</span><span class="p">(</span><span class="n">prepared</span><span class="p">):</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="k">return</span> <span class="n">capacity</span><span class="p">(</span><span class="n">prepared</span><span class="p">,</span> <span class="n">question</span><span class="p">)</span><span class="o">.</span><span class="n">cases</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">states</span><span class="p">[</span><span class="s2">"converged"</span><span class="p">]</span><span class="o">.</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">delivered</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">prepared</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">UnitsSettings</span><span class="p">(</span><span class="n">resolution</span><span class="o">=</span><span class="mi">1</span><span class="p">)))</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="n">network</span><span class="o">.</span><span class="n">replace_link</span><span class="p">(</span><span class="s2">"A|B|0"</span><span class="p">,</span> <span class="n">capacity</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="k">assert</span> <span class="n">most_from_a_to_c</span><span class="p">(</span><span class="n">prepared</span><span class="p">)</span> <span class="o">==</span> <span class="mi">10</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="k">assert</span> <span class="n">most_from_a_to_c</span><span class="p">(</span><span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">units</span><span class="o">=</span><span class="n">UnitsSettings</span><span class="p">(</span><span class="n">resolution</span><span class="o">=</span><span class="mi">1</span><span class="p">))))</span> <span class="o">==</span> <span class="mi">4</span>
+</span></code></pre></div>
+<p>In the reference: <a href="../reference/workflow/">Workflow Steps</a>; Python <code>Scenario</code>, <code>prepare</code>, <code>run</code>, <code>PreparedScenario</code> (<a href="../reference/api/#prepare-and-query">Python API</a>).</p>
+<h2 id="links-directions-and-what-is-enabled">Links, directions and what is enabled<a class="headerlink" href="#links-directions-and-what-is-enabled" title="Permanent link">&para;</a></h2>
+<p>A physical link is a cable: traffic can cross it both ways, and each way has the link's full capacity. Traffic from A to B therefore never competes with traffic from B to A.</p>
+<p><strong>The rule.</strong> Every physical link gives the graph a forward edge (source to target) and a reverse edge, each with the link's capacity and cost. A link's id is <code>source|target|n</code>, where <code>n</code> counts the links added between that ordered pair of nodes, from 0. A link is enabled when it and both of its end nodes are enabled.</p>
+<p><strong>Example.</strong> Two opposing demands of 10 on one link of 10 both arrive in full:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">prepared</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="s2">network:</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="s2">  nodes: {A: </span><span class="si">{}</span><span class="s2">, B: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="s2">  links: [{source: A, target: B, capacity: 10}]</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="s2">demands:</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="s2">  both_ways:</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="s2">    - {source: ^A$, target: ^B$, volume: 10}</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="s2">    - {source: ^B$, target: ^A$, volume: 10}</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="s2">workflow:</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: place, demand_set: both_ways}</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="s2">"""</span><span class="p">))</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="k">assert</span> <span class="nb">list</span><span class="p">(</span><span class="n">prepared</span><span class="o">.</span><span class="n">scenario</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">links</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"A|B|0"</span><span class="p">]</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="k">assert</span> <span class="n">converged</span><span class="p">(</span><span class="n">run</span><span class="p">(</span><span class="n">prepared</span><span class="p">))</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span> <span class="o">==</span> <span class="mi">20</span>
+</span></code></pre></div>
+<p>In the reference: link keys in <a href="../reference/dsl/#network-topology">Scenario YAML</a>; <code>DirectedLink</code> (<a href="../reference/api/#prepare-and-query">Python API</a>).</p>
+<h2 id="units-and-the-resolution-q">Units and the resolution q<a class="headerlink" href="#units-and-the-resolution-q" title="Permanent link">&para;</a></h2>
+<p>The engine counts bandwidth in whole units, never in fractions, so that every answer is exact and repeatable. Preparation picks the size of one unit, <code>q</code>, and converts every capacity and volume to a whole number of units by rounding. What the engine computes (delivered traffic, losses, flows on links) comes back in units: multiply by <code>q</code> for physical bandwidth. The inputs themselves, and NetworkStats capacities, stay physical.</p>
+<p><strong>The rule.</strong></p>
+<ul>
+<li>A legal <code>q</code> is one power of two from 2^-32 through 2^32; <code>units: {resolution: auto}</code> (the default) lets preparation choose it (<a href="#precision-and-the-choice-of-q">Precision and the choice of q</a>).</li>
+<li>Capacities, demand volumes and every other bandwidth amount a scenario declares are physical amounts. Preparation reads each as a binary64 number (a Python float) and converts it to units with exact half-up rounding: an amount of 10.5 units becomes 11.</li>
+<li>Native bandwidth results are exact integer units; multiply them by <code>q</code> only when presenting physical bandwidth. Recorded inputs, offers and designs, and <code>NetworkStats</code> capacities remain physical amounts.</li>
+<li>Whole units are split by fixed arithmetic. Units split equally (round robin) go <code>I // k</code> to each of <code>k</code> members and one more to the first <code>I % k</code> in a fixed order, so 10 over 3 members gives 4, 3, 3. A weighted split (highest averages) hands them out one at a time to the member with the largest weight over its count plus one, ties to the earlier member, so 5 over weights 2 and 1 gives 4 and 1. The engine's exact rule: <a href="https://github.com/networmix/NetGraph-Core/blob/v0.12.0/docs/semantics.md#splitting-whole-units">Splitting whole units</a>.</li>
+</ul>
+<p><strong>Example.</strong> At <code>q</code> = 0.25 a link of 10 is 40 units, and a volume of 2.625 is 10.5 units, rounded up to 11:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">prepared</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="s2">units: </span><span class="si">{resolution: 0.25}</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="s2">network:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="s2">  nodes: {A: </span><span class="si">{}</span><span class="s2">, B: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="s2">  links: [{source: A, target: B, capacity: 10}]</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="s2">demands:</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="s2">  small: [{source: ^A$, target: ^B$, volume: 2.625}]</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="s2">workflow:</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="s2">  - {type: NetworkStats, name: stats}</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: place, demand_set: small}</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="s2">"""</span><span class="p">))</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">result</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">prepared</span><span class="p">)</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">totals</span> <span class="o">=</span> <span class="n">converged</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">totals</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">assert</span> <span class="n">prepared</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">q</span> <span class="o">==</span> <span class="mf">0.25</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="k">assert</span> <span class="n">totals</span><span class="o">.</span><span class="n">reference_request_units</span> <span class="o">==</span> <span class="mi">11</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="k">assert</span> <span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span> <span class="o">*</span> <span class="n">prepared</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">q</span> <span class="o">==</span> <span class="mf">2.75</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="k">assert</span> <span class="n">result</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">total_capacity</span> <span class="o">==</span> <span class="mi">10</span>
+</span></code></pre></div>
+<p>The demand delivers 11 units, 2.75 physical; NetworkStats reports the link's physical capacity, 10.</p>
+<p>In the reference: <code>units</code> in <a href="../reference/dsl/#units-and-input-validation">Scenario YAML</a>; <code>units_report.q</code> in <a href="../reference/results/">Results</a>.</p>
+<h2 id="routing-models-and-admission">Routing models and admission<a class="headerlink" href="#routing-models-and-admission" title="Permanent link">&para;</a></h2>
+<p>A model says two things about a demand: how its traffic chooses routes and divides among them (the routing), and what happens to traffic that does not fit (the admission). Shortest-path routing works like IP routing: each router sends traffic toward the destination over its lowest-cost next hops, the neighbours on a lowest-cost route. Equal-cost multipath (ECMP) divides the traffic equally among those next hops at each router, not equally over whole paths: a router with two next hops gives each half, however many paths lie behind them. Lossless admission refuses before it enters whatever the routes cannot carry; lossy admission sends everything and loses what does not fit on the way.</p>
+<p><strong>The rule.</strong> Each preset names one model; a demand or MaxFlow step can instead declare the model itself. A capacity question (the MaxFlow step) asks how much one model delivers between two node sets; it can fix the traffic sent (<code>offer</code>) and the traffic the routes are planned for (<code>design_demand</code>), both physical amounts.</p>
+<table>
+<thead>
+<tr>
+<th>Model (YAML <code>routing.type</code>)</th>
+<th>Python</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>shortest_paths</code>, <code>allocation: equal</code></td>
+<td><code>ShortestPaths</code> EQUAL</td>
+<td>Each router splits equally among its lowest-cost next hops (ECMP)</td>
+</tr>
+<tr>
+<td><code>shortest_paths</code>, <code>allocation: weighted</code></td>
+<td><code>ShortestPaths</code> WEIGHTED</td>
+<td>Each router splits in proportion to declared integer weights (WCMP); the <code>SHORTEST_PATHS_WCMP</code> preset weighs each next hop by its link's physical capacity</td>
+</tr>
+<tr>
+<td><code>shortest_paths</code>, <code>allocation: optimized</code></td>
+<td><code>ShortestPaths</code> OPTIMIZED</td>
+<td>Chooses the flow itself on the lowest-cost routes only: as much as they carry, the cheapest way</td>
+</tr>
+<tr>
+<td><code>centralized_te</code> without a <code>tunnel_count</code></td>
+<td><code>CentralizedTE</code> without a count</td>
+<td>Chooses the flow itself on any route: as much as the network carries, the cheapest way</td>
+</tr>
+<tr>
+<td><code>distributed_te</code></td>
+<td><code>DistributedTE</code></td>
+<td>Each source router sets up its own paths, setting bandwidth aside for them before traffic flows (explained in <a href="#tunnels-and-te-ingress-pools">Tunnels and TE ingress pools</a>)</td>
+</tr>
+<tr>
+<td><code>centralized_te</code> with a <code>tunnel_count</code></td>
+<td><code>CentralizedTE</code> with a count</td>
+<td>A central planner gives every source router the same number of equal single paths (explained in <a href="#tunnels-and-te-ingress-pools">Tunnels and TE ingress pools</a>)</td>
+</tr>
+<tr>
+<td><code>pinned</code></td>
+<td><code>Pinned</code></td>
+<td>Routes the scenario supplies (named routes), or a native program</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Programs.</strong> A program is a model's routing decision written down: the routes and how each router splits. Named routes and native <code>Pinned</code> programs are supplied programs.</li>
+<li><strong>Splitting at each router.</strong> Equal and weighted routing split at every router of the routes by the whole-unit rules of <a href="#units-and-the-resolution-q">Units and the resolution q</a>: round robin over the next hops in a fixed order, or highest averages over their weights. Where the routes of several sources of one demand meet, their traffic is added and split once.</li>
+<li><strong>Members that can carry nothing.</strong> Shortest-path routing keeps its lowest-cost routes even when a link on them has no capacity: equal splitting still gives that next hop its share, capacity weighting gives it weight 0. Both divide a demand equally over its sources (<a href="#demands-how-traffic-enters">Demands: how traffic enters</a>).</li>
+<li><strong>The optimizing models.</strong> <code>TE_MAXFLOW_UNLIM</code> and <code>SHORTEST_PATHS_MAXFLOW</code> may choose different flows and routes from each other and from the splitting models.</li>
+<li><strong>Admission.</strong> Results keep admitted, injected, carried and lost units apart. Lossless admission admits the largest total whose splits fit everywhere and refuses the rest, as unadmitted traffic. Lossy admission sends the whole volume, and it is lost at sources without a usable route (source drops) or on links (edge drops). The optimizing models are lossless.</li>
+</ul>
+<p><strong>Example.</strong> A reaches D over A-B-D, A-C-X-D and A-C-Y-D, every link of cost 1 except B-D (cost 2), and C-X carries at most 2:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">paths</span> <span class="o">=</span> <span class="s2">"""</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="s2">network:</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="s2">  nodes: {A: </span><span class="si">{}</span><span class="s2">, B: </span><span class="si">{}</span><span class="s2">, C: </span><span class="si">{}</span><span class="s2">, X: </span><span class="si">{}</span><span class="s2">, Y: </span><span class="si">{}</span><span class="s2">, D: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="s2">  links:</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="s2">    - {source: A, target: B, capacity: 100}</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="s2">    - {source: B, target: D, capacity: 100, cost: 2}</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="s2">    - {source: A, target: C, capacity: 100}</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="s2">    - {source: C, target: X, capacity: 2}</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="s2">    - {source: C, target: Y, capacity: 100}</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="s2">    - {source: X, target: D, capacity: 100}</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="s2">    - {source: Y, target: D, capacity: 100}</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="s2">demands:</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="s2">  lossless: [{source: ^A$, target: ^D$, volume: 12, preset: SHORTEST_PATHS_ECMP}]</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="s2">  lossy: [{source: ^A$, target: ^D$, volume: 12, preset: SHORTEST_PATHS_ECMP_LOSSY}]</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="s2">workflow:</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: lossless, demand_set: lossless, outputs: {edge_flows: true}}</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: lossy, demand_set: lossy, outputs: {edge_flows: true}}</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="s2">"""</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="n">prepared</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">paths</span><span class="p">))</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="n">result</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">prepared</span><span class="p">)</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="n">lossless</span><span class="p">,</span> <span class="n">lossy</span> <span class="o">=</span> <span class="n">converged</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="n">converged</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="k">assert</span> <span class="p">(</span><span class="n">lossless</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span><span class="p">,</span> <span class="n">lossless</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">unadmitted_units</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="mi">9</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="k">assert</span> <span class="n">forward_flows</span><span class="p">(</span><span class="n">prepared</span><span class="p">,</span> <span class="n">lossless</span><span class="o">.</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">edge_flows</span><span class="p">)</span> <span class="o">==</span> <span class="p">{</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>    <span class="s2">"A|B|0"</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span> <span class="s2">"B|D|0"</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span> <span class="s2">"A|C|0"</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span> <span class="s2">"C|X|0"</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">"C|Y|0"</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">"X|D|0"</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">"Y|D|0"</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="p">}</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="k">assert</span> <span class="p">(</span><span class="n">lossy</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span><span class="p">,</span> <span class="n">lossy</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">edge_drop_units</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="mi">11</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="k">assert</span> <span class="n">forward_flows</span><span class="p">(</span><span class="n">prepared</span><span class="p">,</span> <span class="n">lossy</span><span class="o">.</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">edge_flows</span><span class="p">)[</span><span class="s2">"C|X|0"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span>
+</span></code></pre></div>
+<p>A has two next hops, B and C, and C has two, X and Y. Lossless: 9 units is the most whose splits fit. A gives 5 to B (the first next hop takes the odd unit) and 4 to C, and C gives 2 each to X and Y; a tenth unit would send 3 to X. Splitting over the three paths would have put a third on each. Lossy: all 12 enter, A sends 6 each way, C sends 3 to X, and 1 unit is lost on C-X.</p>
+<p>In the reference: presets in <a href="../reference/dsl/#presets">Scenario YAML</a>; <a href="../reference/workflow/#maxflow">MaxFlow</a>; <code>admission</code> and the drop fields in <a href="../reference/results/">Results</a>.</p>
+<h2 id="demands-how-traffic-enters">Demands: how traffic enters<a class="headerlink" href="#demands-how-traffic-enters" title="Permanent link">&para;</a></h2>
+<p>A demand's volume is multiplied by the step's multiplier, alpha, and turned into whole units once. Those units are then divided by fixed arithmetic: over the source-destination pairs the demand expands into, and, in a demand with several sources, over its sources in a fixed order. The order matters under lossless admission: every source receives its share, so one source that cannot carry its share limits the whole demand.</p>
+<p><strong>The rule.</strong></p>
+<ul>
+<li><strong>Alpha</strong> is the demand multiplier: a step places each declared volume times alpha (1 by default). The scaled physical volume is converted to units once, so 1.05 at alpha 2.5 is 2.625, 11 units at <code>q</code> = 0.25, not 2.5 × 4 units.</li>
+<li><strong>Expansion.</strong> A demand's selectors and modes expand it into a fixed tree of physical parents and integer split leaves (<a href="../reference/dsl/#traffic-modes-mode">Traffic Modes</a>, <a href="../reference/dsl/#group-modes-group_mode">Group Modes</a>). Each declared physical total is converted to units once, then split by integer quotient and remainder in canonical order (groups sorted by label, then nodes sorted by name), after excluding self pairs and same-label group pairs. At <code>q</code> = 1, a parent of 10 split into two groups and the second into three gives 5 and (2, 2, 1). Branches whose only pairs are node-to-itself or same-label group pairs are removed recursively; the remaining hierarchy keeps its shape. Empty selections keep their reported discarded shares, which are never redistributed, and a declaration with no eligible pair is reported whole as discarded with its reason. Declared units equal resolved plus discarded units.</li>
+<li><strong>The source roster.</strong> A <code>combine</code> demand has one ordered roster of participating sources. For equal and weighted shortest-path routing, these are the selected, allowed sources with a static route to an allowed destination, in node order. Zero capacity does not remove a source from this roster; having no such route does. Equal and weighted shortest-path routing give each source an equal share by round robin over the roster, so the first sources take the odd units, and pool the traffic where the sources' routes meet. Under lossless admission a zero-capacity source keeps its share, so earlier sources in the roster can receive units before it blocks the rest. Optimized source allocation (<code>source_allocation: optimized</code>, as in <code>TE_MAXFLOW_UNLIM</code>) instead chooses how much each source sends.</li>
+<li><strong>Losses.</strong> A demand loses units by not admitting them (lossless: <code>unadmitted_units</code>, traffic never sent) or by dropping them (lossy): at sources without a usable route (<code>source_drop_units</code>) and on links (<code>edge_drop_units</code>). Dropped traffic is the two together. The reference request is the scaled declared request; the shortfall is that request minus the delivery, every unit not delivered, and the delivery ratio is the delivery over the request.</li>
+</ul>
+<p><strong>Example.</strong> One demand from S1 and S2 to T, volume 12 at alpha 2.5, so 30 units; each source has one link to T. The capacities decide how much the equal shares admit:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">roster</span> <span class="o">=</span> <span class="s2">"""</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="s2">network:</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="s2">  nodes: {S1: </span><span class="si">{}</span><span class="s2">, S2: </span><span class="si">{}</span><span class="s2">, T: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="s2">  links:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="s2">    - {source: S1, target: T, capacity: </span><span class="si">%s</span><span class="s2">}</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="s2">    - {source: S2, target: T, capacity: </span><span class="si">%s</span><span class="s2">}</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="s2">demands:</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="s2">  both: [{source: ^S, target: ^T$, volume: 12}]</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="s2">workflow:</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: place, demand_set: both, alpha: 2.5}</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="s2">"""</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="n">delivered</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="k">for</span> <span class="n">first</span><span class="p">,</span> <span class="n">second</span> <span class="ow">in</span> <span class="p">((</span><span class="mi">100</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">100</span><span class="p">),</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">)):</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="n">totals</span> <span class="o">=</span> <span class="n">converged</span><span class="p">(</span><span class="n">run</span><span class="p">(</span><span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">roster</span> <span class="o">%</span> <span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">)))))</span><span class="o">.</span><span class="n">totals</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="k">assert</span> <span class="n">totals</span><span class="o">.</span><span class="n">reference_request_units</span> <span class="o">==</span> <span class="mi">30</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    <span class="n">delivered</span><span class="p">[</span><span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">]</span> <span class="o">=</span> <span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="k">assert</span> <span class="n">delivered</span> <span class="o">==</span> <span class="p">{(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">10</span><span class="p">):</span> <span class="mi">21</span><span class="p">,</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">100</span><span class="p">):</span> <span class="mi">20</span><span class="p">,</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">):</span> <span class="mi">1</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">):</span> <span class="mi">0</span><span class="p">}</span>
+</span></code></pre></div>
+<p>S1 is first in the roster. With 100 and 10 it takes 11 units and S2 10, so 21 fit, more than twice the smaller capacity. With the order reversed, S1 would need 11 of its 10, so 20 fit. A source of capacity 0 admits nothing once its turn comes: after S1's one unit, or at once when it is first.</p>
+<p>In the reference: <a href="../reference/dsl/#traffic-modes-mode">Traffic Modes</a> and <a href="../reference/dsl/#group-modes-group_mode">Group Modes</a>; <code>alpha</code> in <a href="../reference/workflow/#trafficmatrixplacement">TrafficMatrixPlacement</a>; placement totals in <a href="../reference/results/">Results</a>.</p>
+<h2 id="precision-and-the-choice-of-q">Precision and the choice of q<a class="headerlink" href="#precision-and-the-choice-of-q" title="Permanent link">&para;</a></h2>
+<p>NetGraph accounts for bandwidth in whole units of <code>q</code>. Conversion of a nonnegative finite binary64 amount <code>v</code> uses the nearest whole unit, half up: <code>floor(v/q + 1/2)</code>. Its physical error is at most <code>q/2</code>. For positive inputs collected at preparation, relative conversion error is at most the target <code>p</code> only when the units report's <code>input_bound.met</code> is true. A scaled volume is first multiplied in binary64: <code>q/2</code> bounds conversion of that product, not its difference from the exact mathematical product.</p>
+<p><strong>How q is chosen.</strong> Preparation chooses one <code>q</code> for every placement, failure case, MSD probe and later question. The automatic choice is the largest power of two from <code>2^-32</code> through <code>2^32</code> satisfying <code>q ≤ 2p·v_min</code> and <code>q·Γ ≤ p·c_min</code>. Here <code>v_min</code> is the smallest positive prepared bandwidth input (capacity, declared volume, workflow offer, design demand or minimum unreserved bandwidth), <code>c_min</code> is the smallest positive link capacity, and <code>0 &lt; p ≤ 0.5</code> (<code>0.001</code> by default). A bound with no positive amount is omitted.</p>
+<p>Let <code>L</code> be the number of network nodes plus twice the number of links, including disabled ones. For each prepared group of demands placed together, <code>k</code> counts lossless shortest-path leaves with equal router and source splits; <code>t</code> counts the heads times tunnels per head of its tunnel leaves. Each bound demand set is a group, each workflow capacity pair is a separate group, and each tunnel-count row is a group. A pool is one head; presets use 16 or 256 tunnels per head, an explicit count uses that count, an <code>up_to</code> uses its limit, and a count step uses its largest count or limit. The count is <code>Γ = max(L/4 + 2, max_groups(max(k, 1)·(L/4 + 2) + t))</code>. Other leaves add nothing. Opaque custom workflow callbacks add only the floor; their unknown tunnels are uncounted, like later questions. Pool heads and attachment edges are excluded from <code>L</code>.</p>
+<p>A demand set used only by simultaneous placement steps adds nothing to the count. A set named by any other workflow step (an ordered placement, MSD or tunnel-count step) or requested in <code>prepare(..., demand_sets=...)</code> counts its leaves by their declared models.</p>
+<p>If either bound needs a unit below <code>2^-32</code>, preparation starts at <code>2^-32</code> and reports the unmet bound. If an input or augmented capacity sum reaches <code>2^62</code> units, it takes the finest coarser unit that fits; if none fits, it refuses. <code>units: {resolution: &lt;power of two from 2^-32 through 2^32&gt;}</code> declares <code>q</code> instead and is checked for range. The report gives <code>limited_by</code>, <code>input_bound.met</code>, <code>split_bound.met</code> and the scalar <code>achieved_precision = max(q/(2·v_min), q·Γ/c_min)</code> over present terms. <code>target_met</code> means that scalar is absent or at most <code>p</code>; it does not certify every analysis.</p>
+<p><strong>Why this count is used.</strong> It gives a delivery bound under these conditions, which must all hold for the comparison:</p>
+<ul>
+<li>There is one demand, placed alone on original capacities or on links no earlier demand has used.</li>
+<li>Its finite physical request <code>R</code> is converted directly to units, without apportioning a rounded parent or treating a binary64 scaled product as the exact mathematical product.</li>
+<li>Router and source allocations are equal, admission is lossless, and routing is one fixed shared acyclic hop-by-hop program, such as <code>SHORTEST_PATHS_ECMP</code>. Traffic arriving from different sources merges before each router splits it once. The source roster is nonempty and every source share reaches a destination. The proportional comparison uses the same roster, destinations, routes and member order.</li>
+<li>Every edge carrying a positive proportional share has positive original capacity, and the report's <code>split_bound.met</code> is true.</li>
+</ul>
+<p>Let <code>X</code> be this demand's delivery with exact equal proportional splits on the original physical capacities. Then whole-unit physical delivery <code>A</code> satisfies <code>|A − X| ≤ p·X + q/2</code>. If also <code>q ≤ 2p·R</code>, the stronger bound is <code>|A − X| ≤ p·X</code>; a directly converted positive prepared request meets this condition when <code>input_bound.met</code> is true. For this same demand, each link flow differs by at most <code>2p</code> times that link's physical capacity plus <code>q/2</code>. A changed failure-case DAG can use the theorem only if all these conditions still hold, including positive carrying capacities and every source share reaching a destination.</p>
+<p>For example, six nodes and seven links in the routes of <a href="#routing-models-and-admission">Routing models and admission</a> give <code>L = 20</code>, one lossless equal-split demand and <code>Γ = 7</code>. With smallest capacity 2 and <code>p = 0.001</code>, the split bound is <code>0.002/7</code> and the input bound <code>0.004</code>, so <code>q = 2^-12</code>. The lossless demand delivers 32769 units, or 8.000244140625, against proportional delivery 8. C-X holds 8192 units; round robin sends C 16384 of 32769 units and X 8192 of those. One more unit would send X 8193. At declared <code>q = 1</code>, delivery is 9 and the split bound is unmet.</p>
+<p><strong>Outside this domain.</strong> No bound against proportional splitting is promised for these uses; the following runs show the distinctions.</p>
+<ul>
+<li>Several demands in order: on capacity 10, 1000 earlier requests of <code>1051/131072</code> each round from 525.5 to 526 units at <code>q = 2^-16</code>. The last demand gets 129360 units against proportional 129860. Both residuals exceed an unrelated smallest capacity of 1; a large residual alone does not restore the theorem.</li>
+<li>Expanded pair leaves: a parent request of 1 over six independent pairs, each with capacity 1000, at <code>p = 0.1</code> gives <code>q = 1/8</code>. The eight parent units split as <code>(2, 2, 1, 1, 1, 1)</code>. The first pair delivers <code>1/4</code> against proportional <code>1/6</code>, outside the directly converted request's <code>q/2</code> allowance.</li>
+<li>Scaled placements and MSD answers: with volume and capacity <code>2^28 + 1</code>, <code>p = 2^-57</code>, <code>q = 2^-31</code> and alpha <code>1 − 2^-28 + 2^-53</code>, binary64 multiplication gives delivery <code>2^28</code>. The exact product exceeds it by <code>234881025/2^53</code>, more than <code>p·X + q/2</code>. Conversion itself is exact in this run. MSD additionally depends on its search bracket: on capacity 10 and volume 1, <code>alpha_max = 1</code> stops at 1 though the proportional threshold is 10.</li>
+<li>Later questions and tunnel counts: preparation of capacity 100 alone chooses <code>q = 1/32</code>; a later finite offer <code>1/128</code> converts to zero. A capacity-1 model prepared with one tunnel at <code>p = 0.5</code>, <code>q = 1/8</code>, permits eight units per tunnel; a later request for 16 tunnels has capacity-limited size zero. Neither the new offer nor the larger count was covered by preparation's inputs and counts.</li>
+<li>Supplied programs: 100 repeated entries of one DAG over four nodes retain separate splits and deliver <code>253/128</code> against proportional 2 at <code>q = 2^-14</code>.</li>
+<li>Weighted routing: 20 parallel members with weights <code>(1000, 1, …, 1)</code>, offer 24458019, first capacity twice that offer and other capacities 24000.5 deliver the full offer with lossy admission at <code>q = 1</code>; the proportional answer is smaller by <code>57361/2038</code>. The equal-split theorem does not apply.</li>
+<li>Lossy service, including simultaneous sharing: three offers <code>(5, 1, 1)</code> on capacity 3 at <code>q = 1</code> deliver <code>(3, 0, 0)</code>, against proportional <code>(15/7, 3/7, 3/7)</code>. Lossy presets and stale forwarding have no certificate from this theorem.</li>
+<li>Tunnels: two tunnels set up by their head on parallel capacities 6 and 4 for volume <code>8 + 2^-12</code> deliver 16385 units at automatic <code>q = 2^-11</code>, or 8.00048828125, while exact setup gives 6. Setup is a discrete decision before forwarding.</li>
+<li>The WCMP controller: exits of 30.0007 and 10 produce weights <code>(3, 1)</code> at <code>q = 1</code> and <code>(30721, 10240)</code> at <code>q = 2^-10</code>. The routes and weights are not fixed across these units.</li>
+<li>Zero carrying capacity: equal splitting over parallel capacities 5 and 0 delivers one unit at <code>q = 2^-10</code>, against proportional zero.</li>
+</ul>
+<p>Ratios of deliveries, optimized route choices, flow vectors, <code>total_cost</code>, and several optimized demands placed in order have no precision promise here.</p>
+<p><strong>Optimized maximum flow.</strong> Separately, one uncapped maximum-flow question with optimized source allocation, fixed allowed support and original capacities returns the exact maximum flow on the rounded capacities. If <code>q ≤ 2p·c_min</code>, its throughput is within relative <code>p</code> of the physical optimum. If that maximum is <code>F_C</code> whole units, a finite offer <code>V</code> instead returns <code>min(F_C, floor(V/q + 1/2))</code> whole units; relative <code>p</code> additionally requires <code>q ≤ 2p·V</code>. On capacity 100 with declared offer 1, <code>q = 2^-9</code> returns 512 units (1); the uncapped maximum is 51200 units (100). A later offer needs its own input condition.</p>
+<p>In the reference: <code>units</code> in <a href="../reference/dsl/#units-and-input-validation">Scenario YAML</a>; <code>UnitsReportJSON</code> in <a href="../reference/results/#unitsreportjson">Results</a>.</p>
+<h2 id="tunnels-and-te-ingress-pools">Tunnels and TE ingress pools<a class="headerlink" href="#tunnels-and-te-ingress-pools" title="Permanent link">&para;</a></h2>
+<p>Traffic-engineering models send traffic over tunnels: single paths set up from a source router, the tunnel's head, to the destination before traffic flows. In <code>distributed_te</code> each head sets up its own tunnels and sets bandwidth aside on every link of each one, a hold (or reservation). In <code>centralized_te</code> with a <code>tunnel_count</code>, one controller lays out the tunnels of every head. A tunnel count is the layout, how many tunnels each head gets; it does not say how much traffic arrives.</p>
+<p><strong>The rule.</strong></p>
+<ul>
+<li><strong>Set up by the heads (T1, <code>distributed_te</code>).</strong> The design is split equally over the heads, and each head's share equally over its tunnels; each tunnel asks for its part. The tunnels are set up one at a time, each on the shortest path whose links all have enough unreserved bandwidth. A tunnel that comes up holds exactly its request on every link of its path; one that finds no such path stays down and holds nothing. Holds decide which tunnels come up, never what traffic gets through: a tunnel carries what forwarding gives it, within the free capacity. <code>distributed_te</code> requires <code>tunnel_count: {per_head: N}</code> and accepts <code>min_unreserved_bandwidth</code> (a physical amount, which filters the setup and is never held) and a cost ceiling. The engine's exact rule: <a href="https://github.com/networmix/NetGraph-Core/blob/v0.12.0/docs/semantics.md#t1-tunnels-set-up-by-their-heads">T1: tunnels set up by their heads</a>.</li>
+<li><strong>Laid out by the controller (T2, <code>centralized_te</code> with a <code>tunnel_count</code>).</strong> The controller gives every head the same number of single-path tunnels of one common whole-unit size. It picks the largest size, then no more than the design needs, then the cheapest routes; the planned size is never held. The engine's exact rule: <a href="https://github.com/networmix/NetGraph-Core/blob/v0.12.0/docs/semantics.md#t2-the-controllers-equal-tunnels">T2: the controller's equal tunnels</a>.</li>
+<li><strong>Counts, designs and offers.</strong> Counts are per head. <code>design_demand</code> sizes the layout; <code>offer</code> is the traffic forwarded through it. A row's <code>count</code> is the requested count or the <code>up_to</code> limit, while <code>plan.tunnels_per_head</code> is the chosen count; with <code>up_to</code>, the controller chooses the smallest count that carries the live heads' design shares, not the count that delivers most of the offer. A reservation is not carried traffic and is not added to the carried flows.</li>
+<li><strong>TE ingress pools.</strong> Combined sources asked with <code>TE_ECMP_16_LSP</code> or <code>TE_ECMP_UP_TO_256_LSP</code> share one private head, a TE ingress pool, for placement and capacity alike. Its private attachments to the selected physical sources have finite capacity bounds and cost 1; they belong to their declared demand or MaxFlow question, are labelled as synthetic and never become ordinary transit endpoints. Preparation builds one for each such demand and MaxFlow step (one pool per source set for a MaxFlow step), and a library <code>CapacityQuery</code> with that preset as its <code>declaration</code> uses the prepared pool of exactly its sources, or is refused. <code>resolve_demands</code> refuses a pool id whose sources differ from its prepared ingress.</li>
+<li><strong>A pool's offer budget</strong> is 0 unless a step gives it a known lossy offer; <a href="#ordered-and-simultaneous-placement">Ordered and simultaneous placement</a> adds a second source of one. A <code>TunnelCountAnalysis</code> step's offer is such an offer for the pools of its set: each pool's attachments widen to carry it (the headroom penalty prices them), and a library <code>tunnel_counts</code> query above that budget is refused. The offer and design take part in choosing <code>q</code>, so they can make <code>q</code> finer for every step of the run.</li>
+</ul>
+<p><strong>Example.</strong> First a head with two tunnels of 5 over links of 6 and 4; then a controller's counts over links of capacity 1 (cost 1) and 100 (cost 2):</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">head</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="s2">network:</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="s2">  nodes: {S: </span><span class="si">{}</span><span class="s2">, T: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="s2">  links:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="s2">    - {source: S, target: T, capacity: 6}</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="s2">    - {source: S, target: T, capacity: 4}</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="s2">demands:</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="s2">  te:</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="s2">    - source: ^S$</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="s2">      target: ^T$</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="s2">      volume: 10</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="s2">      model: {routing: {type: distributed_te, tunnel_count: </span><span class="si">{per_head: 2}</span><span class="s2">}}</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="s2">workflow:</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: place, demand_set: te,</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="s2">     outputs: {edge_flows: true, edge_reservations: true}}</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="s2">"""</span><span class="p">))</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="n">placed</span> <span class="o">=</span> <span class="n">converged</span><span class="p">(</span><span class="n">run</span><span class="p">(</span><span class="n">head</span><span class="p">))</span><span class="o">.</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="k">assert</span> <span class="p">[</span><span class="n">tunnel</span><span class="o">.</span><span class="n">status</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">tunnel</span> <span class="ow">in</span> <span class="n">placed</span><span class="o">.</span><span class="n">by_tunnel</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"UP"</span><span class="p">,</span> <span class="s2">"INSUFFICIENT_BANDWIDTH"</span><span class="p">]</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="k">assert</span> <span class="n">forward_flows</span><span class="p">(</span><span class="n">head</span><span class="p">,</span> <span class="n">placed</span><span class="o">.</span><span class="n">edge_reservations</span><span class="p">)</span> <span class="o">==</span> <span class="p">{</span><span class="s2">"S|T|0"</span><span class="p">:</span> <span class="mi">5</span><span class="p">}</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="k">assert</span> <span class="p">(</span><span class="n">placed</span><span class="o">.</span><span class="n">delivered</span><span class="p">,</span> <span class="n">placed</span><span class="o">.</span><span class="n">unadmitted</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="n">counts</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="s2">network:</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="s2">  nodes: {S: </span><span class="si">{}</span><span class="s2">, T: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="s2">  links:</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="s2">    - {source: S, target: T, capacity: 1, cost: 1}</span>
+</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="s2">    - {source: S, target: T, capacity: 100, cost: 2}</span>
+</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="s2">demands:</span>
+</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="s2">  te:</span>
+</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="s2">    - source: ^S$</span>
+</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="s2">      target: ^T$</span>
+</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="s2">      volume: 0</span>
+</span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="s2">      model:</span>
+</span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a><span class="s2">        routing: {type: centralized_te, source_allocation: equal, tunnel_count: </span><span class="si">{per_head: 1}</span><span class="s2">}</span>
+</span><span id="__span-6-37"><a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="s2">workflow:</span>
+</span><span id="__span-6-38"><a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a><span class="s2">  - {type: TunnelCountAnalysis, name: counts, demand_set: te,</span>
+</span><span id="__span-6-39"><a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="s2">     counts: [1, 2], up_to: 3, design_demand: 2, offer: 1000}</span>
+</span><span id="__span-6-40"><a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a><span class="s2">"""</span><span class="p">)))</span>
+</span><span id="__span-6-41"><a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a><span class="n">rows</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">rows</span>
+</span><span id="__span-6-42"><a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a><span class="k">assert</span> <span class="p">[(</span><span class="n">row</span><span class="o">.</span><span class="n">count</span><span class="p">,</span> <span class="n">row</span><span class="o">.</span><span class="n">up_to</span><span class="p">,</span> <span class="n">row</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">plan</span><span class="o">.</span><span class="n">tunnels_per_head</span><span class="p">,</span> <span class="n">row</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">delivered</span><span class="p">)</span>
+</span><span id="__span-6-43"><a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a>        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span> <span class="o">==</span> <span class="p">[(</span><span class="mi">1</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">100</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">101</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">100</span><span class="p">)]</span>
+</span></code></pre></div>
+<p>The first tunnel holds 5 on the link of 6. The second asks 5 and finds 1 and 4 free, so it stays down. All traffic takes the one tunnel, which carries 6, more than its hold, because the link has room. The controller's one tunnel takes the wide link; two tunnels use both links and deliver 101 of the offer of 1000. Up to 3 chooses one tunnel: it carries the design of 2, so a second is not needed, though it would deliver more.</p>
+<p>In the reference: <a href="../reference/workflow/#tunnelcountanalysis">TunnelCountAnalysis</a>; <code>edge_reservations</code> in <a href="../reference/workflow/#output-selection">Output selection</a>; <code>pool</code> in <a href="../reference/results/">Results</a>.</p>
+<h2 id="routing-domains-and-the-wcmp-controller">Routing domains and the WCMP controller<a class="headerlink" href="#routing-domains-and-the-wcmp-controller" title="Permanent link">&para;</a></h2>
+<p>A routing domain describes a fabric: interior routers that run one routing protocol (the IGP domain) and edge routers at its border (the BGP edge), toward which traffic is sent. A WCMP controller computes once, for each edge destination, weights that tell routers how to split traffic toward it, so that a fabric with uneven exits carries more than equal splitting would. Within one demand set, every <code>SHORTEST_PATHS_WCMP</code> demand toward that destination forwards on the same table; another demand set has its own table.</p>
+<p><strong>The rule.</strong></p>
+<ul>
+<li><strong>The routes.</strong> Toward a destination t the routes are one DAG (a set of routes without loops): one reverse shortest-path search inside the IGP domain from the exits (domain nodes with an eligible link to t), every eligible exit link, and every eligible uplink from another BGP-edge router into a domain node that reaches an exit. Nothing enters a BGP-edge router but t, so no other one carries transit. With no exit the DAG is empty and the demand finds no route.</li>
+<li><strong>The tables.</strong> The controller (<code>wcmp_controller</code>) computes one weight table per demand set and destination for the <code>SHORTEST_PATHS_WCMP</code> demands toward that destination. A programmed demand has one destination, in <code>bgp_edge</code>; its sources lie in either population. <code>routing</code> constrains the controller only; ECMP and TE demands keep their own models.</li>
+<li><strong>The scopes.</strong><ul>
+<li><code>next_hop</code> (the default): the source routers of demands with a positive volume split over their next hops by progressive filling: each next hop grows in proportion to what it carries alone, and stops when a link it uses fills. Routers are processed downstream first, so a programmed router's integer weights shape the loads of routers above it.</li>
+<li><code>group</code>: each programmed source router splits by its declared tree (<a href="#forwarding-groups-and-their-caps">Forwarding groups and their caps</a>).</li>
+<li><code>all_routers</code>: every router on the sources' walks is programmed from one native flow over the DAG whose sources send in proportion to the demands' exact declared volumes (a multi-source demand divides its volume over its sources that reach t).</li>
+</ul>
+</li>
+<li>Every other router splits equally over its next hops, zero-capacity ones included (ECMP). Each demand forwards on the shared table through its own native program; the controller forwards nothing itself. The tables are computed on the network without failures and do not change with alpha.</li>
+</ul>
+<p><strong>Example.</strong> S reaches T through two exits, X1 with 30 toward T and X2 with 10:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">domain</span> <span class="o">=</span> <span class="s2">"""</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="s2">network:</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="s2">  nodes: {S: </span><span class="si">{}</span><span class="s2">, X1: </span><span class="si">{}</span><span class="s2">, X2: </span><span class="si">{}</span><span class="s2">, T: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="s2">  links:</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="s2">    - {source: S, target: X1, capacity: 100}</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="s2">    - {source: S, target: X2, capacity: 100}</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="s2">    - {source: X1, target: T, capacity: 30}</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="s2">    - {source: X2, target: T, capacity: 10}</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="s2">routing:</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="s2">  igp_domain: {path: '^X'}</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="s2">  bgp_edge: {path: '^(S|T)$'}</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="s2">wcmp_controller: {scope: next_hop}</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="s2">demands:</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="s2">  wcmp: [{source: ^S$, target: ^T$, volume: 40, preset: SHORTEST_PATHS_WCMP}]</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="s2">  ecmp: [{source: ^S$, target: ^T$, volume: 40, preset: SHORTEST_PATHS_ECMP}]</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="s2">workflow:</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: wcmp, demand_set: wcmp}</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: ecmp, demand_set: ecmp}</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="s2">"""</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="n">prepared</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">domain</span><span class="p">))</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="p">[</span><span class="n">table</span><span class="p">]</span> <span class="o">=</span> <span class="n">prepared</span><span class="o">.</span><span class="n">demand_sets</span><span class="p">[</span><span class="s2">"wcmp"</span><span class="p">]</span><span class="o">.</span><span class="n">controller</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="p">[</span><span class="n">router</span><span class="p">]</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">programmed</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="k">assert</span> <span class="n">router</span><span class="o">.</span><span class="n">router</span> <span class="o">==</span> <span class="s2">"S"</span> <span class="ow">and</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">weight</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">router</span><span class="o">.</span><span class="n">members</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="n">result</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">prepared</span><span class="p">)</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="k">assert</span> <span class="n">converged</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span> <span class="o">==</span> <span class="mi">40</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="k">assert</span> <span class="n">converged</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span> <span class="o">==</span> <span class="mi">21</span>
+</span></code></pre></div>
+<p>Alone, X1 carries 30 and X2 10, so both grow 3 to 1 and fill together: S's weights are 3 and 1, and all 40 arrive. Equal splitting fills X2's 10 first and admits 21 (11 and 10).</p>
+<p>In the reference: <a href="../reference/dsl/#routing-domains-and-the-wcmp-controller">Routing domains and the WCMP controller</a>; <code>controller</code> in <a href="../reference/results/">Results</a>.</p>
+<h2 id="forwarding-groups-and-their-caps">Forwarding groups and their caps<a class="headerlink" href="#forwarding-groups-and-their-caps" title="Permanent link">&para;</a></h2>
+<p>Under the <code>group</code> scope an operator declares, per programmed router, how its traffic divides: a tree of groups whose top-level shares are fixed caps, as in a router's forwarding configuration. Inside a group, members share by their own weights. A member that cannot reach the destination gets nothing, and its group's share goes to the members that can.</p>
+<p><strong>The rule.</strong> Root shares are fixed caps, normalized once; child shares split within their parent. A member that can carry nothing alone (it meets a zero-capacity link or a dead branch) gets 0, and its group re-flattens over its live members within its cap. A root group with no live member is refused: the preset's lossless admission would stop the demand at the first unit sent into it. Weights too large for the engine are approximated and reported (<a href="../reference/dsl/#weight-approximation">Weight approximation</a>).</p>
+<p><strong>Example.</strong> S splits between a group with X1 and a group with X2 and X3, half each; X3's link toward T has capacity 0 in the second run:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">groups</span> <span class="o">=</span> <span class="s2">"""</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="s2">network:</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="s2">  nodes: {S: </span><span class="si">{}</span><span class="s2">, X1: </span><span class="si">{}</span><span class="s2">, X2: </span><span class="si">{}</span><span class="s2">, X3: </span><span class="si">{}</span><span class="s2">, T: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="s2">  links:</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="s2">    - {source: S, target: X1, capacity: 100}</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s2">    - {source: S, target: X2, capacity: 100}</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="s2">    - {source: S, target: X3, capacity: 100}</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="s2">    - {source: X1, target: T, capacity: 100}</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="s2">    - {source: X2, target: T, capacity: 100}</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="s2">    - {source: X3, target: T, capacity: </span><span class="si">%s</span><span class="s2">}</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="s2">routing:</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="s2">  igp_domain: {path: '^X'}</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="s2">  bgp_edge: {path: '^(S|T)$'}</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="s2">wcmp_controller: {scope: group}</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="s2">forwarding_groups:</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="s2">  edge:</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="s2">    router: S</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="s2">    groups:</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="s2">      - share: 1</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="s2">        children: [{edge: {link: 'S|X1|0', direction: forward}}]</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="s2">      - share: 1</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="s2">        children:</span>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="s2">          - {edge: {link: 'S|X2|0', direction: forward}}</span>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="s2">          - {edge: {link: 'S|X3|0', direction: forward}}</span>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="s2">demands:</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="s2">  d: [{source: ^S$, target: ^T$, volume: 40, preset: SHORTEST_PATHS_WCMP}]</span>
+</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="s2">workflow:</span>
+</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: place, demand_set: d, outputs: {edge_flows: true}}</span>
+</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="s2">"""</span>
+</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="k">for</span> <span class="n">x3</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">flows</span> <span class="ow">in</span> <span class="p">(</span>
+</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>    <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">{</span><span class="s2">"S|X1|0"</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span> <span class="s2">"S|X2|0"</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">"S|X3|0"</span><span class="p">:</span> <span class="mi">10</span><span class="p">}),</span>
+</span><span id="__span-8-33"><a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>    <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">{</span><span class="s2">"S|X1|0"</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span> <span class="s2">"S|X2|0"</span><span class="p">:</span> <span class="mi">20</span><span class="p">}),</span>
+</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a><span class="p">):</span>
+</span><span id="__span-8-35"><a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>    <span class="n">prepared</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">groups</span> <span class="o">%</span> <span class="n">x3</span><span class="p">))</span>
+</span><span id="__span-8-36"><a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>    <span class="p">[</span><span class="n">table</span><span class="p">]</span> <span class="o">=</span> <span class="n">prepared</span><span class="o">.</span><span class="n">demand_sets</span><span class="p">[</span><span class="s2">"d"</span><span class="p">]</span><span class="o">.</span><span class="n">controller</span>
+</span><span id="__span-8-37"><a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a>    <span class="k">assert</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">weight</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">programmed</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">members</span><span class="p">]</span> <span class="o">==</span> <span class="n">weights</span>
+</span><span id="__span-8-38"><a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>    <span class="n">state</span> <span class="o">=</span> <span class="n">converged</span><span class="p">(</span><span class="n">run</span><span class="p">(</span><span class="n">prepared</span><span class="p">))</span>
+</span><span id="__span-8-39"><a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>    <span class="k">assert</span> <span class="n">state</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span> <span class="o">==</span> <span class="mi">40</span>
+</span><span id="__span-8-40"><a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a>    <span class="k">assert</span> <span class="p">{</span><span class="n">link</span><span class="p">:</span> <span class="n">units</span> <span class="k">for</span> <span class="n">link</span><span class="p">,</span> <span class="n">units</span> <span class="ow">in</span> <span class="n">forward_flows</span><span class="p">(</span><span class="n">prepared</span><span class="p">,</span> <span class="n">state</span><span class="o">.</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">edge_flows</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+</span><span id="__span-8-41"><a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a>            <span class="k">if</span> <span class="n">link</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"S|"</span><span class="p">)}</span> <span class="o">==</span> <span class="n">flows</span>
+</span></code></pre></div>
+<p>With X3 live, the second half splits between X2 and X3: weights 2, 1, 1. With X3 dead, it re-flattens onto X2 within its cap of one half: weights 1, 1, 0, and all 40 still arrive.</p>
+<p>In the reference: <code>forwarding_groups</code> in <a href="../reference/dsl/#routing-domains-and-the-wcmp-controller">Scenario YAML</a>.</p>
+<h2 id="failures-patterns-cases-and-states">Failures: patterns, cases and states<a class="headerlink" href="#failures-patterns-cases-and-states" title="Permanent link">&para;</a></h2>
+<p>A failure policy says which nodes and links can fail together. NetGraph draws from it a number of times (<code>iterations</code>); each draw is a set of failed nodes and links, a failure pattern. Equal patterns are evaluated once, as one failure case that counts how often it was drawn. A placement reports each case in up to three failure states, which model the moments after a failure: routing has recomputed (<code>converged</code>), the old forwarding is still in place (<code>stale</code>), or routers have removed the dead routes without computing new ones (<code>repair</code>).</p>
+<p><strong>The rule.</strong></p>
+<ul>
+<li><strong>Draws and cases.</strong> A failure rule matches among all declared nodes, links or risk groups, disabled ones included, taken in sorted identifier order. A draw picks one mode by weight and applies its rules in declaration order; seeds follow <a href="../reference/dsl/#seeds">Seeds</a>. A draw's pattern is every node and link it fails, the members of failed risk groups included. Equal patterns are one case, computed once: <code>occurrences</code> counts the draws that gave it, and with <code>failure_trace</code> its trace is the first of them. The baseline, the case without failures, comes first and is not an extra draw: draws that fail nothing count in its <code>occurrences</code>, which can be 0, so the cases' <code>occurrences</code> sum to <code>iterations</code>. The other cases follow in the order of their first draw. A step without a failure policy makes its <code>iterations</code> draws with nothing failed; a library query without a <code>FailureRequest</code> has the baseline alone, with 0 occurrences. Every draw is made before any case is computed, so the cases are the same for any number of workers.</li>
+<li><strong>Coverage.</strong> Draws are random and independent, so they need not produce every pattern a policy allows. A policy that fails one of <code>n</code> links (one <code>choice</code> rule of count 1 without <code>weight_by</code>) picks each link with equal chance in each draw, and <code>n</code> draws usually miss some. Each pattern drawn is one case, so every link was drawn exactly when the step has <code>n</code> failure cases besides the baseline. <code>n</code> × ln(<code>n</code>/ε) draws, rounded up, miss some link with chance at most ε: 32 draws for 5 links at ε = 1 %.</li>
+<li><strong>What a failure changes.</strong> A failure removes the failed nodes and links, both directions of each failed link, from what the case can use, so when the demands are computed again (the converged state below), a source that failed or lost every route is out of the source roster. It never changes a declared volume, not even one whose endpoint failed. Each case keeps the prepared <code>q</code>.</li>
+<li><strong>The states.</strong> Each case reports its states through a common states mapping: capacity its converged state, placement its requested failure states (<code>[converged]</code> by default; <code>stale</code> and <code>repair</code> only when listed), each computed separately, from a network that carries no traffic yet. Stale forwarding replays a demand's program unchanged while failed elements swallow what reaches them; repair drops the failed routes and re-splits over the survivors, with no new search. No state is guaranteed to deliver at least as much as another: for any two of them, some cases deliver more in one and some in the other, and <code>converged</code>, computed again, can deliver less than <code>repair</code>. The engine's exact rule: <a href="https://github.com/networmix/NetGraph-Core/blob/v0.12.0/docs/semantics.md#forwarding-programs">Forwarding programs</a>.<ul>
+<li><code>converged</code>: the demands computed again on the failed network. Controller tables are rebuilt for the case; declared forwarding-group shares stay fixed caps. A root group with no live member keeps its fixed cap and is listed in the state's <code>dead_caps</code>. Lossless admission stops before the first unit assigned to a dead member; lossy forwarding (for example a simultaneous step, <a href="#ordered-and-simultaneous-placement">Ordered and simultaneous placement</a>) drops the units assigned to that group at its router. A case whose program would forward that share differently is refused with the group, case and state.</li>
+<li><code>stale</code>: each demand's program from the case without failures, forwarded unchanged and lossy at that baseline's admitted total; traffic that reaches a failed node or link is lost there.</li>
+<li><code>repair</code>: the same programs with failed routes removed and survivors re-split (no new route search), at the declared request and admission; group shares stay caps.</li>
+</ul>
+</li>
+<li><code>reference_request_units</code> stays the scaled request in every state; the native <code>requested</code> and <code>offered</code> describe each call. Every case and state of a step therefore has the same request, and NetGraph does not rank them: the worst case of a state is the one that delivers least, with the largest shortfall and the lowest <code>delivery_ratio</code>. A state's shortfall is its unadmitted and dropped units; in <code>stale</code> it also counts those the baseline did not admit. Cost reports come from converged rows only. For an explicit-route demand alone, converged and repair forward the same program.</li>
+<li><strong>Forwarding failure.</strong> The bounded forwarding calculation can cycle or reach its round limit. That case and state then reports a forwarding failure, with no rows; this does not prove that no stable answer exists. In the baseline it stops the step when stale or repair needs its programs.</li>
+<li><strong>Groups inside the domain.</strong> Group scope refuses converged and repair under a failure policy when it programs a router inside the IGP domain, where other demands can transit the router after a failure and a dead group's dropped share would cut them too; <code>stale</code> works there.</li>
+</ul>
+<p><strong>Example.</strong> A centralized-TE demand of 20 from S to T over S-A-T and S-B-T (cost 2, capacity 10 each) and S-C-T (cost 3, capacity 10); one of A-T and B-T fails per draw, over five draws:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">failures</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="s2">seed: 1</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="s2">network:</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="s2">  nodes: {S: </span><span class="si">{}</span><span class="s2">, A: </span><span class="si">{}</span><span class="s2">, B: </span><span class="si">{}</span><span class="s2">, C: </span><span class="si">{}</span><span class="s2">, T: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="s2">  links:</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="s2">    - {source: S, target: A, capacity: 10}</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="s2">    - {source: A, target: T, capacity: 10}</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="s2">    - {source: S, target: B, capacity: 10}</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="s2">    - {source: B, target: T, capacity: 10}</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="s2">    - {source: S, target: C, capacity: 10}</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="s2">    - {source: C, target: T, capacity: 10, cost: 2}</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="s2">failures:</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="s2">  one_exit:</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="s2">    modes: [{weight: 1, rules: [{scope: link, mode: choice, count: 1, path: '^(A|B)</span><span class="se">\\</span><span class="s2">|T'}]}]</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="s2">demands:</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="s2">  te: [{source: ^S$, target: ^T$, volume: 20, preset: TE_MAXFLOW_UNLIM}]</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="s2">workflow:</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: te, demand_set: te, failure_policy: one_exit,</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="s2">     iterations: 5, failure_states: [converged, stale, repair]}</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="s2">"""</span><span class="p">))</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="n">baseline</span><span class="p">,</span> <span class="o">*</span><span class="n">failed</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">failures</span><span class="p">)</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">cases</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="k">assert</span> <span class="n">baseline</span><span class="o">.</span><span class="n">case</span><span class="o">.</span><span class="n">occurrences</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">failed</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="k">assert</span> <span class="nb">sum</span><span class="p">(</span><span class="n">case</span><span class="o">.</span><span class="n">case</span><span class="o">.</span><span class="n">occurrences</span> <span class="k">for</span> <span class="n">case</span> <span class="ow">in</span> <span class="n">failed</span><span class="p">)</span> <span class="o">==</span> <span class="mi">5</span>
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="k">for</span> <span class="n">case</span> <span class="ow">in</span> <span class="n">failed</span><span class="p">:</span>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a>    <span class="n">states</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span><span class="p">,</span> <span class="n">state</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">unadmitted_units</span><span class="p">,</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>                     <span class="n">state</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">edge_drop_units</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">state</span> <span class="ow">in</span> <span class="n">case</span><span class="o">.</span><span class="n">states</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a>    <span class="k">assert</span> <span class="n">states</span> <span class="o">==</span> <span class="p">{</span><span class="s2">"converged"</span><span class="p">:</span> <span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="s2">"stale"</span><span class="p">:</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="s2">"repair"</span><span class="p">:</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">0</span><span class="p">)}</span>
+</span></code></pre></div>
+<p>The five draws give two patterns, A-T failed and B-T failed, and the baseline is not an extra draw. Without failures the demand uses the two cost-2 routes, 10 each. Converged: the controller computes again and moves 10 to S-C-T. Stale: the old program still sends 10 into the failed link, where it is lost. Repair: the old program loses its failed route and re-splits onto the survivor, which carries 10; lossless admission refuses the other 10.</p>
+<p>A dead cap under a failure: S splits half to X1 and half to X2 under the group scope, and X2's link to T fails:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">dead_cap</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="s2">network:</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="s2">  nodes: {S: </span><span class="si">{}</span><span class="s2">, X1: </span><span class="si">{}</span><span class="s2">, X2: </span><span class="si">{}</span><span class="s2">, T: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="s2">  links:</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="s2">    - {source: S, target: X1, capacity: 100}</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="s2">    - {source: S, target: X2, capacity: 100}</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s2">    - {source: X1, target: T, capacity: 100}</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="s2">    - {source: X2, target: T, capacity: 100}</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s2">routing:</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="s2">  igp_domain: {path: '^X'}</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="s2">  bgp_edge: {path: '^(S|T)$'}</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="s2">wcmp_controller: {scope: group}</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="s2">forwarding_groups:</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="s2">  edge:</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="s2">    router: S</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="s2">    groups:</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="s2">      - children: [{edge: {link: 'S|X1|0', direction: forward}}]</span>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="s2">      - children: [{edge: {link: 'S|X2|0', direction: forward}}]</span>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="s2">failures:</span>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="s2">  x2_exit:</span>
+</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="s2">    modes: [{weight: 1, rules: [{scope: link, mode: all, path: '^X2</span><span class="se">\\</span><span class="s2">|T'}]}]</span>
+</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="s2">demands:</span>
+</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="s2">  d: [{source: ^S$, target: ^T$, volume: 40, preset: SHORTEST_PATHS_WCMP}]</span>
+</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="s2">workflow:</span>
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: place, demand_set: d, failure_policy: x2_exit,</span>
+</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="s2">     failure_states: [converged, stale]}</span>
+</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="s2">"""</span><span class="p">))</span>
+</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a><span class="n">baseline</span><span class="p">,</span> <span class="n">failed</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">dead_cap</span><span class="p">)</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">cases</span>
+</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a><span class="n">converged_state</span><span class="p">,</span> <span class="n">stale_state</span> <span class="o">=</span> <span class="n">failed</span><span class="o">.</span><span class="n">states</span><span class="p">[</span><span class="s2">"converged"</span><span class="p">],</span> <span class="n">failed</span><span class="o">.</span><span class="n">states</span><span class="p">[</span><span class="s2">"stale"</span><span class="p">]</span>
+</span><span id="__span-10-31"><a id="__codelineno-10-31" name="__codelineno-10-31" href="#__codelineno-10-31"></a><span class="p">[</span><span class="n">cap</span><span class="p">]</span> <span class="o">=</span> <span class="n">converged_state</span><span class="o">.</span><span class="n">dead_caps</span>
+</span><span id="__span-10-32"><a id="__codelineno-10-32" name="__codelineno-10-32" href="#__codelineno-10-32"></a><span class="k">assert</span> <span class="p">(</span><span class="n">cap</span><span class="o">.</span><span class="n">router</span><span class="p">,</span> <span class="n">cap</span><span class="o">.</span><span class="n">group</span><span class="p">,</span> <span class="n">cap</span><span class="o">.</span><span class="n">cap</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="s2">"S"</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>
+</span><span id="__span-10-33"><a id="__codelineno-10-33" name="__codelineno-10-33" href="#__codelineno-10-33"></a><span class="k">assert</span> <span class="n">converged_state</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span> <span class="o">==</span> <span class="mi">1</span>
+</span><span id="__span-10-34"><a id="__codelineno-10-34" name="__codelineno-10-34" href="#__codelineno-10-34"></a><span class="k">assert</span> <span class="p">(</span><span class="n">stale_state</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">delivered_units</span><span class="p">,</span> <span class="n">stale_state</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">edge_drop_units</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The second group has no live member, but its cap of one half stays. Lossless admission takes one unit (to X1, first) and stops before the next, which would go to the dead group. Stale forwarding sends 20 each way and loses X2's 20 on the failed link.</p>
+<p>In the reference: <a href="../reference/dsl/#failures-failure-policies"><code>failures</code></a>; <code>failure_policy</code>, <code>iterations</code>, <code>failure_trace</code> and <code>failure_states</code> in <a href="../reference/workflow/#keys-common-to-analysis-steps">Workflow Steps</a>; <code>cases</code>, <code>occurrences</code> and <code>states</code> in <a href="../reference/results/">Results</a>.</p>
+<h2 id="ordered-and-simultaneous-placement">Ordered and simultaneous placement<a class="headerlink" href="#ordered-and-simultaneous-placement" title="Permanent link">&para;</a></h2>
+<p>By default a placement places its demands one after another, by priority: each demand sees the capacity the earlier ones left. Real traffic arrives at once instead: a simultaneous placement forwards every demand at the same time, and demands that meet on a full link share its losses.</p>
+<p><strong>The rule.</strong></p>
+<ul>
+<li><code>interaction: ordered</code> (the default) places demands in priority order, then declaration and canonical expansion order. A row's residual is the capacity left after that row.</li>
+<li><code>interaction: simultaneous</code> forwards every demand at once in one native list, sharing losses on common links, as a lossy question on fixed programs: each model that can be lossy forwards a lossy copy of itself (tunnel models are set up first and keep their holds), and a live controller (<code>TE_MAXFLOW_UNLIM</code>, <code>SHORTEST_PATHS_MAXFLOW</code>) is computed, then its program forwarded lossy. Its lossy copy is created after the other participants, in every state, so it loses one-unit ties to them. Every row reports the one final residual. Rows are not comparable with the default <code>ordered</code> rows. The engine's exact rule: <a href="https://github.com/networmix/NetGraph-Core/blob/v0.12.0/docs/semantics.md#several-demands-at-once">Several demands at once</a>.</li>
+<li>A TE ingress pool in a simultaneous step gets a lossy offer budget, its largest known request, reported as the row's <code>pool.offer_limit_units</code>. Budgets are prepared once for the scenario: every placement step on that preparation reports them, and they count in the range check of <code>q</code>.</li>
+</ul>
+<p><strong>Example.</strong> Two demands on one link of 10, first of 10 each, then of 3 and 5:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">two</span> <span class="o">=</span> <span class="s2">"""</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="s2">units: </span><span class="si">{resolution: 1}</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="s2">network:</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="s2">  nodes: {S: </span><span class="si">{}</span><span class="s2">, T: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="s2">  links: [{source: S, target: T, capacity: 10}]</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="s2">demands:</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="s2">  two:</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="s2">    - {source: ^S$, target: ^T$, volume: </span><span class="si">%s</span><span class="s2">}</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="s2">    - {source: ^S$, target: ^T$, volume: </span><span class="si">%s</span><span class="s2">}</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="s2">workflow:</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: ordered, demand_set: two, outputs: {residual: true}}</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: simultaneous, demand_set: two,</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="s2">     interaction: simultaneous, outputs: {residual: true}}</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="s2">"""</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="n">full</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">two</span> <span class="o">%</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">))))</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="n">ordered</span><span class="p">,</span> <span class="n">simultaneous</span> <span class="o">=</span> <span class="n">converged</span><span class="p">(</span><span class="n">full</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">rows</span><span class="p">,</span> <span class="n">converged</span><span class="p">(</span><span class="n">full</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">rows</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="k">assert</span> <span class="p">[(</span><span class="n">row</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">delivered</span><span class="p">,</span> <span class="n">row</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">unadmitted</span><span class="p">)</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">ordered</span><span class="p">]</span> <span class="o">==</span> <span class="p">[(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">)]</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="k">assert</span> <span class="p">[</span><span class="n">row</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">delivered</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">simultaneous</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">]</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="k">assert</span> <span class="n">converged</span><span class="p">(</span><span class="n">full</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">edge_drop_units</span> <span class="o">==</span> <span class="mi">10</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="n">prepared</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">two</span> <span class="o">%</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">)))</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="n">small</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">prepared</span><span class="p">)</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="n">left</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a>    <span class="p">[</span><span class="n">forward_flows</span><span class="p">(</span><span class="n">prepared</span><span class="p">,</span> <span class="n">row</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">residual</span><span class="p">)[</span><span class="s2">"S|T|0"</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">converged</span><span class="p">(</span><span class="n">small</span><span class="p">,</span> <span class="n">step</span><span class="p">)</span><span class="o">.</span><span class="n">rows</span><span class="p">]</span>
+</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a>    <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="p">]</span>
+</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a><span class="k">assert</span> <span class="n">left</span> <span class="o">==</span> <span class="p">[[</span><span class="mi">7</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]]</span>
+</span></code></pre></div>
+<p>Ordered, the first demand takes the link and the second is refused. Simultaneous, both send 10, the link carries 10 and each loses 5. With 3 and 5, ordered rows show the residual after each (7, then 2); simultaneous rows both show the final 2.</p>
+<p>In the reference: <code>interaction</code> in <a href="../reference/workflow/#trafficmatrixplacement">TrafficMatrixPlacement</a>; <code>residual</code> in <a href="../reference/workflow/#output-selection">Output selection</a>.</p>
+<h2 id="maximum-supported-demand">Maximum supported demand<a class="headerlink" href="#maximum-supported-demand" title="Permanent link">&para;</a></h2>
+<p>Maximum supported demand (MSD) asks how far the whole demand set can grow: the largest alpha at which every demand is placed in full. It searches by probes, each a placement at one alpha: from <code>alpha_start</code> it multiplies or divides alpha by <code>growth_factor</code> until one probe fits and another does not, then halves the gap between them until it is at most <code>alpha_tolerance</code>. It reports every probe, and proves its answer only where it can.</p>
+<p><strong>The rule.</strong></p>
+<ul>
+<li><strong>Probes.</strong> A probe places the set at one alpha and checks exact native-unit feasibility: every demand delivers its whole request. Its outcome is <code>feasible</code>, <code>infeasible</code>, <code>below_resolution</code> (a resolved leaf of a positive declaration requests zero units after scaling and expansion, so the probe proves nothing; it is never feasible or a certificate endpoint, and search moves up from it) or <code>range</code> (the scaled volumes leave the native range; not an infeasible congestion sample). Probes keep the prepared <code>q</code>. MSD takes no failure input.</li>
+<li><strong>The answer.</strong> <code>alpha_feasible</code> is the largest tested feasible alpha, null if no probe was feasible; the best rows are its rows. The result does not claim an untested global maximum.</li>
+<li>
+<p><strong>Statuses</strong> (<code>search_status</code>, with <code>stop_reason</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning (stop reasons)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>feasible</code></td>
+<td>The gap between a feasible and an infeasible alpha closed to <code>alpha_tolerance</code> (<code>tolerance</code>)</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>A feasible alpha was found but the search hit <code>alpha_max</code> (<code>alpha_bound</code>) or its iteration limit (<code>bracket_limit</code>, <code>bisect_limit</code>)</td>
+</tr>
+<tr>
+<td><code>none_feasible</code></td>
+<td>No tested alpha was feasible: <code>alpha_min</code> remained infeasible (<code>alpha_bound</code>), an iteration limit was reached (<code>bracket_limit</code>, <code>bisect_limit</code>), or no feasible nonzero probe was found before the unit-resolution threshold or <code>alpha_max</code> (<code>unit_resolution</code>).</td>
+</tr>
+<tr>
+<td><code>range</code></td>
+<td>A probe's scaled volumes left the native range (<code>offer_range</code>)</td>
+</tr>
+<tr>
+<td><code>stagnation</code></td>
+<td>The next bracketing value equals the current alpha, or a bisection midpoint rounds to a bracket endpoint (<code>representable_limit</code>).</td>
+</tr>
+<tr>
+<td><code>trivial</code></td>
+<td>The set offers nothing (all volumes zero or discarded); one probe at <code>alpha_max</code> succeeded (<code>nothing_offered</code>)</td>
+</tr>
+</tbody>
+</table>
+</li>
+<li>
+<p><strong>Proofs.</strong> Only a proved downward-closed class (any alpha below a feasible one is feasible) receives an upper certificate: the feasible and the infeasible probe that bracket the answer. Fixed programs (equal or weighted splitting on static routes, supplied programs and WCMP controller tables, which are built once and do not change with alpha) and one centralized-TE demand without a tunnel count (weighted sources included), or one optimized shortest-paths demand with a static route choice (<code>FEWER_HOPS</code> or <code>HIGHER_CAPACITY</code>), alone in its set, are proved; live controllers beside other demands, tunnel layouts and TE ingress pools are not. A proof is about feasibility, not delivery: delivery can fall as alpha grows. The bounded search on an unproved set is a heuristic.</p>
+</li>
+<li>A later step can place the set at the largest tested feasible alpha (<code>alpha_from_step</code>); a simultaneous step that takes its alpha from an MSD step cannot have pool demands.</li>
+</ul>
+<p><strong>Example.</strong> One link of 10 and a demand of 4 (automatic <code>q</code> = 2^-7); then a demand of 3 at <code>q</code> = 1, starting at alpha 1/8:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">msd</span> <span class="o">=</span> <span class="s2">"""</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="s2">units: {resolution: </span><span class="si">%s</span><span class="s2">}</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="s2">network:</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="s2">  nodes: {A: </span><span class="si">{}</span><span class="s2">, B: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="s2">  links: [{source: A, target: B, capacity: 10}]</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="s2">demands:</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="s2">  d: [{source: ^A$, target: ^B$, volume: </span><span class="si">%s</span><span class="s2">}]</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="s2">workflow:</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="s2">  - {type: MaximumSupportedDemand, name: msd, demand_set: d, alpha_start: </span><span class="si">%s</span><span class="s2">}</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="s2">"""</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="n">search</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">msd</span> <span class="o">%</span> <span class="p">(</span><span class="s2">"auto"</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">))))</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="n">certificate</span> <span class="o">=</span> <span class="n">search</span><span class="o">.</span><span class="n">upper_certificate</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="k">assert</span> <span class="n">search</span><span class="o">.</span><span class="n">alpha_feasible</span><span class="o">.</span><span class="n">value</span> <span class="o">==</span> <span class="mf">2.5</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="k">assert</span> <span class="p">(</span><span class="n">search</span><span class="o">.</span><span class="n">search_status</span><span class="p">,</span> <span class="n">search</span><span class="o">.</span><span class="n">stop_reason</span><span class="p">,</span> <span class="n">search</span><span class="o">.</span><span class="n">proof</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="s2">"feasible"</span><span class="p">,</span> <span class="s2">"tolerance"</span><span class="p">,</span> <span class="s2">"fixed_program"</span><span class="p">)</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="k">assert</span> <span class="p">(</span><span class="n">certificate</span><span class="o">.</span><span class="n">lower</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">certificate</span><span class="o">.</span><span class="n">upper</span><span class="o">.</span><span class="n">value</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="mf">2.5</span><span class="p">,</span> <span class="mi">321</span> <span class="o">/</span> <span class="mi">128</span><span class="p">)</span>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="n">coarse</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">msd</span> <span class="o">%</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mf">0.125</span><span class="p">))))</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span>
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="k">assert</span> <span class="p">[(</span><span class="n">p</span><span class="o">.</span><span class="n">alpha</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">outcome</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">totals</span><span class="o">.</span><span class="n">reference_request_units</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">coarse</span><span class="o">.</span><span class="n">history</span><span class="p">[:</span><span class="mi">2</span><span class="p">]]</span> <span class="o">==</span> <span class="p">[(</span><span class="mi">1</span><span class="o">/</span><span class="mi">8</span><span class="p">,</span> <span class="s2">"below_resolution"</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">4</span><span class="p">,</span> <span class="s2">"feasible"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]</span>
+</span></code></pre></div>
+<p>The search finds 5/2 (a volume of 10 on the link of 10) and proves the answer lies below 321/128, the smallest infeasible alpha it tested. In the second search, 3 × 1/8 = 0.375 rounds to 0 units, so the first probe is <code>below_resolution</code>; 3 × 1/4 = 0.75 rounds to 1 unit and fits.</p>
+<p>In the reference: <a href="../reference/workflow/#maximumsupporteddemand">MaximumSupportedDemand</a>; <code>MSDAnalysisJSON</code> in <a href="../reference/results/#msdanalysisjson">Results</a>.</p>
+<h2 id="results-and-their-units">Results and their units<a class="headerlink" href="#results-and-their-units" title="Permanent link">&para;</a></h2>
+<p>A result holds numbers of different kinds, and the field names say which. Bandwidth computed by the engine is in units of <code>q</code>; amounts you declared stay physical; path and tunnel costs stay unscaled, while <code>total_cost</code> is cost times bandwidth units: multiply it by <code>q</code> for cost times physical bandwidth. In exported JSON a field that was not asked for is absent, while a field that was asked for but has no value is <code>null</code>.</p>
+<p><strong>The rule.</strong></p>
+<ul>
+<li><strong>Five kinds of numbers.</strong> Bandwidth units (every <code>*_units</code> field and the native amounts; units × <code>q</code> is physical), physical amounts (inputs, offers and designs, <code>NetworkStats</code> capacities and <code>split_bound.capacity</code>, as declared), ratios (no unit), routing costs (never multiplied by <code>q</code>; <code>total_cost</code> is cost × bandwidth units, so <code>total_cost</code> × <code>q</code> is cost × physical bandwidth) and hardware money and power. Counts are plain integers. Native integer-valued configuration fields already contain units; YAML bandwidth minima are physical and are converted at preparation.</li>
+<li>Each row's native result says what this call did (<code>call_</code> fields) and the demand's state after it (totals), and the two never mix. The engine's exact rule: <a href="https://github.com/networmix/NetGraph-Core/blob/v0.12.0/docs/semantics.md#the-result">The result</a>.</li>
+<li><strong>Export.</strong> <code>write_json</code> writes each record's declared fields, and the results schema is generated from the same declarations. Native integer quantities stay integer, optional outputs stay absent when unrequested, and unlimited and null values remain distinct. JSON rows default to compact exact summaries, and each optional output has its own selector; Python results always hold the detail fields, while the other outputs exist only when requested (<a href="../reference/workflow/#output-selection">Output selection</a>).</li>
+<li><strong>Cost reports</strong> are computed only when <code>cost_distribution</code> is requested and only for <code>converged</code> rows. Unrestricted optimized traffic engineering (<code>TE_MAXFLOW_UNLIM</code>) reports units at each marginal cost; shortest-path routing, tunnels and named routes report units at each path cost when attribution is available. Otherwise a converged row gives <code>controller_table</code>, <code>mixed_cost_dag</code> or <code>unsupported_model</code> under <code>unavailable_outputs</code>. Stale and repair rows carry neither a report nor an unavailable reason. A report's <code>cost_domain</code> is <code>analysis_graph</code> when costs include a TE ingress pool's attachment, and <code>physical_network</code> otherwise.</li>
+</ul>
+<p><strong>Example.</strong> A demand of 10 over A-B (cost 1) and B-C (cost 2), at <code>q</code> = 1/8:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">io</span><span class="w"> </span><span class="kn">import</span> <span class="n">StringIO</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph</span><span class="w"> </span><span class="kn">import</span> <span class="n">write_json</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="n">prepared</span> <span class="o">=</span> <span class="n">prepare</span><span class="p">(</span><span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="s2">units: </span><span class="si">{resolution: 0.125}</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="s2">network:</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="s2">  nodes: {A: </span><span class="si">{}</span><span class="s2">, B: </span><span class="si">{}</span><span class="s2">, C: </span><span class="si">{}</span><span class="s2">}</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="s2">  links:</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="s2">    - {source: A, target: B, capacity: 10, cost: 1}</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s2">    - {source: B, target: C, capacity: 10, cost: 2}</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="s2">demands:</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="s2">  te: [{source: ^A$, target: ^C$, volume: 10, preset: TE_MAXFLOW_UNLIM}]</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="s2">  ecmp: [{source: ^A$, target: ^C$, volume: 10, preset: SHORTEST_PATHS_ECMP}]</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="s2">workflow:</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: te, demand_set: te, outputs: {min_cut: true}}</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="s2">  - {type: TrafficMatrixPlacement, name: ecmp, demand_set: ecmp, outputs: {min_cut: true}}</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="s2">"""</span><span class="p">))</span>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="n">result</span> <span class="o">=</span> <span class="n">run</span><span class="p">(</span><span class="n">prepared</span><span class="p">)</span>
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="n">te</span> <span class="o">=</span> <span class="n">converged</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">step</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">result</span>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="k">assert</span> <span class="n">te</span><span class="o">.</span><span class="n">delivered</span> <span class="o">==</span> <span class="mi">80</span> <span class="ow">and</span> <span class="n">te</span><span class="o">.</span><span class="n">delivered</span> <span class="o">*</span> <span class="n">prepared</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">q</span> <span class="o">==</span> <span class="mi">10</span>
+</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a><span class="k">assert</span> <span class="n">te</span><span class="o">.</span><span class="n">total_cost</span> <span class="o">==</span> <span class="mi">240</span> <span class="ow">and</span> <span class="n">te</span><span class="o">.</span><span class="n">total_cost</span> <span class="o">*</span> <span class="n">prepared</span><span class="o">.</span><span class="n">topology</span><span class="o">.</span><span class="n">q</span> <span class="o">==</span> <span class="mi">30</span>
+</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a>
+</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="n">out</span> <span class="o">=</span> <span class="n">StringIO</span><span class="p">()</span>
+</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="n">write_json</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
+</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="n">steps</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())[</span><span class="s2">"steps"</span><span class="p">]</span>
+</span><span id="__span-13-28"><a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a><span class="n">te_row</span><span class="p">,</span> <span class="n">ecmp_row</span> <span class="o">=</span> <span class="p">(</span><span class="n">step</span><span class="p">[</span><span class="s2">"result"</span><span class="p">][</span><span class="s2">"cases"</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s2">"states"</span><span class="p">][</span><span class="s2">"converged"</span><span class="p">][</span><span class="s2">"rows"</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s2">"result"</span><span class="p">]</span>
+</span><span id="__span-13-29"><a id="__codelineno-13-29" name="__codelineno-13-29" href="#__codelineno-13-29"></a>                    <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="n">steps</span><span class="p">)</span>
+</span><span id="__span-13-30"><a id="__codelineno-13-30" name="__codelineno-13-30" href="#__codelineno-13-30"></a><span class="k">assert</span> <span class="n">te_row</span><span class="p">[</span><span class="s2">"min_cut"</span><span class="p">]</span> <span class="o">==</span> <span class="p">[{</span><span class="s2">"link"</span><span class="p">:</span> <span class="s2">"A|B|0"</span><span class="p">,</span> <span class="s2">"direction"</span><span class="p">:</span> <span class="s2">"forward"</span><span class="p">}]</span>
+</span><span id="__span-13-31"><a id="__codelineno-13-31" name="__codelineno-13-31" href="#__codelineno-13-31"></a><span class="k">assert</span> <span class="n">ecmp_row</span><span class="p">[</span><span class="s2">"min_cut"</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span>
+</span><span id="__span-13-32"><a id="__codelineno-13-32" name="__codelineno-13-32" href="#__codelineno-13-32"></a><span class="k">assert</span> <span class="s2">"edge_flows"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">te_row</span>
+</span></code></pre></div>
+<p>The 10 delivered are 80 units of 1/8. The route costs 3 per unit of bandwidth, so <code>total_cost</code> is 3 × 80 = 240, and 30 after × <code>q</code>. Both steps asked for the minimum cut: the optimized demand has one, A→B; ECMP has none, so its <code>min_cut</code> is <code>null</code>. Neither asked for <code>edge_flows</code>, so the key is absent.</p>
+<p>In the reference: <a href="../reference/results/">Results</a>; <a href="../reference/cli/#output-format">Output Format</a>.</p>
+<h2 id="glossary">Glossary<a class="headerlink" href="#glossary" title="Permanent link">&para;</a></h2>
+<p>The documentation uses one term for each idea. The terms the sections define, each in the section named:</p>
+<ul>
+<li>bandwidth unit <code>q</code> (YAML <code>units.resolution</code>), unit, physical amount: <a href="#units-and-the-resolution-q">Units and the resolution q</a></li>
+<li>physical link, direction, enabled: <a href="#links-directions-and-what-is-enabled">Links, directions and what is enabled</a></li>
+<li>next hop, ECMP, admission, program: <a href="#routing-models-and-admission">Routing models and admission</a></li>
+<li>alpha (the demand multiplier), source roster, canonical order: <a href="#demands-how-traffic-enters">Demands: how traffic enters</a></li>
+<li>precision target, split count, achieved precision: <a href="#precision-and-the-choice-of-q">Precision and the choice of q</a></li>
+<li>tunnel, head, hold (a reservation), carried traffic, TE ingress pool, offer budget: <a href="#tunnels-and-te-ingress-pools">Tunnels and TE ingress pools</a></li>
+<li>routing domain, table: <a href="#routing-domains-and-the-wcmp-controller">Routing domains and the WCMP controller</a></li>
+<li>cap, dead cap: <a href="#forwarding-groups-and-their-caps">Forwarding groups and their caps</a>, <a href="#failures-patterns-cases-and-states">Failures: patterns, cases and states</a></li>
+<li>draw, failure pattern, failure case, failure state: <a href="#failures-patterns-cases-and-states">Failures: patterns, cases and states</a></li>
+<li>probe, certificate: <a href="#maximum-supported-demand">Maximum supported demand</a></li>
+</ul>
+<p>Words the pages use in passing:</p>
+<ul>
+<li><strong>Native:</strong> computed by, or handed directly to, the engine, NetGraph-Core: a native result, model or program. The native range is the engine's numeric limit: each amount in units, and the graph's capacity and cost sums, below 2^62 (<a href="#precision-and-the-choice-of-q">Precision and the choice of q</a>).</li>
+<li><strong>Eligible:</strong> usable in the case at hand: enabled and, in a failure case, not failed.</li>
+<li><strong>Directed link:</strong> one direction of a physical link, <code>forward</code> (source to target) or <code>reverse</code>; Python <code>DirectedLink</code>.</li>
+<li><strong>Pool head, pool attachment:</strong> a TE ingress pool's private head node, and its private link (cost 1) to one physical source.</li>
+<li><strong>Scenario seed:</strong> the top-level <code>seed</code>, from which step and policy seeds are derived (<a href="../reference/dsl/#seeds">Seeds</a>).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.tabs", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

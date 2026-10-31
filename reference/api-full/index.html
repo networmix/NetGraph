@@ -1,0 +1,5883 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://networmix.github.io/NetGraph/reference/api-full/">
+      
+      
+        <link rel="prev" href="../api/">
+      
+      
+        <link rel="next" href="../schemas/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Python API (generated) - NetGraph</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#python-api-generated" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="NetGraph" class="md-header__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NetGraph
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Python API (generated)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../concepts/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How NetGraph computes
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/basic/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../dsl/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="NetGraph" class="md-nav__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    NetGraph
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How NetGraph computes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/basic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basic Example
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/clos-fabric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clos Fabric
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/bundled-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bundled Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dsl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenario YAML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow Steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command Line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API (generated)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API (generated)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ngraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ngraph">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ngraphanalysismetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.AnalysisMetadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphanalysisresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.AnalysisResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphbuildgraphresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.BuildGraphResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcapacityanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CapacityAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcapacityquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CapacityQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcapacityrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CapacityRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcaseresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CaseResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcasestate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CaseState
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcomponent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Component
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcomponentslibrary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ComponentsLibrary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcondition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcontrollergroup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ControllerGroup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcostpowerresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CostPowerResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcostreport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CostReport
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcostunavailablereason" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CostUnavailableReason
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdeliveredbypathcost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DeliveredByPathCost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdemandset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DemandSet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdemandspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DemandSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdirectedlink" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DirectedLink
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdiscardedshare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DiscardedShare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdomainresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DomainResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphedgeweight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.EdgeWeight
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphendpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexactalpha" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExactAlpha
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexpansionaccounting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExpansionAccounting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexpansionleaf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExpansionLeaf
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexpansionparent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExpansionParent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexpansionsplit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExpansionSplit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexportcontext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExportContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurecase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureCase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailuremode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureMode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurepattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailurePattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurepolicy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailurePolicy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurerequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureRequest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurerule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureRule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailureselection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureSelection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailuretrace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureTrace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphflowpolicypreset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FlowPolicyPreset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphforwardinggroup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ForwardingGroup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphgroupchild" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.GroupChild
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarerow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.HardwareRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphinputconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.InputConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsplitcountconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SplitCountConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphjsonvalue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.JSONValue
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphlink" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Link
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdprobe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDProbe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdproof" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDProof
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdstopreason" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDStopReason
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmarginalcostbin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MarginalCostBin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmarginalcurve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MarginalCurve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmatchspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MatchSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphnetwork" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Network
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphnetworkexplorer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.NetworkExplorer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphnetworkstatsresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.NetworkStatsResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphnode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Node
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphoutputselection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.OutputSelection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpathanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PathAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpathcostbin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PathCostBin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpathquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PathQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpathrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PathRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphphysicalamount" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PhysicalAmount
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpinnedroutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PinnedRoutes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplacementanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PlacementAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplacementquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PlacementQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplacementrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PlacementRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplacementtotals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PlacementTotals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpoolhead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PoolHead
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpoolmetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PoolMetadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpreparationscope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PreparationScope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpreparedscenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PreparedScenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpreparedtopology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PreparedTopology
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrangeconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RangeConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrangerefusal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RangeRefusal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphresolveddemand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ResolvedDemand
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphresolveddemandset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ResolvedDemandSet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphriskgroup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RiskGroup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphroutespec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RouteSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphroutingdomain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RoutingDomain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrunmetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RunMetadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrunresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RunResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsamplingmetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SamplingMetadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphscenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Scenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphselector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Selector
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphselfpair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SelfPair
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsensitivityanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SensitivityAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsensitivityquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SensitivityQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphstepcontext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.StepContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphstepoutput" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.StepOutput
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphstepquestion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.StepQuestion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphstepresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.StepResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsupportspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SupportSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsyntheticingress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SyntheticIngress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphtunnelcountanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.TunnelCountAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphtunnelcountquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.TunnelCountQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphtunnelcountrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.TunnelCountRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphunitsreport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.UnitsReport
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphunitssettings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.UnitsSettings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphuppercertificate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.UpperCertificate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphwcmpcontroller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.WCMPController
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphweightspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.WeightSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Workers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowstep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.WorkflowStep
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcapacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.capacity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphedge_sensitivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.edge_sensitivity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailure_cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.failure_cases
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmaximum_supported_demand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.maximum_supported_demand
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpaths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.place
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphprepare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.prepare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphregister_result_exporter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.register_result_exporter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphregister_workflow_step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.register_workflow_step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphresolve_demands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.resolve_demands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrun" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphtunnel_counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.tunnel_counts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphwrite_json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.write_json
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ngraphworkflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ngraph.workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowstepneeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.StepNeeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowstep_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.step_name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowbuildgraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.BuildGraph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowcostpower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.CostPower
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowmaxflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.MaxFlow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowmaximumsupporteddemand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.MaximumSupportedDemand
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflownetworkstats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.NetworkStats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowtrafficmatrixplacement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.TrafficMatrixPlacement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowtunnelcountanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.TunnelCountAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ngraphhardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ngraph.hardware">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarehardware_inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.hardware_inventory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarehardwareinventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.HardwareInventory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarehardwareuse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.HardwareUse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarelink_active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.link_active
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwareresolve_link_end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.resolve_link_end
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ngraphlogging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.logging
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ngraph.logging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ngraphloggingget_logger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.logging.get_logger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphloggingsetup_root_logger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.logging.setup_root_logger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphloggingset_global_log_level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.logging.set_global_log_level
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Errors
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schemas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ngraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ngraph">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ngraphanalysismetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.AnalysisMetadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphanalysisresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.AnalysisResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphbuildgraphresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.BuildGraphResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcapacityanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CapacityAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcapacityquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CapacityQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcapacityrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CapacityRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcaseresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CaseResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcasestate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CaseState
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcomponent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Component
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcomponentslibrary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ComponentsLibrary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcondition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Condition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcontrollergroup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ControllerGroup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcostpowerresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CostPowerResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcostreport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CostReport
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcostunavailablereason" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.CostUnavailableReason
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdeliveredbypathcost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DeliveredByPathCost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdemandset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DemandSet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdemandspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DemandSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdirectedlink" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DirectedLink
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdiscardedshare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DiscardedShare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphdomainresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.DomainResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphedgeweight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.EdgeWeight
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphendpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexactalpha" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExactAlpha
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexpansionaccounting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExpansionAccounting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexpansionleaf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExpansionLeaf
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexpansionparent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExpansionParent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexpansionsplit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExpansionSplit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphexportcontext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ExportContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurecase" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureCase
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailuremode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureMode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurepattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailurePattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurepolicy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailurePolicy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurerequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureRequest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailurerule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureRule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailureselection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureSelection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailuretrace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FailureTrace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphflowpolicypreset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.FlowPolicyPreset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphforwardinggroup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ForwardingGroup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphgroupchild" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.GroupChild
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarerow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.HardwareRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphinputconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.InputConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsplitcountconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SplitCountConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphjsonvalue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.JSONValue
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphlink" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Link
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdprobe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDProbe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdproof" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDProof
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmsdstopreason" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MSDStopReason
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmarginalcostbin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MarginalCostBin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmarginalcurve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MarginalCurve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmatchspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.MatchSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphnetwork" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Network
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphnetworkexplorer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.NetworkExplorer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphnetworkstatsresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.NetworkStatsResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphnode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Node
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphoutputselection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.OutputSelection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpathanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PathAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpathcostbin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PathCostBin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpathquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PathQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpathrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PathRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphphysicalamount" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PhysicalAmount
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpinnedroutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PinnedRoutes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplacementanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PlacementAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplacementquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PlacementQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplacementrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PlacementRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplacementtotals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PlacementTotals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpoolhead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PoolHead
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpoolmetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PoolMetadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpreparationscope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PreparationScope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpreparedscenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PreparedScenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpreparedtopology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.PreparedTopology
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrangeconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RangeConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrangerefusal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RangeRefusal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphresolveddemand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ResolvedDemand
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphresolveddemandset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.ResolvedDemandSet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphriskgroup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RiskGroup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphroutespec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RouteSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphroutingdomain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RoutingDomain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrunmetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RunMetadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrunresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.RunResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsamplingmetadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SamplingMetadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphscenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Scenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphselector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Selector
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphselfpair" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SelfPair
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsensitivityanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SensitivityAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsensitivityquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SensitivityQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphstepcontext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.StepContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphstepoutput" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.StepOutput
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphstepquestion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.StepQuestion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphstepresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.StepResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsupportspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SupportSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphsyntheticingress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.SyntheticIngress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphtunnelcountanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.TunnelCountAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphtunnelcountquery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.TunnelCountQuery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphtunnelcountrow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.TunnelCountRow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphunitsreport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.UnitsReport
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphunitssettings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.UnitsSettings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphuppercertificate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.UpperCertificate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphwcmpcontroller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.WCMPController
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphweightspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.WeightSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.Workers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowstep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.WorkflowStep
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphversion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphcapacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.capacity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphedge_sensitivity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.edge_sensitivity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphfailure_cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.failure_cases
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphmaximum_supported_demand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.maximum_supported_demand
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphpaths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphplace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.place
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphprepare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.prepare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphregister_result_exporter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.register_result_exporter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphregister_workflow_step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.register_workflow_step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphresolve_demands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.resolve_demands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphrun" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphtunnel_counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.tunnel_counts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphwrite_json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.write_json
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ngraphworkflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ngraph.workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowstepneeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.StepNeeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowstep_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.step_name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowbuildgraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.BuildGraph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowcostpower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.CostPower
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowmaxflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.MaxFlow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowmaximumsupporteddemand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.MaximumSupportedDemand
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflownetworkstats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.NetworkStats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowtrafficmatrixplacement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.TrafficMatrixPlacement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphworkflowtunnelcountanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.workflow.TunnelCountAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ngraphhardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ngraph.hardware">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarehardware_inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.hardware_inventory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarehardwareinventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.HardwareInventory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarehardwareuse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.HardwareUse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwarelink_active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.link_active
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphhardwareresolve_link_end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.hardware.resolve_link_end
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ngraphlogging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.logging
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ngraph.logging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ngraphloggingget_logger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.logging.get_logger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphloggingsetup_root_logger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.logging.setup_root_logger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ngraphloggingset_global_log_level" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ngraph.logging.set_global_log_level
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Errors
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!-- markdownlint-disable MD007 MD032 MD029 MD050 MD004 MD052 MD012 -->
+
+<h1 id="python-api-generated">Python API (generated)<a class="headerlink" href="#python-api-generated" title="Permanent link">&para;</a></h1>
+<p>Every public name of NetGraph, generated from the docstrings: the <code>__all__</code> of <code>ngraph</code>, <code>ngraph.workflow</code>, <code>ngraph.hardware</code> and <code>ngraph.logging</code>, and nothing else. The <a href="../api/">Python API</a> guide shows the same API by task, with examples.</p>
+<h2 id="ngraph">ngraph<a class="headerlink" href="#ngraph" title="Permanent link">&para;</a></h2>
+<h3 id="ngraphanalysismetadata">ngraph.AnalysisMetadata<a class="headerlink" href="#ngraphanalysismetadata" title="Permanent link">&para;</a></h3>
+<p>How an analysis ran: its effective number of workers and its failure sampling.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>workers</code> (int)</li>
+<li><code>sampling</code> (SamplingMetadata | None): None when the analysis draws no failures</li>
+</ul>
+<h3 id="ngraphanalysisresult">ngraph.AnalysisResult<a class="headerlink" href="#ngraphanalysisresult" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">AnalysisResult</span> <span class="o">=</span> <span class="p">(</span><span class="n">CapacityAnalysis</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="o">|</span> <span class="n">PlacementAnalysis</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">|</span> <span class="n">SensitivityAnalysis</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="o">|</span> <span class="n">PathAnalysis</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">|</span> <span class="n">MSDAnalysis</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="o">|</span> <span class="n">TunnelCountAnalysis</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The result of any analysis: capacity, placement, sensitivity, paths, MSD or tunnel
+counts.</p>
+<h3 id="ngraphbuildgraphresult">ngraph.BuildGraphResult<a class="headerlink" href="#ngraphbuildgraphresult" title="Permanent link">&para;</a></h3>
+<p>The BuildGraph step's result: the network in NetworkX node-link form.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['build_graph']]) = build_graph</li>
+<li><code>add_reverse</code> (bool)</li>
+<li><code>node_count</code> (int)</li>
+<li><code>edge_count</code> (int)</li>
+<li><code>graph</code> (Mapping[str, JSONValue])</li>
+</ul>
+<h3 id="ngraphcapacityanalysis">ngraph.CapacityAnalysis<a class="headerlink" href="#ngraphcapacityanalysis" title="Permanent link">&para;</a></h3>
+<p>The answer of <code>capacity</code>: the question asked and one result per failure case.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['capacity']]) = capacity</li>
+<li><code>prepared</code> (PreparedScenario)</li>
+<li><code>metadata</code> (AnalysisMetadata)</li>
+<li><code>outputs</code> (OutputSelection)</li>
+<li><code>question</code> (Literal['lossless_bound', 'fixed_offer_delivery', 'first_hop_experiment'])</li>
+<li><code>offer_source</code> (Literal['unlimited', 'explicit', 'design', 'first_hop'])</li>
+<li><code>cases</code> (tuple[CaseResult[CapacityRow | SelfPair], ...])</li>
+<li><code>query</code> (CapacityQuery)</li>
+</ul>
+<h3 id="ngraphcapacityquery">ngraph.CapacityQuery<a class="headerlink" href="#ngraphcapacityquery" title="Permanent link">&para;</a></h3>
+<p>A capacity question: how much one model delivers from the source selector to the
+target selector; lossless optimized flow by default.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>source</code> (Selector)</li>
+<li><code>target</code> (Selector)</li>
+<li><code>config</code> (ngc.FlowPolicyConfig) = FlowPolicyConfig(routing=CentralizedTE(source_allocation=SourceAllocation.OPTIMIZED), admission=Admission.LOSSLESS)</li>
+<li><code>mode</code> (Literal['combine', 'pairwise']) = combine</li>
+<li><code>offer</code> (float | None)</li>
+<li><code>design_demand</code> (float | None)</li>
+<li><code>failures</code> (FailureRequest | None)</li>
+<li><code>workers</code> (Workers) = auto</li>
+<li><code>outputs</code> (ngc.OutputOptions)</li>
+<li><code>export_cost_distribution</code> (bool) = False</li>
+<li><code>export_details</code> (bool) = False</li>
+<li><code>declaration</code> (object)</li>
+</ul>
+<h3 id="ngraphcapacityrow">ngraph.CapacityRow<a class="headerlink" href="#ngraphcapacityrow" title="Permanent link">&para;</a></h3>
+<p>One capacity answer between a source and a destination group: its native result
+and optional reports.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>id</code> (str)</li>
+<li><code>endpoints</code> (Endpoints)</li>
+<li><code>result</code> (ngc.PlacementResult)</li>
+<li><code>pool</code> (PoolMetadata | None)</li>
+<li><code>cost_distribution</code> (CostReport | None)</li>
+<li><code>unavailable_outputs</code> (Mapping[Literal['cost_distribution'], CostUnavailableReason])</li>
+</ul>
+<h3 id="ngraphcaseresult">ngraph.CaseResult<a class="headerlink" href="#ngraphcaseresult" title="Permanent link">&para;</a></h3>
+<p>One failure case and its states, by name.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>case</code> (FailureCase)</li>
+<li><code>states</code> (Mapping[StateName, CaseState[RowT]])</li>
+</ul>
+<h3 id="ngraphcasestate">ngraph.CaseState<a class="headerlink" href="#ngraphcasestate" title="Permanent link">&para;</a></h3>
+<p>One state of a case: its rows and totals, or its forwarding failure.</p>
+<p><code>dead_caps</code> lists the dead root groups of a group-scope demand set in the
+converged and repair states; it is None elsewhere.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>rows</code> (tuple[RowT, ...])</li>
+<li><code>totals</code> (PlacementTotals | None)</li>
+<li><code>failure</code> (ForwardingFailure | None)</li>
+<li><code>dead_caps</code> (tuple[DeadCap, ...] | None)</li>
+</ul>
+<h3 id="ngraphcomponent">ngraph.Component<a class="headerlink" href="#ngraphcomponent" title="Permanent link">&para;</a></h3>
+<p>Hardware component such as a chassis, line card, or optic.</p>
+<p>Components can nest children, each with its own capex, power, and count.</p>
+<p>Attributes:
+    name (str): Name of the component (e.g., "SpineChassis" or "400G-LR4").
+    component_type (str): Free-form label (e.g., "chassis", "linecard", "optic").
+    description (str): Free-form human-readable description.
+    capex (float): Monetary capex of a single instance of this component.
+    power_watts (float): Typical power usage (watts) for one instance.
+    power_watts_max (float): Maximum/peak power usage (watts) for one instance.
+    capacity (float): A generic capacity measure (e.g., platform capacity).
+    ports (int): Number of ports if relevant for this component.
+    count (int): How many identical copies of this component are present; a positive
+        integer whose conversion to float is finite.
+    attrs (Dict[str, Any]): Finite JSON metadata, checked and stored
+        read-only at construction.
+    children (Dict[str, Component]): Nested child components (e.g., line cards
+        inside a chassis), keyed by child name; read-only.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>component_type</code> (str) = generic</li>
+<li><code>description</code> (str)</li>
+<li><code>capex</code> (float) = 0.0</li>
+<li><code>power_watts</code> (float) = 0.0</li>
+<li><code>power_watts_max</code> (float) = 0.0</li>
+<li><code>capacity</code> (float) = 0.0</li>
+<li><code>ports</code> (int) = 0</li>
+<li><code>count</code> (int) = 1</li>
+<li><code>attrs</code> (Dict[str, Any]) = {}</li>
+<li><code>children</code> (Dict[str, Component]) = {}</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>as_dict(self, include_children: 'bool' = True) -&gt; 'Dict[str, Any]'</code> - Returns a dictionary containing all properties of this component.</li>
+<li><code>total_capacity(self) -&gt; 'float'</code> - Computes capacity for this component and all descendants.</li>
+<li><code>total_capex(self) -&gt; 'float'</code> - Return capex of this component and all descendants, times <code>count</code>.</li>
+<li><code>total_power(self) -&gt; 'float'</code> - Computes <em>typical</em> power for this component and all descendants.</li>
+<li><code>total_power_max(self) -&gt; 'float'</code> - Computes <em>peak</em> power for this component and all descendants.</li>
+</ul>
+<h3 id="ngraphcomponentslibrary">ngraph.ComponentsLibrary<a class="headerlink" href="#ngraphcomponentslibrary" title="Permanent link">&para;</a></h3>
+<p>Named Component templates for capex, power, and capacity lookups.</p>
+<p>Each entry is a top-level template and may have nested children. The
+<code>components</code> dict stays editable; <code>prepare</code> keeps a read-only view.</p>
+<p>Example (YAML-like):
+    components:
+      BigSwitch:
+        component_type: chassis
+        capex: 20000
+        power_watts: 1750
+        capacity: 25600
+        children:
+          PIM16Q-16x200G:
+            component_type: linecard
+            capex: 1000
+            power_watts: 10
+            ports: 16
+            count: 8
+      200G-FR4:
+        component_type: optic
+        capex: 2000
+        power_watts: 6
+        power_watts_max: 6.5</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>components</code> (Dict[str, Component]) = {}</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>clone(self) -&gt; 'ComponentsLibrary'</code> - Creates an independent copy of this ComponentsLibrary.</li>
+<li><code>from_dict(data: 'Dict[str, Any]') -&gt; 'ComponentsLibrary'</code> - Constructs a ComponentsLibrary from raw component definitions.</li>
+<li><code>from_yaml(yaml_str: 'str') -&gt; 'ComponentsLibrary'</code> - Constructs a ComponentsLibrary from a YAML string.</li>
+<li><code>get(self, name: 'str') -&gt; 'Optional[Component]'</code> - Retrieves a Component by its name from the library.</li>
+<li><code>merge(self, other: 'ComponentsLibrary', override: 'bool' = True) -&gt; 'ComponentsLibrary'</code> - Merges another ComponentsLibrary into this one.</li>
+<li><code>snapshot(self) -&gt; 'ComponentsLibrary'</code> - Return a read-only view sharing this library's immutable components.</li>
+</ul>
+<h3 id="ngraphcondition">ngraph.Condition<a class="headerlink" href="#ngraphcondition" title="Permanent link">&para;</a></h3>
+<p>A single attribute condition for filtering.</p>
+<p>Supports dot-notation for nested attribute access (e.g., "hardware.vendor"
+resolves to attrs["hardware"]["vendor"]).</p>
+<p>Attributes:
+    attr: Attribute name to match (supports dot-notation for nested attrs).
+    op: Comparison operator.
+    value: Right-hand operand (unused for exists/not_exists): finite JSON
+        data, stored read-only with accepted scalar subclasses normalized.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>attr</code> (str)</li>
+<li><code>op</code> (ConditionOp)</li>
+<li><code>value</code> (Any)</li>
+</ul>
+<h3 id="ngraphcontrollergroup">ngraph.ControllerGroup<a class="headerlink" href="#ngraphcontrollergroup" title="Permanent link">&para;</a></h3>
+<p>A root group of one router: its share is a fixed cap, normalized once.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>children</code> (tuple[GroupChild, ...])</li>
+<li><code>share</code> (Fraction)</li>
+</ul>
+<h3 id="ngraphcostpowerresult">ngraph.CostPowerResult<a class="headerlink" href="#ngraphcostpowerresult" title="Permanent link">&para;</a></h3>
+<p>The CostPower step's result: hardware rows per aggregation level.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['cost_power']]) = cost_power</li>
+<li><code>include_disabled</code> (bool)</li>
+<li><code>aggregation_level</code> (int)</li>
+<li><code>levels</code> (Mapping[int, tuple[HardwareRow, ...]])</li>
+</ul>
+<h3 id="ngraphcostreport">ngraph.CostReport<a class="headerlink" href="#ngraphcostreport" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">CostReport</span> <span class="o">=</span> <span class="n">DeliveredByPathCost</span> <span class="o">|</span> <span class="n">MarginalCurve</span>
+</span></code></pre></div>
+<p>A cost report: delivered units per path cost, or a marginal cost curve.</p>
+<h3 id="ngraphcostunavailablereason">ngraph.CostUnavailableReason<a class="headerlink" href="#ngraphcostunavailablereason" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">CostUnavailableReason</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="s2">"mixed_cost_dag"</span><span class="p">,</span> <span class="s2">"unsupported_model"</span><span class="p">,</span> <span class="s2">"controller_table"</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>Why a requested cost report is unavailable: <code>controller_table</code> (the demand forwards
+on a WCMP controller table, which does not attribute delivery to path costs),
+<code>mixed_cost_dag</code> (a pinned DAG whose routes differ in cost) or
+<code>unsupported_model</code> (the model's delivery cannot be attributed to path costs).</p>
+<h3 id="ngraphdeliveredbypathcost">ngraph.DeliveredByPathCost<a class="headerlink" href="#ngraphdeliveredbypathcost" title="Permanent link">&para;</a></h3>
+<p>A cost report: delivered units per path cost, cheapest first.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['delivered_by_path_cost']]) = delivered_by_path_cost</li>
+<li><code>cost_domain</code> (Literal['physical_network', 'analysis_graph'])</li>
+<li><code>bins</code> (tuple[PathCostBin, ...])</li>
+</ul>
+<h3 id="ngraphdemandset">ngraph.DemandSet<a class="headerlink" href="#ngraphdemandset" title="Permanent link">&para;</a></h3>
+<p>A named list of demand declarations.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>demands</code> (tuple[DemandSpec, ...])</li>
+</ul>
+<h3 id="ngraphdemandspec">ngraph.DemandSpec<a class="headerlink" href="#ngraphdemandspec" title="Permanent link">&para;</a></h3>
+<p>One declared demand: endpoints, physical volume, model, identity, priority and
+expansion modes.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>source</code> (Selector)</li>
+<li><code>target</code> (Selector)</li>
+<li><code>volume</code> (PhysicalAmount)</li>
+<li><code>policy</code> (DemandPolicy) = SHORTEST_PATHS_ECMP</li>
+<li><code>id</code> (str | None)</li>
+<li><code>priority</code> (int) = 0</li>
+<li><code>mode</code> (Literal['combine', 'pairwise']) = combine</li>
+<li><code>group_mode</code> (Literal['flatten', 'per_group', 'group_pairwise']) = flatten</li>
+<li><code>attrs</code> (Mapping[str, JSONValue]) = {}</li>
+<li><code>yaml_label</code> (str | None)</li>
+<li><code>declaration_ordinal</code> (int | None)</li>
+<li><code>expand_leaf_index</code> (int | None)</li>
+</ul>
+<h3 id="ngraphdirectedlink">ngraph.DirectedLink<a class="headerlink" href="#ngraphdirectedlink" title="Permanent link">&para;</a></h3>
+<p>One direction of a physical link: forward (source to target) or reverse.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>link</code> (str)</li>
+<li><code>direction</code> (Literal['forward', 'reverse'])</li>
+</ul>
+<h3 id="ngraphdiscardedshare">ngraph.DiscardedShare<a class="headerlink" href="#ngraphdiscardedshare" title="Permanent link">&para;</a></h3>
+<p>One expansion leaf whose units were discarded, and why.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>label</code> (str)</li>
+<li><code>units</code> (int)</li>
+<li><code>reason</code> (Literal['self_pair', 'filtered', 'empty_selection'])</li>
+</ul>
+<h3 id="ngraphdomainresult">ngraph.DomainResult<a class="headerlink" href="#ngraphdomainresult" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">DomainResult</span> <span class="o">=</span> <span class="n">BuildGraphResult</span> <span class="o">|</span> <span class="n">NetworkStatsResult</span> <span class="o">|</span> <span class="n">CostPowerResult</span>
+</span></code></pre></div>
+<p>The result of a built-in domain step: BuildGraph, NetworkStats or CostPower.</p>
+<h3 id="ngraphedgeweight">ngraph.EdgeWeight<a class="headerlink" href="#ngraphedgeweight" title="Permanent link">&para;</a></h3>
+<p>One explicit integer weight on a directed link.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>edge</code> (DirectedLink)</li>
+<li><code>value</code> (int)</li>
+</ul>
+<h3 id="ngraphendpoints">ngraph.Endpoints<a class="headerlink" href="#ngraphendpoints" title="Permanent link">&para;</a></h3>
+<p>The source and destination node names of a row, each sorted.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>sources</code> (tuple[str, ...])</li>
+<li><code>destinations</code> (tuple[str, ...])</li>
+</ul>
+<h3 id="ngraphexactalpha">ngraph.ExactAlpha<a class="headerlink" href="#ngraphexactalpha" title="Permanent link">&para;</a></h3>
+<p>An alpha (the demand multiplier) as a binary64 value and its exact fraction.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>value</code> (float)</li>
+<li><code>numerator</code> (int)</li>
+<li><code>denominator</code> (int)</li>
+</ul>
+<h3 id="ngraphexpansionaccounting">ngraph.ExpansionAccounting<a class="headerlink" href="#ngraphexpansionaccounting" title="Permanent link">&para;</a></h3>
+<p>How a declared demand's units were divided: declared, resolved and discarded
+units, with each discarded share.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>base_id</code> (str)</li>
+<li><code>declared_units</code> (int)</li>
+<li><code>resolved_units</code> (int)</li>
+<li><code>discarded_units</code> (int)</li>
+<li><code>discards</code> (tuple[DiscardedShare, ...])</li>
+</ul>
+<h3 id="ngraphexpansionleaf">ngraph.ExpansionLeaf<a class="headerlink" href="#ngraphexpansionleaf" title="Permanent link">&para;</a></h3>
+<p>A leaf of a demand's expansion tree: one resolved demand, or a discarded share
+with its reason.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>id</code> (str)</li>
+<li><code>order</code> (int)</li>
+<li><code>endpoints</code> (Endpoints | None)</li>
+<li><code>discard_reason</code> (Literal['self_pair', 'filtered', 'empty_selection'] | None)</li>
+</ul>
+<h3 id="ngraphexpansionparent">ngraph.ExpansionParent<a class="headerlink" href="#ngraphexpansionparent" title="Permanent link">&para;</a></h3>
+<p>One declared demand: its declaration and its expansion tree.</p>
+<p><code>config</code> is the native configuration of its first resolved leaf (None
+when every leaf of a named pinned declaration was discarded).</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>source</code> (Selector)</li>
+<li><code>target</code> (Selector)</li>
+<li><code>priority</code> (int)</li>
+<li><code>policy</code> (DemandPolicy)</li>
+<li><code>config</code> (ngc.FlowPolicyConfig | None)</li>
+<li><code>base_id</code> (str)</li>
+<li><code>declaration_ordinal</code> (int)</li>
+<li><code>expand_leaf_index</code> (int | None)</li>
+<li><code>physical_volume</code> (float)</li>
+<li><code>mode</code> (Literal['combine', 'pairwise'])</li>
+<li><code>group_mode</code> (Literal['flatten', 'per_group', 'group_pairwise'])</li>
+<li><code>root</code> (ExpansionSplit | ExpansionLeaf)</li>
+</ul>
+<h3 id="ngraphexpansionsplit">ngraph.ExpansionSplit<a class="headerlink" href="#ngraphexpansionsplit" title="Permanent link">&para;</a></h3>
+<p>A node of a demand's expansion tree whose units split over its children.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>label</code> (str)</li>
+<li><code>children</code> (tuple[ExpansionSplit | ExpansionLeaf, ...])</li>
+</ul>
+<h3 id="ngraphexportcontext">ngraph.ExportContext<a class="headerlink" href="#ngraphexportcontext" title="Permanent link">&para;</a></h3>
+<p>What a result encoder receives: the prepared scenario and the run's units report.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>prepared</code> (PreparedScenario)</li>
+<li><code>units_report</code> (UnitsReport)</li>
+</ul>
+<h3 id="ngraphfailurecase">ngraph.FailureCase<a class="headerlink" href="#ngraphfailurecase" title="Permanent link">&para;</a></h3>
+<p>One failure case: the baseline or one distinct failure pattern, how many draws
+produced it, and its eligibility (the engine's mask of what the case can use).</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>id</code> (str)</li>
+<li><code>kind</code> (Literal['baseline', 'failure'])</li>
+<li><code>pattern</code> (FailurePattern)</li>
+<li><code>occurrences</code> (int)</li>
+<li><code>eligibility</code> (ngc.Eligibility)</li>
+<li><code>trace</code> (FailureTrace | None)</li>
+</ul>
+<h3 id="ngraphfailuremode">ngraph.FailureMode<a class="headerlink" href="#ngraphfailuremode" title="Permanent link">&para;</a></h3>
+<p>One weighted alternative of a failure policy: a draw picks one mode by weight,
+then applies its rules.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>weight</code> (float)</li>
+<li><code>rules</code> (Sequence[FailureRule]) = ()</li>
+<li><code>attrs</code> (dict[str, Any]) = {}</li>
+</ul>
+<h3 id="ngraphfailurepattern">ngraph.FailurePattern<a class="headerlink" href="#ngraphfailurepattern" title="Permanent link">&para;</a></h3>
+<p>The nodes and links one draw fails, each sorted; equal patterns are one case.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>excluded_nodes</code> (tuple[str, ...])</li>
+<li><code>excluded_links</code> (tuple[str, ...])</li>
+</ul>
+<h3 id="ngraphfailurepolicy">ngraph.FailurePolicy<a class="headerlink" href="#ngraphfailurepolicy" title="Permanent link">&para;</a></h3>
+<p>Failure modes drawn by weight; at least one mode has a positive weight.</p>
+<p>"No failures" is no policy, not an empty one.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>attrs</code> (dict[str, Any]) = {}</li>
+<li><code>expand_groups</code> (bool) = False</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>modes</code> (Sequence[FailureMode])</li>
+</ul>
+<h3 id="ngraphfailurerequest">ngraph.FailureRequest<a class="headerlink" href="#ngraphfailurerequest" title="Permanent link">&para;</a></h3>
+<p>One failure sampling question.</p>
+<p><code>policy_name</code> names a scenario's policy in the recorded question (an
+unnamed policy is recorded inline); <code>seed_source</code> records where a given
+<code>seed</code> came from.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>policy</code> (FailurePolicy | None)</li>
+<li><code>iterations</code> (int) = 1</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>failure_trace</code> (bool) = False</li>
+<li><code>policy_name</code> (str | None)</li>
+<li><code>seed_source</code> (Literal['query', 'step', 'scenario']) = query</li>
+</ul>
+<h3 id="ngraphfailurerule">ngraph.FailureRule<a class="headerlink" href="#ngraphfailurerule" title="Permanent link">&para;</a></h3>
+<p>One failure rule: the entities it matches, and how it fails them: all, <code>count</code>
+chosen at random, or each with <code>probability</code>.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>scope</code> (EntityScope)</li>
+<li><code>conditions</code> (Sequence[Condition]) = ()</li>
+<li><code>logic</code> (Literal['and', 'or']) = or</li>
+<li><code>mode</code> (Literal['random', 'choice', 'all']) = all</li>
+<li><code>probability</code> (float) = 1.0</li>
+<li><code>count</code> (int) = 1</li>
+<li><code>weight_by</code> (str | None)</li>
+<li><code>path</code> (str | None)</li>
+</ul>
+<h3 id="ngraphfailureselection">ngraph.FailureSelection<a class="headerlink" href="#ngraphfailureselection" title="Permanent link">&para;</a></h3>
+<p>What one failure rule selected in a draw.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>rule_index</code> (int)</li>
+<li><code>scope</code> (Literal['node', 'link', 'risk_group'])</li>
+<li><code>selected</code> (tuple[str, ...])</li>
+</ul>
+<h3 id="ngraphfailuretrace">ngraph.FailureTrace<a class="headerlink" href="#ngraphfailuretrace" title="Permanent link">&para;</a></h3>
+<p>The first draw that produced a failure pattern: its mode and what each rule
+selected.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>draw_index</code> (int)</li>
+<li><code>mode_index</code> (int | None): None when the policy has no modes</li>
+<li><code>mode_attrs</code> (Mapping[str, JSONValue])</li>
+<li><code>selections</code> (tuple[FailureSelection, ...])</li>
+<li><code>expanded_nodes</code> (tuple[str, ...])</li>
+<li><code>expanded_links</code> (tuple[str, ...])</li>
+</ul>
+<h3 id="ngraphflowpolicypreset">ngraph.FlowPolicyPreset<a class="headerlink" href="#ngraphflowpolicypreset" title="Permanent link">&para;</a></h3>
+<p>Named questions with one immutable native configuration each.</p>
+<p><strong>Members:</strong></p>
+<ul>
+<li><code>SHORTEST_PATHS_ECMP</code> = 'SHORTEST_PATHS_ECMP'</li>
+<li><code>SHORTEST_PATHS_ECMP_LOSSY</code> = 'SHORTEST_PATHS_ECMP_LOSSY'</li>
+<li><code>SHORTEST_PATHS_WCMP</code> = 'SHORTEST_PATHS_WCMP'</li>
+<li><code>SHORTEST_PATHS_MAXFLOW</code> = 'SHORTEST_PATHS_MAXFLOW'</li>
+<li><code>TE_MAXFLOW_UNLIM</code> = 'TE_MAXFLOW_UNLIM'</li>
+<li><code>TE_ECMP_16_LSP</code> = 'TE_ECMP_16_LSP'</li>
+<li><code>TE_ECMP_UP_TO_256_LSP</code> = 'TE_ECMP_UP_TO_256_LSP'</li>
+</ul>
+<h3 id="ngraphforwardinggroup">ngraph.ForwardingGroup<a class="headerlink" href="#ngraphforwardinggroup" title="Permanent link">&para;</a></h3>
+<p>The declared root groups of one router.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>router</code> (str)</li>
+<li><code>groups</code> (tuple[ControllerGroup, ...])</li>
+</ul>
+<h3 id="ngraphgroupchild">ngraph.GroupChild<a class="headerlink" href="#ngraphgroupchild" title="Permanent link">&para;</a></h3>
+<p>A member edge, or a conditional subtree, with its share within its parent.</p>
+<p>Exactly one of <code>edge</code> and <code>children</code> is set, and the share is
+nonnegative, stored as a Fraction; preparation checks the tree against the
+network (edges leaving the router, zero shares, duplicates).</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>share</code> (Fraction)</li>
+<li><code>edge</code> (DirectedLink | None)</li>
+<li><code>children</code> (tuple[GroupChild, ...] | None)</li>
+</ul>
+<h3 id="ngraphhardwarerow">ngraph.HardwareRow<a class="headerlink" href="#ngraphhardwarerow" title="Permanent link">&para;</a></h3>
+<p>Hardware cost and power of one hierarchy path.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>path</code> (str)</li>
+<li><code>platform_capex</code> (float)</li>
+<li><code>platform_power_watts</code> (float)</li>
+<li><code>optics_capex</code> (float)</li>
+<li><code>optics_power_watts</code> (float)</li>
+<li><code>capex_total</code> (float)</li>
+<li><code>power_total_watts</code> (float)</li>
+</ul>
+<h3 id="ngraphinputconstraint">ngraph.InputConstraint<a class="headerlink" href="#ngraphinputconstraint" title="Permanent link">&para;</a></h3>
+<p>The input bound of one positive input v at precision p (q at most 2pv), and
+whether q meets it.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['input']]) = input</li>
+<li><code>label</code> (str)</li>
+<li><code>q_upper_bound</code> (Fraction)</li>
+<li><code>met</code> (bool)</li>
+</ul>
+<h3 id="ngraphsplitcountconstraint">ngraph.SplitCountConstraint<a class="headerlink" href="#ngraphsplitcountconstraint" title="Permanent link">&para;</a></h3>
+<p>The prepared split-count bound, not a certificate for arbitrary answers.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['split_count']]) = split_count</li>
+<li><code>capacity_label</code> (str)</li>
+<li><code>capacity</code> (float)</li>
+<li><code>nodes</code> (int)</li>
+<li><code>directed_links</code> (int)</li>
+<li><code>group</code> (str | None): None when the floor sets the count</li>
+<li><code>demands</code> (int)</li>
+<li><code>tunnels</code> (int)</li>
+<li><code>count</code> (Fraction)</li>
+<li><code>q_upper_bound</code> (Fraction)</li>
+<li><code>met</code> (bool)</li>
+</ul>
+<h3 id="ngraphjsonvalue">ngraph.JSONValue<a class="headerlink" href="#ngraphjsonvalue" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">JSONValue</span> <span class="o">=</span> <span class="kc">None</span> <span class="o">|</span> <span class="nb">bool</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="s2">"JSONValue"</span><span class="p">]</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">"JSONValue"</span><span class="p">]</span>
+</span></code></pre></div>
+<p>JSON data: null, a boolean, a number, a string, or lists and string-keyed mappings
+of these.</p>
+<h3 id="ngraphlink">ngraph.Link<a class="headerlink" href="#ngraphlink" title="Permanent link">&para;</a></h3>
+<p>One physical link between two nodes.</p>
+<p>It carries traffic both ways: the prepared graph gives it a forward edge
+(<code>source</code> -&gt; <code>target</code>) and a reverse edge, each with the link's
+capacity and cost.</p>
+<p>Attributes:
+    source (str): Name of the source node.
+    target (str): Name of the target node.
+    capacity (float): Finite nonnegative link capacity (default 1.0),
+        promoted to binary64 at construction.
+    cost (int): Link cost, an integer from 1 to below 2^62 (default 1); an
+        exactly integral float such as 2.0 is stored as 2.
+    disabled (bool): Whether the link is disabled.
+    risk_groups (AbstractSet[str]): Names of the risk groups this link belongs
+        to, stored as a frozenset.
+    attrs (Dict[str, Any]): Finite JSON metadata (e.g., distance), checked
+        and stored read-only at construction.
+    id (str): Unique identifier. <code>Network.add_link</code> assigns the
+        deterministic form "{source}|{target}|<seq>", where <seq> is a
+        per-(source, target) insertion sequence number, once; links never
+        added to a Network keep a provisional uuid-suffixed id.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>source</code> (str)</li>
+<li><code>target</code> (str)</li>
+<li><code>capacity</code> (float) = 1.0</li>
+<li><code>cost</code> (int) = 1</li>
+<li><code>disabled</code> (bool) = False</li>
+<li><code>risk_groups</code> (AbstractSet[str]) = frozenset()</li>
+<li><code>attrs</code> (Dict[str, Any]) = {}</li>
+<li><code>id</code> (str)</li>
+</ul>
+<h3 id="ngraphmsdanalysis">ngraph.MSDAnalysis<a class="headerlink" href="#ngraphmsdanalysis" title="Permanent link">&para;</a></h3>
+<p>The answer of <code>maximum_supported_demand</code>: the largest tested feasible alpha,
+how the search ended, its proof and every probe.</p>
+<p>The values of <code>search_status</code>, <code>stop_reason</code> and <code>proof</code> are explained
+under <code>MSDAnalysisJSON</code> in the results reference.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['msd']]) = msd</li>
+<li><code>prepared</code> (PreparedScenario)</li>
+<li><code>metadata</code> (AnalysisMetadata)</li>
+<li><code>outputs</code> (OutputSelection)</li>
+<li><code>alpha_feasible</code> (ExactAlpha | None)</li>
+<li><code>best_probe_index</code> (int | None)</li>
+<li><code>monotone_proven</code> (bool)</li>
+<li><code>proof</code> (MSDProof)</li>
+<li><code>upper_certificate</code> (UpperCertificate | None)</li>
+<li><code>search_status</code> (MSDStatus)</li>
+<li><code>stop_reason</code> (MSDStopReason)</li>
+<li><code>history</code> (tuple[MSDProbe, ...])</li>
+<li><code>query</code> (MSDQuery)</li>
+<li><code>best_rows</code> (tuple[PlacementRow, ...] | None)</li>
+<li><code>best_accounting</code> (tuple[ExpansionAccounting, ...] | None)</li>
+<li><code>probe_rows</code> (Mapping[int, tuple[PlacementRow, ...]] | None)</li>
+</ul>
+<h3 id="ngraphmsdprobe">ngraph.MSDProbe<a class="headerlink" href="#ngraphmsdprobe" title="Permanent link">&para;</a></h3>
+<p>One MSD probe: its alpha, outcome and totals.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>index</code> (int)</li>
+<li><code>alpha</code> (ExactAlpha)</li>
+<li><code>outcome</code> (Literal['feasible', 'infeasible', 'below_resolution', 'range'])</li>
+<li><code>totals</code> (PlacementTotals | None): None when the probe was out of range</li>
+<li><code>range_refusal</code> (RangeRefusal | None): None when the probe was in range</li>
+</ul>
+<h3 id="ngraphmsdproof">ngraph.MSDProof<a class="headerlink" href="#ngraphmsdproof" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">MSDProof</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">"fixed_program"</span><span class="p">,</span> <span class="s2">"single_controller"</span><span class="p">,</span> <span class="s2">"nothing_offered"</span><span class="p">,</span> <span class="s2">"unproved"</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>What makes feasibility downward closed in alpha for an MSD question; each value is
+explained under <code>MSDAnalysisJSON</code> in the results reference.</p>
+<h3 id="ngraphmsdquery">ngraph.MSDQuery<a class="headerlink" href="#ngraphmsdquery" title="Permanent link">&para;</a></h3>
+<p>A maximum supported demand question: the search for the largest alpha at which a
+resolved demand set is placed in full.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>demands</code> (ResolvedDemandSet)</li>
+<li><code>alpha_start</code> (float) = 1.0</li>
+<li><code>growth_factor</code> (float) = 2.0</li>
+<li><code>alpha_min</code> (float) = 1e-06</li>
+<li><code>alpha_max</code> (float) = 1000000000.0</li>
+<li><code>alpha_tolerance</code> (float) = 0.01</li>
+<li><code>max_bracket_iters</code> (int) = 32</li>
+<li><code>max_bisect_iters</code> (int) = 32</li>
+<li><code>export_probe_rows</code> (bool) = False</li>
+<li><code>export_details</code> (bool) = False</li>
+</ul>
+<h3 id="ngraphmsdstatus">ngraph.MSDStatus<a class="headerlink" href="#ngraphmsdstatus" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">MSDStatus</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">"feasible"</span><span class="p">,</span> <span class="s2">"none_feasible"</span><span class="p">,</span> <span class="s2">"range"</span><span class="p">,</span> <span class="s2">"stagnation"</span><span class="p">,</span> <span class="s2">"limit"</span><span class="p">,</span> <span class="s2">"trivial"</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>How an MSD search ended; each value is explained under <code>MSDAnalysisJSON</code> in the
+results reference.</p>
+<h3 id="ngraphmsdstopreason">ngraph.MSDStopReason<a class="headerlink" href="#ngraphmsdstopreason" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">MSDStopReason</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="s2">"tolerance"</span><span class="p">,</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s2">"alpha_bound"</span><span class="p">,</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">"bracket_limit"</span><span class="p">,</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="s2">"bisect_limit"</span><span class="p">,</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="s2">"offer_range"</span><span class="p">,</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="s2">"representable_limit"</span><span class="p">,</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="s2">"nothing_offered"</span><span class="p">,</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="s2">"unit_resolution"</span><span class="p">,</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>Why an MSD search stopped; each value is explained under <code>MSDAnalysisJSON</code> in the
+results reference.</p>
+<h3 id="ngraphmarginalcostbin">ngraph.MarginalCostBin<a class="headerlink" href="#ngraphmarginalcostbin" title="Permanent link">&para;</a></h3>
+<p>One piece of a marginal cost curve: its marginal cost and its units.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>marginal_cost</code> (int)</li>
+<li><code>units</code> (int)</li>
+</ul>
+<h3 id="ngraphmarginalcurve">ngraph.MarginalCurve<a class="headerlink" href="#ngraphmarginalcurve" title="Permanent link">&para;</a></h3>
+<p>A cost report: the native marginal cost curve of an optimized flow.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['marginal_curve']]) = marginal_curve</li>
+<li><code>cost_domain</code> (Literal['physical_network', 'analysis_graph'])</li>
+<li><code>bins</code> (tuple[MarginalCostBin, ...])</li>
+</ul>
+<h3 id="ngraphmatchspec">ngraph.MatchSpec<a class="headerlink" href="#ngraphmatchspec" title="Permanent link">&para;</a></h3>
+<p>Attribute conditions combined with "and" or "or" logic.</p>
+<p>Attributes:
+    conditions: Conditions to evaluate, in order.
+    logic: How to combine conditions ("and" = all, "or" = any).</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>conditions</code> (Sequence[Condition]) = ()</li>
+<li><code>logic</code> (Literal['and', 'or']) = or</li>
+</ul>
+<h3 id="ngraphnetwork">ngraph.Network<a class="headerlink" href="#ngraphnetwork" title="Permanent link">&para;</a></h3>
+<p>Scenario-level topology: nodes, links, and risk groups.</p>
+<p>Holds what the scenario declares, disabled nodes and links included.
+Failures are not edits of the network: an analysis takes them as a
+failure request or exclusions.</p>
+<p>The dicts stay editable; their values are immutable records, so an edit
+replaces a record. <code>prepare</code> keeps a read-only view of these dicts, so
+later edits do not reach a prepared scenario.</p>
+<p>Attributes:
+    nodes (Dict[str, Node]): Mapping from node name -&gt; Node object.
+    links (Dict[str, Link]): Mapping from link ID -&gt; Link object.
+    risk_groups (Dict[str, RiskGroup]): Top-level risk groups by name.
+    attrs (Dict[str, Any]): Optional metadata about the network.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>nodes</code> (Dict[str, Node]) = {}</li>
+<li><code>links</code> (Dict[str, Link]) = {}</li>
+<li><code>risk_groups</code> (Dict[str, RiskGroup]) = {}</li>
+<li><code>attrs</code> (Dict[str, Any]) = {}</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>add_link(self, link: 'Link') -&gt; 'None'</code> - Add a link to the network, assigning its deterministic ID.</li>
+<li><code>add_node(self, node: 'Node') -&gt; 'None'</code> - Add a node to the network (keyed by node.name).</li>
+<li><code>disable_all(self) -&gt; 'None'</code> - Mark all nodes and links as disabled.</li>
+<li><code>disable_link(self, link_id: 'str') -&gt; 'None'</code> - Mark a link as disabled.</li>
+<li><code>disable_node(self, node_name: 'str') -&gt; 'None'</code> - Mark a node as disabled.</li>
+<li><code>disable_risk_group(self, name: 'str', recursive: 'bool' = True) -&gt; 'None'</code> - Disable every node/link that has 'name' in its risk_groups.</li>
+<li><code>enable_all(self) -&gt; 'None'</code> - Mark all nodes and links as enabled.</li>
+<li><code>enable_link(self, link_id: 'str') -&gt; 'None'</code> - Mark a link as enabled.</li>
+<li><code>enable_node(self, node_name: 'str') -&gt; 'None'</code> - Mark a node as enabled.</li>
+<li><code>enable_risk_group(self, name: 'str', recursive: 'bool' = True) -&gt; 'None'</code> - Enable every node/link that has 'name' in its risk_groups.</li>
+<li><code>find_links(self, source_regex: 'Optional[str]' = None, target_regex: 'Optional[str]' = None, any_direction: 'bool' = False) -&gt; 'List[Link]'</code> - Search for links by regex on source and/or target node names.</li>
+<li><code>get_links_between(self, source: 'str', target: 'str') -&gt; 'List[str]'</code> - Retrieve the IDs of all direct links from source to target.</li>
+<li><code>replace_link(self, link_id: 'str', **changes: 'Any') -&gt; 'Link'</code> - Replace a link by a copy with the given field changes; its id stays.</li>
+<li><code>replace_node(self, name: 'str', **changes: 'Any') -&gt; 'Node'</code> - Replace a node by a copy with the given field changes.</li>
+<li><code>select_node_groups_by_path(self, path: 'str') -&gt; 'Dict[str, List[Node]]'</code> - Select and group nodes by regex pattern on node name.</li>
+<li><code>snapshot(self) -&gt; 'Network'</code> - Return a read-only view sharing this network's immutable records.</li>
+</ul>
+<h3 id="ngraphnetworkexplorer">ngraph.NetworkExplorer<a class="headerlink" href="#ngraphnetworkexplorer" title="Permanent link">&para;</a></h3>
+<p>Hierarchical view of a Network with per-subtree statistics.</p>
+<p>Statistics are computed in two modes: 'all' (disabled nodes and links
+included) and 'active' (enabled only).</p>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None, strict_validation: 'bool' = True) -&gt; 'NetworkExplorer'</code> - Build the hierarchy tree and compute 'all' and 'active' statistics.</li>
+<li><code>get_bom(self, include_disabled: 'bool' = True) -&gt; 'Dict[str, float]'</code> - Return aggregated hardware BOM for the whole network.</li>
+<li><code>get_link_issues(self) -&gt; 'List[LinkCapacityIssue]'</code> - Return link capacity violations recorded in non-strict mode.</li>
+<li><code>get_node_utilization(self) -&gt; 'List[NodeUtilization]'</code> - Return hardware utilization per node based on active topology.</li>
+<li><code>print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True, max_external_lines: 'Optional[int]' = None, line_prefix: 'str' = '') -&gt; 'None'</code> - Print the hierarchy from 'node' down (default: root).</li>
+</ul>
+<h3 id="ngraphnetworkstatsresult">ngraph.NetworkStatsResult<a class="headerlink" href="#ngraphnetworkstatsresult" title="Permanent link">&para;</a></h3>
+<p>The NetworkStats step's result: counts, and capacity, cost and degree statistics;
+capacities are physical amounts.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['network_stats']]) = network_stats</li>
+<li><code>node_count</code> (int)</li>
+<li><code>link_count</code> (int)</li>
+<li><code>total_capacity</code> (float)</li>
+<li><code>mean_capacity</code> (float)</li>
+<li><code>median_capacity</code> (float)</li>
+<li><code>min_capacity</code> (float)</li>
+<li><code>max_capacity</code> (float)</li>
+<li><code>mean_cost</code> (float)</li>
+<li><code>median_cost</code> (float)</li>
+<li><code>min_cost</code> (int)</li>
+<li><code>max_cost</code> (int)</li>
+<li><code>mean_degree</code> (float)</li>
+<li><code>median_degree</code> (float)</li>
+<li><code>min_degree</code> (float)</li>
+<li><code>max_degree</code> (float)</li>
+</ul>
+<h3 id="ngraphnode">ngraph.Node<a class="headerlink" href="#ngraphnode" title="Permanent link">&para;</a></h3>
+<p>Network node, keyed by its unique name in <code>Network.nodes</code>.</p>
+<p>Attributes:
+    name (str): Unique identifier for the node.
+    disabled (bool): Whether the node is disabled in the scenario configuration.
+    risk_groups (AbstractSet[str]): Names of the risk groups this node belongs
+        to, stored as a frozenset.
+    attrs (Dict[str, Any]): Finite JSON metadata (e.g., coordinates, region),
+        checked and stored read-only at construction.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>disabled</code> (bool) = False</li>
+<li><code>risk_groups</code> (AbstractSet[str]) = frozenset()</li>
+<li><code>attrs</code> (Dict[str, Any]) = {}</li>
+</ul>
+<h3 id="ngraphoutputselection">ngraph.OutputSelection<a class="headerlink" href="#ngraphoutputselection" title="Permanent link">&para;</a></h3>
+<p>The optional outputs an analysis was asked for: native flags, cost reports and
+details.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>native</code> (ngc.OutputOptions)</li>
+<li><code>cost_distribution</code> (bool)</li>
+<li><code>details</code> (bool) = False</li>
+</ul>
+<h3 id="ngraphpathanalysis">ngraph.PathAnalysis<a class="headerlink" href="#ngraphpathanalysis" title="Permanent link">&para;</a></h3>
+<p>The answer of <code>paths</code>: one row per endpoint pair.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['paths']]) = paths</li>
+<li><code>prepared</code> (PreparedScenario)</li>
+<li><code>metadata</code> (AnalysisMetadata)</li>
+<li><code>algorithm</code> (Literal['spf', 'ksp'])</li>
+<li><code>mode</code> (Literal['combine', 'pairwise'])</li>
+<li><code>costs_only</code> (bool)</li>
+<li><code>rows</code> (tuple[PathRow, ...])</li>
+<li><code>query</code> (PathQuery)</li>
+</ul>
+<h3 id="ngraphpathcostbin">ngraph.PathCostBin<a class="headerlink" href="#ngraphpathcostbin" title="Permanent link">&para;</a></h3>
+<p>Delivered units at one path cost, in a cost report.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>cost</code> (int)</li>
+<li><code>physical_path_cost</code> (int)</li>
+<li><code>delivered_units</code> (int)</li>
+</ul>
+<h3 id="ngraphpathquery">ngraph.PathQuery<a class="headerlink" href="#ngraphpathquery" title="Permanent link">&para;</a></h3>
+<p>A path question: shortest or k shortest paths between two selectors.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>source</code> (Selector)</li>
+<li><code>target</code> (Selector)</li>
+<li><code>mode</code> (Literal['combine', 'pairwise']) = combine</li>
+<li><code>options</code> (ngc.SpfOptions | ngc.KspOptions)</li>
+<li><code>costs_only</code> (bool) = False</li>
+<li><code>max_paths</code> (int | None)</li>
+<li><code>split_parallel_edges</code> (bool | None)</li>
+</ul>
+<h3 id="ngraphpathrow">ngraph.PathRow<a class="headerlink" href="#ngraphpathrow" title="Permanent link">&para;</a></h3>
+<p>The paths between one source and destination group: their cost and native paths.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>id</code> (str)</li>
+<li><code>endpoints</code> (Endpoints)</li>
+<li><code>kind</code> (Literal['paths', 'self'])</li>
+<li><code>cost</code> (int | None)</li>
+<li><code>paths</code> (tuple[ngc.Path, ...] | None)</li>
+</ul>
+<h3 id="ngraphphysicalamount">ngraph.PhysicalAmount<a class="headerlink" href="#ngraphphysicalamount" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">PhysicalAmount</span> <span class="o">=</span> <span class="nb">float</span>
+</span></code></pre></div>
+<p>A physical amount, such as a capacity or a volume, in whatever unit the scenario
+uses (for example Gbit/s), never in units of <code>q</code>.</p>
+<h3 id="ngraphpinnedroutes">ngraph.PinnedRoutes<a class="headerlink" href="#ngraphpinnedroutes" title="Permanent link">&para;</a></h3>
+<p>A pinned model over named routes, in order: its admission and, for a DAG, its
+allocation and weights.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>routes</code> (tuple[str, ...])</li>
+<li><code>admission</code> (ngc.Admission) = Admission.LOSSLESS</li>
+<li><code>allocation</code> (ngc.RouteAllocation | None)</li>
+<li><code>weight_basis</code> (ngc.WeightBasis | None)</li>
+<li><code>edge_weights</code> (str | None)</li>
+</ul>
+<h3 id="ngraphplacementanalysis">ngraph.PlacementAnalysis<a class="headerlink" href="#ngraphplacementanalysis" title="Permanent link">&para;</a></h3>
+<p>The answer of <code>place</code>: alpha, one result per failure case and the expansion
+accounting.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['placement']]) = placement</li>
+<li><code>prepared</code> (PreparedScenario)</li>
+<li><code>metadata</code> (AnalysisMetadata)</li>
+<li><code>outputs</code> (OutputSelection)</li>
+<li><code>alpha</code> (ExactAlpha)</li>
+<li><code>cases</code> (tuple[CaseResult[PlacementRow], ...])</li>
+<li><code>accounting</code> (tuple[ExpansionAccounting, ...])</li>
+<li><code>query</code> (PlacementQuery)</li>
+</ul>
+<h3 id="ngraphplacementquery">ngraph.PlacementQuery<a class="headerlink" href="#ngraphplacementquery" title="Permanent link">&para;</a></h3>
+<p>A placement question: place a resolved demand set at alpha, with optional
+failures, failure states and interaction.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>demands</code> (ResolvedDemandSet)</li>
+<li><code>alpha</code> (float) = 1.0</li>
+<li><code>failures</code> (FailureRequest | None)</li>
+<li><code>workers</code> (Workers) = auto</li>
+<li><code>outputs</code> (ngc.OutputOptions)</li>
+<li><code>export_cost_distribution</code> (bool) = False</li>
+<li><code>export_details</code> (bool) = False</li>
+<li><code>alpha_from_step</code> (str | None)</li>
+<li><code>states</code> (tuple[StateName, ...]) = ('converged',)</li>
+<li><code>interaction</code> (Literal['ordered', 'simultaneous']) = ordered</li>
+</ul>
+<h3 id="ngraphplacementrow">ngraph.PlacementRow<a class="headerlink" href="#ngraphplacementrow" title="Permanent link">&para;</a></h3>
+<p>One placed demand: its identity, endpoints, reference request, native result and
+optional reports.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>id</code> (str)</li>
+<li><code>base_id</code> (str)</li>
+<li><code>endpoints</code> (Endpoints)</li>
+<li><code>reference_request_units</code> (int)</li>
+<li><code>result</code> (ngc.PlacementResult)</li>
+<li><code>pool</code> (PoolMetadata | None)</li>
+<li><code>cost_distribution</code> (CostReport | None)</li>
+<li><code>unavailable_outputs</code> (Mapping[Literal['cost_distribution'], CostUnavailableReason])</li>
+</ul>
+<h3 id="ngraphplacementtotals">ngraph.PlacementTotals<a class="headerlink" href="#ngraphplacementtotals" title="Permanent link">&para;</a></h3>
+<p>A state's totals in units: the reference request, the delivery, the losses by
+kind, the shortfall, the delivery ratio and whether every row was placed in full.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>reference_request_units</code> (int)</li>
+<li><code>delivered_units</code> (int)</li>
+<li><code>unadmitted_units</code> (int)</li>
+<li><code>source_drop_units</code> (int)</li>
+<li><code>edge_drop_units</code> (int)</li>
+<li><code>reference_shortfall_units</code> (int)</li>
+<li><code>delivery_ratio</code> (Fraction)</li>
+<li><code>feasible</code> (bool)</li>
+</ul>
+<h3 id="ngraphpoolhead">ngraph.PoolHead<a class="headerlink" href="#ngraphpoolhead" title="Permanent link">&para;</a></h3>
+<p>The private head of a TE ingress pool and the physical sources it feeds.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>pool_id</code> (str)</li>
+<li><code>physical_sources</code> (tuple[str, ...])</li>
+</ul>
+<h3 id="ngraphpoolmetadata">ngraph.PoolMetadata<a class="headerlink" href="#ngraphpoolmetadata" title="Permanent link">&para;</a></h3>
+<p>A TE ingress pool; <code>offer_limit_units</code> is its prepared lossy offer budget.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>head</code> (PoolHead)</li>
+<li><code>offer_limit_units</code> (int) = 0</li>
+<li><code>synthetic_ingress_cost</code> (ClassVar[Literal[1]]) = 1</li>
+</ul>
+<h3 id="ngraphpreparationscope">ngraph.PreparationScope<a class="headerlink" href="#ngraphpreparationscope" title="Permanent link">&para;</a></h3>
+<p>What a preparation covered: its workflow steps, and the demand sets bound for the
+workflow and for library callers.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>workflow_steps</code> (tuple[str, ...])</li>
+<li><code>workflow_demand_sets</code> (tuple[str, ...])</li>
+<li><code>library_demand_sets</code> (tuple[str, ...])</li>
+</ul>
+<h3 id="ngraphpreparedscenario">ngraph.PreparedScenario<a class="headerlink" href="#ngraphpreparedscenario" title="Permanent link">&para;</a></h3>
+<p>One graph, unit and demand binding over a read-only view of a scenario.</p>
+<p><code>units_report</code> records the fixed input/count bounds for every analysis.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>scenario</code> (Scenario)</li>
+<li><code>topology</code> (PreparedTopology)</li>
+<li><code>demand_sets</code> (Mapping[str, ResolvedDemandSet])</li>
+<li><code>units_report</code> (UnitsReport)</li>
+</ul>
+<h3 id="ngraphpreparedtopology">ngraph.PreparedTopology<a class="headerlink" href="#ngraphpreparedtopology" title="Permanent link">&para;</a></h3>
+<p>One engine graph with its network labels; per-edge arrays follow <code>edge_refs</code>.</p>
+<p><code>pool_heads</code> maps each finite TE ingress pool to its synthetic head node;
+<code>pool_budgets</code> holds a pool's lossy offer budget in units, when it has one.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>graph</code> (ngc.Graph)</li>
+<li><code>node_names</code> (tuple[str, ...])</li>
+<li><code>node_id_by_name</code> (Mapping[str, int])</li>
+<li><code>edge_refs</code> (tuple[DirectedLink | SyntheticIngress, ...])</li>
+<li><code>edges_by_link</code> (Mapping[str, tuple[int, int]])</li>
+<li><code>disabled</code> (ngc.Eligibility)</li>
+<li><code>q</code> (float)</li>
+<li><code>pool_heads</code> (Mapping[str, int])</li>
+<li><code>pool_budgets</code> (Mapping[str, int])</li>
+</ul>
+<h3 id="ngraphrangeconstraint">ngraph.RangeConstraint<a class="headerlink" href="#ngraphrangeconstraint" title="Permanent link">&para;</a></h3>
+<p>A range limit: a value in units against its exclusive limit 2^62 at the tested q.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (Literal['capacity_sum', 'cost_sum', 'amount'])</li>
+<li><code>label</code> (str)</li>
+<li><code>tested_q</code> (float)</li>
+<li><code>units_value</code> (int)</li>
+<li><code>exclusive_limit</code> (int)</li>
+<li><code>met</code> (bool)</li>
+</ul>
+<h3 id="ngraphrangerefusal">ngraph.RangeRefusal<a class="headerlink" href="#ngraphrangerefusal" title="Permanent link">&para;</a></h3>
+<p>Why an MSD probe was out of range.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>label</code> (str)</li>
+<li><code>reason</code> (Literal['scaled_nonfinite', 'native_units_range'])</li>
+<li><code>message</code> (str)</li>
+<li><code>binary64_hex</code> (str | None): None when the refused amount is not a binary64 value</li>
+</ul>
+<h3 id="ngraphresolveddemand">ngraph.ResolvedDemand<a class="headerlink" href="#ngraphresolveddemand" title="Permanent link">&para;</a></h3>
+<p>One demand bound to the prepared graph: its identity, endpoints, priority, units
+at alpha 1 and native configuration.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>id</code> (str)</li>
+<li><code>base_id</code> (str)</li>
+<li><code>endpoints</code> (Endpoints)</li>
+<li><code>priority</code> (int)</li>
+<li><code>order</code> (int)</li>
+<li><code>nominal_units</code> (int)</li>
+<li><code>config</code> (ngc.FlowPolicyConfig)</li>
+<li><code>pool</code> (PoolMetadata | None)</li>
+<li><code>yaml_label</code> (str | None)</li>
+</ul>
+<h3 id="ngraphresolveddemandset">ngraph.ResolvedDemandSet<a class="headerlink" href="#ngraphresolveddemandset" title="Permanent link">&para;</a></h3>
+<p>Resolved demands; a set the WCMP controller programs also holds its tables.</p>
+<p><code>controller_tables</code> are the internal tables with their destination
+names; <code>controller</code> is their report (None when the controller programs
+nothing).</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>demands</code> (tuple[ResolvedDemand, ...])</li>
+<li><code>accounting</code> (tuple[ExpansionAccounting, ...])</li>
+<li><code>expansion_template</code> (tuple[ExpansionParent, ...])</li>
+<li><code>controller_tables</code> (tuple[tuple[str, DestinationTable], ...]) = ()</li>
+<li><code>controller</code> (tuple[TableReport, ...] | None)</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>controller_table(self, destination: 'str') -&gt; 'DestinationTable'</code> - The internal table toward one destination router.</li>
+</ul>
+<h3 id="ngraphriskgroup">ngraph.RiskGroup<a class="headerlink" href="#ngraphriskgroup" title="Permanent link">&para;</a></h3>
+<p>A named failure domain with optional nested, unregistered descendants.</p>
+<p><code>attrs</code> holds finite JSON metadata, checked and stored read-only at
+construction.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>children</code> (Sequence[RiskGroup]) = ()</li>
+<li><code>disabled</code> (bool) = False</li>
+<li><code>attrs</code> (dict[str, Any]) = {}</li>
+</ul>
+<h3 id="ngraphroutespec">ngraph.RouteSpec<a class="headerlink" href="#ngraphroutespec" title="Permanent link">&para;</a></h3>
+<p>A named route from its head: a node path, an edge path or a named support, with
+an integer weight.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>head</code> (str)</li>
+<li><code>nodes</code> (tuple[str, ...] | None)</li>
+<li><code>edges</code> (tuple[DirectedLink, ...] | None)</li>
+<li><code>support</code> (str | None)</li>
+<li><code>weight</code> (int) = 1</li>
+</ul>
+<h3 id="ngraphroutingdomain">ngraph.RoutingDomain<a class="headerlink" href="#ngraphroutingdomain" title="Permanent link">&para;</a></h3>
+<p>One IGP domain and the BGP-edge routers around it.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>igp_domain</code> (Selector)</li>
+<li><code>bgp_edge</code> (Selector)</li>
+</ul>
+<h3 id="ngraphrunmetadata">ngraph.RunMetadata<a class="headerlink" href="#ngraphrunmetadata" title="Permanent link">&para;</a></h3>
+<p>What produced a run: package versions, the native extension's hash, the Python
+version and the seed.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>schema_version</code> (ClassVar[Literal['1.0']]) = 1.0</li>
+<li><code>netgraph_version</code> (str)</li>
+<li><code>core_version</code> (str)</li>
+<li><code>core_extension_sha256</code> (str)</li>
+<li><code>python_version</code> (str)</li>
+<li><code>seed</code> (int | None): None when the scenario sets no seed</li>
+</ul>
+<h3 id="ngraphrunresult">ngraph.RunResult<a class="headerlink" href="#ngraphrunresult" title="Permanent link">&para;</a></h3>
+<p>One run with the preparation's units report.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>metadata</code> (RunMetadata)</li>
+<li><code>units_report</code> (UnitsReport)</li>
+<li><code>steps</code> (tuple[StepResult, ...])</li>
+<li><code>prepared</code> (PreparedScenario)</li>
+</ul>
+<h3 id="ngraphsamplingmetadata">ngraph.SamplingMetadata<a class="headerlink" href="#ngraphsamplingmetadata" title="Permanent link">&para;</a></h3>
+<p>How failures were drawn: the seed and its source, the number of draws and the
+fixed drawing rules.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>random_rule_algorithm</code> (ClassVar[Literal['per_entity_bernoulli']]) = per_entity_bernoulli</li>
+<li><code>rng</code> (ClassVar[Literal['random.Random']]) = random.Random</li>
+<li><code>python_version</code> (ClassVar[str])</li>
+<li><code>seed</code> (int | None): None when the draws are unseeded</li>
+<li><code>seed_source</code> (Literal['query', 'step', 'scenario', 'policy', 'unseeded'])</li>
+<li><code>draw_seed_rule</code> (ClassVar[Literal['base_plus_draw_index']]) = base_plus_draw_index</li>
+<li><code>entity_order</code> (ClassVar[Literal['sorted_identifier']]) = sorted_identifier</li>
+<li><code>rule_order</code> (ClassVar[Literal['declaration']]) = declaration</li>
+<li><code>iterations</code> (int)</li>
+</ul>
+<h3 id="ngraphscenario">ngraph.Scenario<a class="headerlink" href="#ngraphscenario" title="Permanent link">&para;</a></h3>
+<p>Named domain inputs, fixed at construction.</p>
+<p>The network and the components library keep editable dicts of immutable
+records; <code>prepare</code> takes a read-only view of them, so later edits do not
+reach a prepared scenario. <code>dataclasses.replace</code> builds an edited copy.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>network</code> (Network)</li>
+<li><code>workflow</code> (Sequence[WorkflowStep]) = ()</li>
+<li><code>demand_sets</code> (Mapping[str, DemandSet]) = {}</li>
+<li><code>failure_policies</code> (Mapping[str, FailurePolicy]) = {}</li>
+<li><code>components_library</code> (ComponentsLibrary) = ComponentsLibrary(components={})</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>units</code> (UnitsSettings) = UnitsSettings(resolution='auto', precision=0.001)</li>
+<li><code>routes</code> (Mapping[str, RouteSpec]) = {}</li>
+<li><code>supports</code> (Mapping[str, SupportSpec]) = {}</li>
+<li><code>weights</code> (Mapping[str, WeightSpec]) = {}</li>
+<li><code>forwarding_groups</code> (Mapping[str, ForwardingGroup]) = {}</li>
+<li><code>routing</code> (RoutingDomain | None)</li>
+<li><code>wcmp_controller</code> (WCMPController | None)</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>from_yaml(yaml_str: 'str', default_components: 'ComponentsLibrary | None' = None) -&gt; 'Scenario'</code> - Parse and validate one scenario document; its network and components stay editable.</li>
+</ul>
+<h3 id="ngraphselector">ngraph.Selector<a class="headerlink" href="#ngraphselector" title="Permanent link">&para;</a></h3>
+<p>Node selection by name regex, attribute conditions, and grouping.</p>
+<p>Evaluation order:</p>
+<ol>
+<li>Select nodes matching <code>path</code> regex (default ".*" if omitted)</li>
+<li>Filter by <code>match</code> conditions</li>
+<li>Filter by <code>active_only</code> flag</li>
+<li>Group by <code>group_by</code> attribute (if specified)</li>
+</ol>
+<p>At least one of path, group_by, or match must be specified.</p>
+<p>Attributes:
+    path: Regex pattern on node.name.
+    group_by: Attribute name to group nodes by.
+    match: Attribute-based filtering conditions.
+    active_only: Whether to exclude disabled nodes. None uses context default.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>path</code> (Optional[str])</li>
+<li><code>group_by</code> (Optional[str])</li>
+<li><code>match</code> (Optional[MatchSpec])</li>
+<li><code>active_only</code> (Optional[bool])</li>
+</ul>
+<h3 id="ngraphselfpair">ngraph.SelfPair<a class="headerlink" href="#ngraphselfpair" title="Permanent link">&para;</a></h3>
+<p>A node paired with itself in a capacity question; its capacity is 0.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['self']]) = self</li>
+<li><code>id</code> (str)</li>
+<li><code>node</code> (str)</li>
+<li><code>capacity_units</code> (ClassVar[Literal[0]]) = 0</li>
+</ul>
+<h3 id="ngraphsensitivityanalysis">ngraph.SensitivityAnalysis<a class="headerlink" href="#ngraphsensitivityanalysis" title="Permanent link">&para;</a></h3>
+<p>The answer of <code>edge_sensitivity</code>: the native baseline and the reduction each
+directed edge's removal causes.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['sensitivity']]) = sensitivity</li>
+<li><code>prepared</code> (PreparedScenario)</li>
+<li><code>metadata</code> (AnalysisMetadata)</li>
+<li><code>outputs</code> (OutputSelection)</li>
+<li><code>endpoints</code> (Endpoints)</li>
+<li><code>question</code> (Literal['lossless_bound', 'fixed_offer_delivery'])</li>
+<li><code>offer_source</code> (Literal['unlimited', 'explicit', 'design'])</li>
+<li><code>result</code> (ngc.SensitivityResult)</li>
+<li><code>query</code> (SensitivityQuery)</li>
+</ul>
+<h3 id="ngraphsensitivityquery">ngraph.SensitivityQuery<a class="headerlink" href="#ngraphsensitivityquery" title="Permanent link">&para;</a></h3>
+<p>An edge sensitivity question: how much each directed edge's removal reduces
+delivery.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>source</code> (Selector)</li>
+<li><code>target</code> (Selector)</li>
+<li><code>config</code> (ngc.FlowPolicyConfig)</li>
+<li><code>offer</code> (float | None)</li>
+<li><code>design_demand</code> (float | None)</li>
+<li><code>eligibility</code> (ngc.Eligibility | None)</li>
+<li><code>workers</code> (Workers) = auto</li>
+<li><code>outputs</code> (ngc.OutputOptions)</li>
+<li><code>export_details</code> (bool) = False</li>
+</ul>
+<h3 id="ngraphstepcontext">ngraph.StepContext<a class="headerlink" href="#ngraphstepcontext" title="Permanent link">&para;</a></h3>
+<p>What a custom step's <code>run</code> receives: the prepared scenario, earlier steps'
+results, its name, order and seed.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>prepared</code> (PreparedScenario)</li>
+<li><code>prior_results</code> (Mapping[str, StepResult])</li>
+<li><code>step_name</code> (str)</li>
+<li><code>execution_order</code> (int)</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>seed_source</code> (Literal['explicit-step', 'scenario-derived', 'none'])</li>
+</ul>
+<h3 id="ngraphstepoutput">ngraph.StepOutput<a class="headerlink" href="#ngraphstepoutput" title="Permanent link">&para;</a></h3>
+<p>What a custom step's <code>run</code> returns: its question and its result.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>question</code> (StepQuestion)</li>
+<li><code>result</code> (object)</li>
+</ul>
+<h3 id="ngraphstepquestion">ngraph.StepQuestion<a class="headerlink" href="#ngraphstepquestion" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">StepQuestion</span> <span class="o">=</span> <span class="p">(</span><span class="n">CapacityQuery</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>        <span class="o">|</span> <span class="n">PlacementQuery</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>        <span class="o">|</span> <span class="n">SensitivityQuery</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>        <span class="o">|</span> <span class="n">PathQuery</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>        <span class="o">|</span> <span class="n">MSDQuery</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>        <span class="o">|</span> <span class="n">TunnelCountQuery</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>        <span class="o">|</span> <span class="n">BuildGraph</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>        <span class="o">|</span> <span class="n">NetworkStats</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>        <span class="o">|</span> <span class="n">CostPower</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>        <span class="o">|</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">JSONValue</span><span class="p">])</span>
+</span></code></pre></div>
+<p>A step's recorded question: an analysis's own query, a built-in domain step's
+configuration, or a custom step's finite JSON parameters.</p>
+<h3 id="ngraphstepresult">ngraph.StepResult<a class="headerlink" href="#ngraphstepresult" title="Permanent link">&para;</a></h3>
+<p>One workflow step's published result: its name, type, order, seeds, question and
+result.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>step_type</code> (str)</li>
+<li><code>execution_order</code> (int)</li>
+<li><code>scenario_seed</code> (int | None)</li>
+<li><code>step_seed</code> (int | None)</li>
+<li><code>seed_source</code> (Literal['explicit-step', 'scenario-derived', 'none'])</li>
+<li><code>result</code> (object)</li>
+<li><code>question</code> (StepQuestion)</li>
+</ul>
+<h3 id="ngraphsupportspec">ngraph.SupportSpec<a class="headerlink" href="#ngraphsupportspec" title="Permanent link">&para;</a></h3>
+<p>A named DAG of directed links that pinned routes can follow (<code>supports</code> in
+YAML).</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>edges</code> (tuple[DirectedLink, ...])</li>
+</ul>
+<h3 id="ngraphsyntheticingress">ngraph.SyntheticIngress<a class="headerlink" href="#ngraphsyntheticingress" title="Permanent link">&para;</a></h3>
+<p>One attachment of a TE ingress pool: the private link from the pool head to one
+physical source.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>pool_id</code> (str)</li>
+<li><code>source</code> (str)</li>
+</ul>
+<h3 id="ngraphtunnelcountanalysis">ngraph.TunnelCountAnalysis<a class="headerlink" href="#ngraphtunnelcountanalysis" title="Permanent link">&para;</a></h3>
+<p>The answer of <code>tunnel_counts</code>: one row per demand and count.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>kind</code> (ClassVar[Literal['tunnel_counts']]) = tunnel_counts</li>
+<li><code>prepared</code> (PreparedScenario)</li>
+<li><code>metadata</code> (AnalysisMetadata)</li>
+<li><code>outputs</code> (OutputSelection)</li>
+<li><code>rows</code> (tuple[TunnelCountRow, ...])</li>
+<li><code>query</code> (TunnelCountQuery)</li>
+</ul>
+<h3 id="ngraphtunnelcountquery">ngraph.TunnelCountQuery<a class="headerlink" href="#ngraphtunnelcountquery" title="Permanent link">&para;</a></h3>
+<p>A tunnel count question: each tunnelled centralized-TE demand at each count, and
+up to a limit, planned for the design and lossy at the offer.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>demands</code> (ResolvedDemandSet)</li>
+<li><code>counts</code> (tuple[int, ...])</li>
+<li><code>design_demand</code> (float)</li>
+<li><code>offer</code> (float)</li>
+<li><code>up_to</code> (int | None)</li>
+<li><code>eligibility</code> (ngc.Eligibility | None)</li>
+<li><code>workers</code> (Workers) = auto</li>
+<li><code>outputs</code> (ngc.OutputOptions)</li>
+<li><code>export_details</code> (bool) = False</li>
+</ul>
+<h3 id="ngraphtunnelcountrow">ngraph.TunnelCountRow<a class="headerlink" href="#ngraphtunnelcountrow" title="Permanent link">&para;</a></h3>
+<p>One demand's evaluation at one tunnel count.</p>
+<p><code>count</code> is the requested count per head, or the limit of an <code>up_to</code>
+row; the chosen count is <code>result.plan.tunnels_per_head</code>. The plan's
+tunnel cost is on the analysis graph: a pool row adds one cost-1 ingress
+hop per tunnel, which <code>physical_tunnel_cost</code> leaves out.
+<code>lossless_at_design_units</code> is min(design, the plan's largest lossless
+offer).</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>id</code> (str)</li>
+<li><code>base_id</code> (str)</li>
+<li><code>endpoints</code> (Endpoints)</li>
+<li><code>count</code> (int)</li>
+<li><code>up_to</code> (bool)</li>
+<li><code>result</code> (ngc.PlacementResult)</li>
+<li><code>pool</code> (PoolMetadata | None)</li>
+<li><code>lossless_at_design_units</code> (int)</li>
+<li><code>physical_tunnel_cost</code> (int)</li>
+</ul>
+<h3 id="ngraphunitsreport">ngraph.UnitsReport<a class="headerlink" href="#ngraphunitsreport" title="Permanent link">&para;</a></h3>
+<p>The prepared unit, its input/count bounds and augmented graph range sums.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>q</code> (float)</li>
+<li><code>exponent</code> (int)</li>
+<li><code>mode</code> (Literal['auto', 'manual'])</li>
+<li><code>precision</code> (float)</li>
+<li><code>target_met</code> (bool)</li>
+<li><code>input_convention</code> (ClassVar[Literal['promoted_binary64_half_up']]) = promoted_binary64_half_up</li>
+<li><code>display_convention</code> (ClassVar[Literal['units_authoritative_binary64_display']]) = units_authoritative_binary64_display</li>
+<li><code>scope</code> (PreparationScope)</li>
+<li><code>limited_by</code> (Literal['input', 'split_count', 'range', 'resolution_floor', 'declared', 'unbounded'])</li>
+<li><code>achieved_precision</code> (Fraction | None): None when there is no positive input or capacity</li>
+<li><code>input_bound</code> (InputConstraint | None): None when there is no positive prepared bandwidth input</li>
+<li><code>split_bound</code> (SplitCountConstraint | None): None when there is no positive link capacity</li>
+<li><code>range_limit</code> (RangeConstraint | None): None when limited_by is not range</li>
+<li><code>augmented_capacity_sum_units</code> (int)</li>
+<li><code>augmented_cost_sum</code> (int)</li>
+<li><code>weight_approximations</code> (tuple[WeightApproximation, ...]) = ()</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>with_approximations(self, entries: 'tuple[WeightApproximation, ...]') -&gt; 'UnitsReport'</code> - This report with the controller's weight approximations, each once.</li>
+</ul>
+<h3 id="ngraphunitssettings">ngraph.UnitsSettings<a class="headerlink" href="#ngraphunitssettings" title="Permanent link">&para;</a></h3>
+<p>The bandwidth unit <code>q</code> (<code>resolution</code>: "auto" or a power of two) and the
+relative precision target.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>resolution</code> (float | Literal['auto']) = auto</li>
+<li><code>precision</code> (float) = 0.001</li>
+</ul>
+<h3 id="ngraphuppercertificate">ngraph.UpperCertificate<a class="headerlink" href="#ngraphuppercertificate" title="Permanent link">&para;</a></h3>
+<p>A proved bracket around the largest feasible alpha: a feasible probe and the
+smallest infeasible probe above it.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>proof</code> (Literal['fixed_program', 'single_controller'])</li>
+<li><code>lower</code> (ExactAlpha)</li>
+<li><code>upper</code> (ExactAlpha)</li>
+<li><code>lower_probe_index</code> (int)</li>
+<li><code>upper_probe_index</code> (int)</li>
+</ul>
+<h3 id="ngraphwcmpcontroller">ngraph.WCMPController<a class="headerlink" href="#ngraphwcmpcontroller" title="Permanent link">&para;</a></h3>
+<p>Which routers the controller programs for SHORTEST_PATHS_WCMP demands.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>scope</code> (Literal['next_hop', 'group', 'all_routers']) = next_hop</li>
+</ul>
+<h3 id="ngraphweightspec">ngraph.WeightSpec<a class="headerlink" href="#ngraphweightspec" title="Permanent link">&para;</a></h3>
+<p>A named vector of explicit edge weights (<code>weights</code> in YAML); unlisted edges
+weigh 0.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>entries</code> (tuple[EdgeWeight, ...])</li>
+</ul>
+<h3 id="ngraphworkers">ngraph.Workers<a class="headerlink" href="#ngraphworkers" title="Permanent link">&para;</a></h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">Workers</span> <span class="o">=</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">]</span>
+</span></code></pre></div>
+<p>A number of worker threads: a positive integer, or <code>"auto"</code> for the CPU count.</p>
+<h3 id="ngraphworkflowstep">ngraph.WorkflowStep<a class="headerlink" href="#ngraphworkflowstep" title="Permanent link">&para;</a></h3>
+<p>Also importable as <code>ngraph.workflow.WorkflowStep</code>.</p>
+<p>Base of every workflow step.</p>
+<p>Built-in steps are immutable once constructed (<code>dataclasses.replace</code>
+makes an edited copy). A custom step's own fields stay its own; <code>prepare</code>
+records its name and seed, so later edits of those do not reach a
+prepared scenario.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>yaml_label</code> (str | None)</li>
+<li><code>derived_seed</code> (int | None)</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>execute(self, context: 'StepContext') -&gt; 'StepResult'</code> - Run the step once and publish its question and result as one immutable StepResult.</li>
+<li><code>needs(self) -&gt; 'StepNeeds | None'</code> - What preparation must bind for this step; None asks for nothing.</li>
+<li><code>run(self, context: 'StepContext') -&gt; 'StepOutput'</code> - Return this step's typed question and result without publishing state.</li>
+<li><code>yaml_arguments(arguments: 'dict', name: 'str') -&gt; 'dict'</code> - Turn this step type's YAML keys into constructor arguments.</li>
+</ul>
+<h3 id="ngraphversion">ngraph.<strong>version</strong><a class="headerlink" href="#ngraphversion" title="Permanent link">&para;</a></h3>
+<p>The installed package version, a string.</p>
+<h3 id="ngraphcapacity">ngraph.capacity<a class="headerlink" href="#ngraphcapacity" title="Permanent link">&para;</a></h3>
+<p><code>capacity(prepared: 'PreparedScenario', query: 'CapacityQuery') -&gt; 'CapacityAnalysis'</code></p>
+<p>Answer a capacity question on a prepared scenario, in each failure case.</p>
+<h3 id="ngraphedge_sensitivity">ngraph.edge_sensitivity<a class="headerlink" href="#ngraphedge_sensitivity" title="Permanent link">&para;</a></h3>
+<p><code>edge_sensitivity(prepared: 'PreparedScenario', query: 'SensitivityQuery') -&gt; 'SensitivityAnalysis'</code></p>
+<p>Measure how much each directed edge's removal reduces delivery.</p>
+<h3 id="ngraphfailure_cases">ngraph.failure_cases<a class="headerlink" href="#ngraphfailure_cases" title="Permanent link">&para;</a></h3>
+<p><code>failure_cases(prepared: 'PreparedScenario', request: 'FailureRequest | None') -&gt; 'tuple[FailureCase, ...]'</code></p>
+<p>The baseline, then each distinct drawn pattern with its draw count.</p>
+<h3 id="ngraphmaximum_supported_demand">ngraph.maximum_supported_demand<a class="headerlink" href="#ngraphmaximum_supported_demand" title="Permanent link">&para;</a></h3>
+<p><code>maximum_supported_demand(prepared: 'PreparedScenario', query: 'MSDQuery') -&gt; 'MSDAnalysis'</code></p>
+<p>Search for the largest alpha at which a resolved demand set is placed in full.</p>
+<h3 id="ngraphpaths">ngraph.paths<a class="headerlink" href="#ngraphpaths" title="Permanent link">&para;</a></h3>
+<p><code>paths(prepared: 'PreparedScenario', query: 'PathQuery') -&gt; 'PathAnalysis'</code></p>
+<p>Find shortest or k shortest paths between two selectors on a prepared scenario.</p>
+<h3 id="ngraphplace">ngraph.place<a class="headerlink" href="#ngraphplace" title="Permanent link">&para;</a></h3>
+<p><code>place(prepared: 'PreparedScenario', query: 'PlacementQuery') -&gt; 'PlacementAnalysis'</code></p>
+<p>Place a resolved demand set on a prepared scenario, in each failure case and
+requested state.</p>
+<h3 id="ngraphprepare">ngraph.prepare<a class="headerlink" href="#ngraphprepare" title="Permanent link">&para;</a></h3>
+<p><code>prepare(scenario: 'Scenario', *, units: 'UnitsSettings | None' = None, demand_sets: 'Sequence[str]' = ()) -&gt; 'PreparedScenario'</code></p>
+<p>Build one graph and choose one bandwidth unit <code>q</code> over a read-only view of
+the scenario.</p>
+<p>The input is not changed. The prepared scenario shares its immutable
+records and keeps read-only copies of the network and component dicts,
+so later edits of the caller's collections do not reach it.</p>
+<h3 id="ngraphregister_result_exporter">ngraph.register_result_exporter<a class="headerlink" href="#ngraphregister_result_exporter" title="Permanent link">&para;</a></h3>
+<p><code>register_result_exporter(result_type: 'type[ExportT]', encoder: 'Callable[[ExportT, ExportContext], JSONValue]') -&gt; 'None'</code></p>
+<p>Register one explicit encoder for exactly this result type.</p>
+<h3 id="ngraphregister_workflow_step">ngraph.register_workflow_step<a class="headerlink" href="#ngraphregister_workflow_step" title="Permanent link">&para;</a></h3>
+<p>Also importable as <code>ngraph.workflow.register_workflow_step</code>.</p>
+<p><code>register_workflow_step(name: 'str') -&gt; 'Callable[[type[StepT]], type[StepT]]'</code></p>
+<p>Register one concrete step class for a nonempty YAML type name.</p>
+<h3 id="ngraphresolve_demands">ngraph.resolve_demands<a class="headerlink" href="#ngraphresolve_demands" title="Permanent link">&para;</a></h3>
+<p><code>resolve_demands(prepared: 'PreparedScenario', specs: 'DemandSet') -&gt; 'ResolvedDemandSet'</code></p>
+<p>Bind a demand set to a prepared scenario: expand it and resolve its models on the
+prepared graph.</p>
+<h3 id="ngraphrun">ngraph.run<a class="headerlink" href="#ngraphrun" title="Permanent link">&para;</a></h3>
+<p><code>run(prepared: 'PreparedScenario', *, step_hook: 'Callable[[WorkflowStep], AbstractContextManager[None]] | None' = None) -&gt; 'RunResult'</code></p>
+<p>Execute once in declaration order; publish a run only after every step succeeds.</p>
+<h3 id="ngraphtunnel_counts">ngraph.tunnel_counts<a class="headerlink" href="#ngraphtunnel_counts" title="Permanent link">&para;</a></h3>
+<p><code>tunnel_counts(prepared: 'PreparedScenario', query: 'TunnelCountQuery') -&gt; 'TunnelCountAnalysis'</code></p>
+<p>Evaluate tunnelled centralized-TE demands at each tunnel count.</p>
+<h3 id="ngraphwrite_json">ngraph.write_json<a class="headerlink" href="#ngraphwrite_json" title="Permanent link">&para;</a></h3>
+<p><code>write_json(result: 'RunResult | AnalysisResult', file: 'IO[str]') -&gt; 'None'</code></p>
+<p>Write a run or an analysis as one line of compact JSON.</p>
+<p>The whole document is encoded before anything is written, so an encoding
+error writes nothing.</p>
+<hr />
+<h2 id="ngraphworkflow">ngraph.workflow<a class="headerlink" href="#ngraphworkflow" title="Permanent link">&para;</a></h2>
+<h3 id="ngraphworkflowstepneeds">ngraph.workflow.StepNeeds<a class="headerlink" href="#ngraphworkflowstepneeds" title="Permanent link">&para;</a></h3>
+<p>What preparation must know of one workflow step's question.</p>
+<p><code>numerical</code> steps are evaluated at the prepared resolution. A step may
+name a demand set to bind, a failure policy, and an earlier step whose
+feasible alpha it uses (one that <code>provides_alpha</code>). <code>capacity</code> builds
+the step's capacity question, which preparation validates once after
+final compilation; <code>inputs</code> are that question's physical amounts, by
+field name. <code>pool_endpoints</code> are the source and target of a question
+whose combined sources are a pool: preparation gives them a private head.
+<code>offer_budget</code> is a fixed lossy offer every pool leaf of <code>demand_set</code>
+receives; <code>counts</code> builds a tunnel-count question, which preparation
+validates once after final binding. <code>nodes</code> and <code>links</code>
+are names the step reads that must exist in the network.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>numerical</code> (bool) = False</li>
+<li><code>demand_set</code> (str | None)</li>
+<li><code>failure_policy</code> (str | None)</li>
+<li><code>states</code> (tuple[str, ...]) = ()</li>
+<li><code>interaction</code> (str) = ordered</li>
+<li><code>alpha</code> (float | None) = 1.0</li>
+<li><code>alpha_from_step</code> (str | None)</li>
+<li><code>provides_alpha</code> (bool) = False</li>
+<li><code>capacity</code> (Callable[[PreparedScenario], CapacityQuery] | None)</li>
+<li><code>inputs</code> (Mapping[str, tuple[_InputKind, float]]) = {}</li>
+<li><code>pool_endpoints</code> (tuple[Selector, Selector] | None)</li>
+<li><code>offer_budget</code> (float | None)</li>
+<li><code>counts</code> (Callable[[PreparedScenario], TunnelCountQuery] | None)</li>
+<li><code>nodes</code> (tuple[str, ...]) = ()</li>
+<li><code>links</code> (tuple[str, ...]) = ()</li>
+</ul>
+<h3 id="ngraphworkflowstep_name">ngraph.workflow.step_name<a class="headerlink" href="#ngraphworkflowstep_name" title="Permanent link">&para;</a></h3>
+<p><code>step_name(step: 'WorkflowStep') -&gt; 'str'</code></p>
+<p>Return the name a step runs under: its name, or its class name when unnamed.</p>
+<h3 id="ngraphworkflowbuildgraph">ngraph.workflow.BuildGraph<a class="headerlink" href="#ngraphworkflowbuildgraph" title="Permanent link">&para;</a></h3>
+<p>Workflow step: export the network in NetworkX node-link form.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>yaml_label</code> (str | None)</li>
+<li><code>derived_seed</code> (int | None)</li>
+<li><code>question_kind</code> (ClassVar) = build_graph</li>
+<li><code>add_reverse</code> (bool) = True</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>execute(self, context: 'StepContext') -&gt; 'StepResult'</code> - Run the step once and publish its question and result as one immutable StepResult.</li>
+<li><code>needs(self) -&gt; 'StepNeeds | None'</code> - What preparation must bind for this step; None asks for nothing.</li>
+<li><code>run(self, context: ngraph.results.StepContext) -&gt; ngraph.results.StepOutput</code> - Return this step's typed question and result without publishing state.</li>
+<li><code>yaml_arguments(arguments: 'dict', name: 'str') -&gt; 'dict'</code> - Turn this step type's YAML keys into constructor arguments.</li>
+</ul>
+<h3 id="ngraphworkflowcostpower">ngraph.workflow.CostPower<a class="headerlink" href="#ngraphworkflowcostpower" title="Permanent link">&para;</a></h3>
+<p>Workflow step: hardware cost and power, aggregated by hierarchy level.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>yaml_label</code> (str | None)</li>
+<li><code>derived_seed</code> (int | None)</li>
+<li><code>question_kind</code> (ClassVar[str]) = cost_power</li>
+<li><code>include_disabled</code> (bool) = False</li>
+<li><code>aggregation_level</code> (int) = 2</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>execute(self, context: 'StepContext') -&gt; 'StepResult'</code> - Run the step once and publish its question and result as one immutable StepResult.</li>
+<li><code>needs(self) -&gt; 'StepNeeds | None'</code> - What preparation must bind for this step; None asks for nothing.</li>
+<li><code>run(self, context: 'StepContext') -&gt; 'StepOutput'</code> - Return this step's typed question and result without publishing state.</li>
+<li><code>yaml_arguments(arguments: 'dict', name: 'str') -&gt; 'dict'</code> - Turn this step type's YAML keys into constructor arguments.</li>
+</ul>
+<h3 id="ngraphworkflowmaxflow">ngraph.workflow.MaxFlow<a class="headerlink" href="#ngraphworkflowmaxflow" title="Permanent link">&para;</a></h3>
+<p>Workflow step: the capacity between two node sets, under one model.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>yaml_label</code> (str | None)</li>
+<li><code>derived_seed</code> (int | None)</li>
+<li><code>source</code> (Selector) = Selector(path='.*', group_by=None, match=None, active_only=None)</li>
+<li><code>target</code> (Selector) = Selector(path='.*', group_by=None, match=None, active_only=None)</li>
+<li><code>mode</code> (Literal) = combine</li>
+<li><code>preset</code> (ngraph.model.demand.FlowPolicyPreset | None)</li>
+<li><code>model</code> (object)</li>
+<li><code>offer</code> (float | None)</li>
+<li><code>design_demand</code> (float | None)</li>
+<li><code>failure_policy</code> (str | None)</li>
+<li><code>iterations</code> (int) = 1</li>
+<li><code>workers</code> (int | Literal['auto']) = auto</li>
+<li><code>failure_trace</code> (bool) = False</li>
+<li><code>outputs</code> (OutputOptions)</li>
+<li><code>export_cost_distribution</code> (bool) = False</li>
+<li><code>export_details</code> (bool) = False</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>execute(self, context: 'StepContext') -&gt; 'StepResult'</code> - Run the step once and publish its question and result as one immutable StepResult.</li>
+<li><code>needs(self) -&gt; ngraph.analysis.preparation.StepNeeds</code> - What preparation must bind for this step; None asks for nothing.</li>
+<li><code>query(self, prepared: ngraph.analysis.preparation.PreparedScenario, failures=None) -&gt; ngraph.analysis.capacity.CapacityQuery</code></li>
+<li><code>run(self, context: ngraph.results.StepContext) -&gt; ngraph.results.StepOutput</code> - Return this step's typed question and result without publishing state.</li>
+<li><code>yaml_arguments(arguments: dict, name: str) -&gt; dict</code> - Turn this step type's YAML keys into constructor arguments.</li>
+</ul>
+<h3 id="ngraphworkflowmaximumsupporteddemand">ngraph.workflow.MaximumSupportedDemand<a class="headerlink" href="#ngraphworkflowmaximumsupporteddemand" title="Permanent link">&para;</a></h3>
+<p>Workflow step: the maximum supported demand of a demand set.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>yaml_label</code> (str | None)</li>
+<li><code>derived_seed</code> (int | None)</li>
+<li><code>demand_set</code> (str)</li>
+<li><code>alpha_start</code> (float) = 1.0</li>
+<li><code>growth_factor</code> (float) = 2.0</li>
+<li><code>alpha_min</code> (float) = 1e-06</li>
+<li><code>alpha_max</code> (float) = 1000000000.0</li>
+<li><code>alpha_tolerance</code> (float) = 0.01</li>
+<li><code>max_bracket_iters</code> (int) = 32</li>
+<li><code>max_bisect_iters</code> (int) = 32</li>
+<li><code>export_details</code> (bool) = False</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>execute(self, context: 'StepContext') -&gt; 'StepResult'</code> - Run the step once and publish its question and result as one immutable StepResult.</li>
+<li><code>needs(self) -&gt; ngraph.analysis.preparation.StepNeeds</code> - What preparation must bind for this step; None asks for nothing.</li>
+<li><code>query(self, demands)</code></li>
+<li><code>run(self, context: ngraph.results.StepContext) -&gt; ngraph.results.StepOutput</code> - Return this step's typed question and result without publishing state.</li>
+<li><code>yaml_arguments(arguments: dict, name: str) -&gt; dict</code> - Turn this step type's YAML keys into constructor arguments.</li>
+</ul>
+<h3 id="ngraphworkflownetworkstats">ngraph.workflow.NetworkStats<a class="headerlink" href="#ngraphworkflownetworkstats" title="Permanent link">&para;</a></h3>
+<p>Workflow step: node and link counts, and capacity, cost and degree statistics.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>yaml_label</code> (str | None)</li>
+<li><code>derived_seed</code> (int | None)</li>
+<li><code>question_kind</code> (ClassVar) = network_stats</li>
+<li><code>include_disabled</code> (bool) = False</li>
+<li><code>excluded_nodes</code> (tuple) = ()</li>
+<li><code>excluded_links</code> (tuple) = ()</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>execute(self, context: 'StepContext') -&gt; 'StepResult'</code> - Run the step once and publish its question and result as one immutable StepResult.</li>
+<li><code>needs(self) -&gt; ngraph.analysis.preparation.StepNeeds</code> - What preparation must bind for this step; None asks for nothing.</li>
+<li><code>run(self, context: ngraph.results.StepContext) -&gt; ngraph.results.StepOutput</code> - Return this step's typed question and result without publishing state.</li>
+<li><code>yaml_arguments(arguments: 'dict', name: 'str') -&gt; 'dict'</code> - Turn this step type's YAML keys into constructor arguments.</li>
+</ul>
+<h3 id="ngraphworkflowtrafficmatrixplacement">ngraph.workflow.TrafficMatrixPlacement<a class="headerlink" href="#ngraphworkflowtrafficmatrixplacement" title="Permanent link">&para;</a></h3>
+<p>Workflow step: place a demand set, with optional failures, failure states and
+interaction.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>yaml_label</code> (str | None)</li>
+<li><code>derived_seed</code> (int | None)</li>
+<li><code>demand_set</code> (str)</li>
+<li><code>failure_policy</code> (str | None)</li>
+<li><code>iterations</code> (int) = 1</li>
+<li><code>workers</code> (int | Literal['auto']) = auto</li>
+<li><code>failure_trace</code> (bool) = False</li>
+<li><code>outputs</code> (OutputOptions)</li>
+<li><code>export_cost_distribution</code> (bool) = False</li>
+<li><code>export_details</code> (bool) = False</li>
+<li><code>alpha</code> (float | None)</li>
+<li><code>alpha_from_step</code> (str | None)</li>
+<li><code>failure_states</code> (tuple) = ('converged',)</li>
+<li><code>interaction</code> (Literal) = ordered</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>execute(self, context: 'StepContext') -&gt; 'StepResult'</code> - Run the step once and publish its question and result as one immutable StepResult.</li>
+<li><code>needs(self) -&gt; ngraph.analysis.preparation.StepNeeds</code> - What preparation must bind for this step; None asks for nothing.</li>
+<li><code>run(self, context: ngraph.results.StepContext) -&gt; ngraph.results.StepOutput</code> - Return this step's typed question and result without publishing state.</li>
+<li><code>yaml_arguments(arguments: dict, name: str) -&gt; dict</code> - Turn this step type's YAML keys into constructor arguments.</li>
+</ul>
+<h3 id="ngraphworkflowtunnelcountanalysis">ngraph.workflow.TunnelCountAnalysis<a class="headerlink" href="#ngraphworkflowtunnelcountanalysis" title="Permanent link">&para;</a></h3>
+<p>Workflow step: one evaluation per demand and tunnel count (or <code>up_to</code> limit).</p>
+<p>Every demand uses the same <code>design_demand</code> and <code>offer</code>; the set's
+declared volumes are not read by the rows, though they still take part in
+choosing the resolution, as every demand set a step names does.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>name</code> (str)</li>
+<li><code>seed</code> (int | None)</li>
+<li><code>yaml_label</code> (str | None)</li>
+<li><code>derived_seed</code> (int | None)</li>
+<li><code>demand_set</code> (str)</li>
+<li><code>counts</code> (tuple) = ()</li>
+<li><code>up_to</code> (int | None)</li>
+<li><code>design_demand</code> (float | None)</li>
+<li><code>offer</code> (float | None)</li>
+<li><code>workers</code> (int | Literal['auto']) = auto</li>
+<li><code>outputs</code> (OutputOptions)</li>
+<li><code>export_details</code> (bool) = False</li>
+</ul>
+<p><strong>Methods:</strong></p>
+<ul>
+<li><code>execute(self, context: 'StepContext') -&gt; 'StepResult'</code> - Run the step once and publish its question and result as one immutable StepResult.</li>
+<li><code>needs(self) -&gt; ngraph.analysis.preparation.StepNeeds</code> - What preparation must bind for this step; None asks for nothing.</li>
+<li><code>query(self, prepared: ngraph.analysis.preparation.PreparedScenario) -&gt; ngraph.analysis.counts.TunnelCountQuery</code></li>
+<li><code>query_for(self, demands) -&gt; ngraph.analysis.counts.TunnelCountQuery</code></li>
+<li><code>run(self, context: ngraph.results.StepContext) -&gt; ngraph.results.StepOutput</code> - Return this step's typed question and result without publishing state.</li>
+<li><code>yaml_arguments(arguments: dict, name: str) -&gt; dict</code> - Turn this step type's YAML keys into constructor arguments.</li>
+</ul>
+<hr />
+<h2 id="ngraphhardware">ngraph.hardware<a class="headerlink" href="#ngraphhardware" title="Permanent link">&para;</a></h2>
+<h3 id="ngraphhardwarehardware_inventory">ngraph.hardware.hardware_inventory<a class="headerlink" href="#ngraphhardwarehardware_inventory" title="Permanent link">&para;</a></h3>
+<p><code>hardware_inventory(network: 'Network', library: 'ComponentsLibrary') -&gt; 'HardwareInventory'</code></p>
+<p>Resolve every node's and link end's hardware, in that order.</p>
+<p>A link end counts only where its endpoint node has a platform.</p>
+<p>Raises:
+    ValueError: If any node, link or link end has a <code>hardware</code> value
+        that is not a mapping, a count that is not a finite positive
+        number, an <code>exclusive</code> that is not a boolean, or a total that
+        exceeds the finite float range; the message starts with the entity
+        (<code>node &lt;name&gt;</code>, <code>link &lt;key&gt;</code>, <code>link &lt;key&gt; source end</code>).</p>
+<h3 id="ngraphhardwarehardwareinventory">ngraph.hardware.HardwareInventory<a class="headerlink" href="#ngraphhardwarehardwareinventory" title="Permanent link">&para;</a></h3>
+<p>The hardware uses of a network and its references to unknown components.</p>
+<p>Attributes:
+    uses: Node platforms in node order, then each link's source end and
+        target end in link order (the order of every sum over them).
+    unknown: <code>(entity, end, name)</code> for each reference to a component the
+        library lacks: a node name with end None, or a link key with its
+        end.</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>uses</code> (tuple[HardwareUse, ...])</li>
+<li><code>unknown</code> (tuple[tuple[str, Optional[str], object], ...])</li>
+</ul>
+<h3 id="ngraphhardwarehardwareuse">ngraph.hardware.HardwareUse<a class="headerlink" href="#ngraphhardwarehardwareuse" title="Permanent link">&para;</a></h3>
+<p>One installed platform or link-end optic.</p>
+<p>Attributes:
+    node: Node the hardware sits at; consumers group by this name.
+    link: Key of the link in <code>Network.links</code> for an optic; None for a
+        node platform.
+    end: <code>"source"</code> or <code>"target"</code> for an optic; None for a platform.
+    component: The library component.
+    count: Declared count.
+    bom_count: Count in the bill of materials: the count, rounded up for
+        an exclusive link end.
+    capex: Component capex (children included) times <code>count</code>.
+    power_watts: Component typical power times <code>count</code>.
+    capacity: Component capacity times <code>count</code>.
+    active: In the enabled view: the node is enabled (platform), or the
+        link is active (optic, see <code>link_active</code>).</p>
+<p><strong>Attributes:</strong></p>
+<ul>
+<li><code>node</code> (str)</li>
+<li><code>link</code> (Optional[str])</li>
+<li><code>end</code> (Optional[str])</li>
+<li><code>component</code> (Component)</li>
+<li><code>count</code> (float)</li>
+<li><code>bom_count</code> (float)</li>
+<li><code>capex</code> (float)</li>
+<li><code>power_watts</code> (float)</li>
+<li><code>capacity</code> (float)</li>
+<li><code>active</code> (bool)</li>
+</ul>
+<h3 id="ngraphhardwarelink_active">ngraph.hardware.link_active<a class="headerlink" href="#ngraphhardwarelink_active" title="Permanent link">&para;</a></h3>
+<p><code>link_active(network: 'Network', link: 'Link') -&gt; 'bool'</code></p>
+<p>Return True when the link and both of its end nodes are enabled.</p>
+<h3 id="ngraphhardwareresolve_link_end">ngraph.hardware.resolve_link_end<a class="headerlink" href="#ngraphhardwareresolve_link_end" title="Permanent link">&para;</a></h3>
+<p><code>resolve_link_end(spec: 'Dict[str, Any]', library: 'ComponentsLibrary') -&gt; 'Tuple[Optional[Component], float, bool]'</code></p>
+<p>Resolve one link end's hardware: <code>{"component": NAME, "count": N}</code>.</p>
+<p><code>count</code> defaults to 1. An optional <code>exclusive: true</code> marks unsharable
+use; the bill of materials rounds such an end's count up to an integer.</p>
+<p>Returns:
+    (component or None when the name is absent or unknown, count, exclusive).</p>
+<p>Raises:
+    ValueError: If <code>spec</code> is not a mapping, <code>count</code> is not a finite
+        positive number, or <code>exclusive</code> is not a boolean.</p>
+<hr />
+<h2 id="ngraphlogging">ngraph.logging<a class="headerlink" href="#ngraphlogging" title="Permanent link">&para;</a></h2>
+<h3 id="ngraphloggingget_logger">ngraph.logging.get_logger<a class="headerlink" href="#ngraphloggingget_logger" title="Permanent link">&para;</a></h3>
+<p><code>get_logger(name: str) -&gt; logging.Logger</code></p>
+<p>Get a logger under NetGraph's logging hierarchy.</p>
+<p>It configures nothing: handlers and
+levels are inherited from the root 'ngraph' logger, which is configured
+only when an application calls setup_root_logger() (directly or via
+set_global_log_level()).</p>
+<p>Args:
+    name: Logger name (typically <strong>name</strong> from calling module).</p>
+<p>Returns:
+    Logger instance inheriting from the root ngraph logger.</p>
+<h3 id="ngraphloggingsetup_root_logger">ngraph.logging.setup_root_logger<a class="headerlink" href="#ngraphloggingsetup_root_logger" title="Permanent link">&para;</a></h3>
+<p><code>setup_root_logger(level: int = 20, format_string: str | None = None, handler: logging.Handler | None = None) -&gt; None</code></p>
+<p>Set up the root NetGraph logger with a single handler.</p>
+<p>Subsequent calls leave the existing handlers in place.</p>
+<p>Args:
+    level: Logging level (default: INFO).
+    format_string: Custom format string (optional).
+    handler: Custom handler (optional, defaults to StreamHandler(sys.stderr)).</p>
+<h3 id="ngraphloggingset_global_log_level">ngraph.logging.set_global_log_level<a class="headerlink" href="#ngraphloggingset_global_log_level" title="Permanent link">&para;</a></h3>
+<p><code>set_global_log_level(level: int) -&gt; None</code></p>
+<p>Set the log level for all NetGraph loggers.</p>
+<p>Installs the default console handler via setup_root_logger() if logging
+has not been configured yet. Intended for applications (e.g. the CLI);
+library code never calls this implicitly.</p>
+<p>Args:
+    level: Logging level (e.g., logging.DEBUG, logging.INFO).</p>
+<hr />
+<h2 id="errors">Errors<a class="headerlink" href="#errors" title="Permanent link">&para;</a></h2>
+<p><code>Scenario.from_yaml</code> refuses invalid input with <code>ValueError</code>, whose message starts with the field's path and value. A constructor refuses an invalid field with <code>ValueError</code> naming the field. Each entry's Raises section lists its other cases.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.tabs", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

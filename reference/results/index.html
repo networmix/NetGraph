@@ -1,0 +1,7238 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://networmix.github.io/NetGraph/reference/results/">
+      
+      
+        <link rel="prev" href="../cli/">
+      
+      
+        <link rel="next" href="../api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Results - NetGraph</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#results" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="NetGraph" class="md-header__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NetGraph
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Results
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../concepts/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  How NetGraph computes
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/basic/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../dsl/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="NetGraph" class="md-nav__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    NetGraph
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How NetGraph computes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/basic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basic Example
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/clos-fabric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clos Fabric
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/bundled-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bundled Scenarios
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dsl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenario YAML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflow Steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command Line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#alphasourcejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AlphaSourceJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#analysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#analysismetadatajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AnalysisMetadataJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buildgraphparametersjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BuildGraphParametersJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buildgraphquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BuildGraphQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buildgraphresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BuildGraphResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacityanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacitycasejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityCaseJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacityqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacityrowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacitystatejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityStateJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacitystatesjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityStatesJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costceilingjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostCeilingJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costpowerparametersjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostPowerParametersJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costpowerquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostPowerQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costpowerresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostPowerResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costreportjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostReportJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costunavailablereasonjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostUnavailableReasonJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#customquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CustomQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deadcapjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeadCapJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#declaredsourceweightjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeclaredSourceWeightJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deliveredbypathcostjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeliveredByPathCostJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#demandquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DemandQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#directedlinkjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DirectedLinkJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#discardedsharejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DiscardedShareJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domainquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DomainQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domainresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DomainResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edgeamountjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EdgeAmountJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edgeweightjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EdgeWeightJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#endpointsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EndpointsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exactalphajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExactAlphaJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#expansionaccountingjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExpansionAccountingJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failurecasejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailureCaseJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failurepatternjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailurePatternJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failurerequestjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailureRequestJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failureselectionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailureSelectionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failuretracejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailureTraceJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forwardingfailurejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ForwardingFailureJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fractionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FractionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardwareleveljson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HardwareLevelJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardwarerowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HardwareRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headdesignjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HeadDesignJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inputconstraintjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InputConstraintJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jsonvalue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSONValue
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdprobejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDProbeJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdproofjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDProofJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdstatusjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDStatusJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdstopreasonjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDStopReasonJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#marginalcostbinjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MarginalCostBinJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#marginalcurvejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MarginalCurveJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memberweightjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MemberWeightJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modeljson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ModelJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#namedpathjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NamedPathJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nativeoutputsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NativeOutputsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nativeplacementjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NativePlacementJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networkstatsparametersjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetworkStatsParametersJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networkstatsquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetworkStatsQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networkstatsresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetworkStatsResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#outputselectionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OutputSelectionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pathanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PathAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pathcostbinjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PathCostBinJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pathqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PathQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pathrowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PathRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementcasejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementCaseJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementrowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementstatejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementStateJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementstatesjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementStatesJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementtotalsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementTotalsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#poolheadjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PoolHeadJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#poolmetadatajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PoolMetadataJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#poolnodejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PoolNodeJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#preparationscopejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PreparationScopeJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proberowsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProbeRowsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#programmedrouterjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProgrammedRouterJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rangeconstraintjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RangeConstraintJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rangerefusaljson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RangeRefusalJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runmetadatajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunMetadataJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#samplingmetadatajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SamplingMetadataJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selectorjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SelectorJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selfpairjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SelfPairJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sensitivityanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SensitivityAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sensitivityentryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SensitivityEntryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sensitivityqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SensitivityQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sourceflowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SourceFlowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sourcejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SourceJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sourceweightjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SourceWeightJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#splitcountconstraintjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SplitCountConstraintJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#standaloneanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        StandaloneAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stepquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        StepQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stepresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        StepResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#syntheticamountjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticAmountJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#syntheticingressjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticIngressJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#syntheticprojectionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticProjectionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tablereportjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TableReportJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelcountanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelCountAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelcountjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelCountJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelcountqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelCountQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelcountrowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelCountRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelflowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelFlowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelplanjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelPlanJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unavailableoutputsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UnavailableOutputsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unitsreportjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UnitsReportJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#uppercertificatejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UpperCertificateJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#weightapproximationjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WeightApproximationJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-full/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API (generated)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Schemas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#alphasourcejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AlphaSourceJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#analysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#analysismetadatajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AnalysisMetadataJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buildgraphparametersjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BuildGraphParametersJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buildgraphquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BuildGraphQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#buildgraphresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BuildGraphResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacityanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacitycasejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityCaseJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacityqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacityrowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacitystatejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityStateJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacitystatesjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CapacityStatesJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costceilingjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostCeilingJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costpowerparametersjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostPowerParametersJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costpowerquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostPowerQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costpowerresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostPowerResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costreportjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostReportJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#costunavailablereasonjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CostUnavailableReasonJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#customquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CustomQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deadcapjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeadCapJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#declaredsourceweightjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeclaredSourceWeightJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deliveredbypathcostjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DeliveredByPathCostJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#demandquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DemandQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#directedlinkjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DirectedLinkJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#discardedsharejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DiscardedShareJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domainquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DomainQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domainresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DomainResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edgeamountjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EdgeAmountJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edgeweightjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EdgeWeightJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#endpointsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        EndpointsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exactalphajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExactAlphaJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#expansionaccountingjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExpansionAccountingJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failurecasejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailureCaseJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failurepatternjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailurePatternJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failurerequestjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailureRequestJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failureselectionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailureSelectionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failuretracejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FailureTraceJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forwardingfailurejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ForwardingFailureJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fractionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FractionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardwareleveljson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HardwareLevelJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hardwarerowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HardwareRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headdesignjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HeadDesignJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inputconstraintjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InputConstraintJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jsonvalue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSONValue
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdprobejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDProbeJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdproofjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDProofJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdstatusjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDStatusJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#msdstopreasonjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MSDStopReasonJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#marginalcostbinjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MarginalCostBinJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#marginalcurvejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MarginalCurveJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memberweightjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MemberWeightJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modeljson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ModelJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#namedpathjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NamedPathJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nativeoutputsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NativeOutputsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nativeplacementjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NativePlacementJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networkstatsparametersjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetworkStatsParametersJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networkstatsquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetworkStatsQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networkstatsresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetworkStatsResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#outputselectionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OutputSelectionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pathanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PathAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pathcostbinjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PathCostBinJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pathqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PathQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pathrowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PathRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementcasejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementCaseJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementrowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementstatejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementStateJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementstatesjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementStatesJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#placementtotalsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PlacementTotalsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#poolheadjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PoolHeadJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#poolmetadatajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PoolMetadataJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#poolnodejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PoolNodeJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#preparationscopejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PreparationScopeJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proberowsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProbeRowsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#programmedrouterjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ProgrammedRouterJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rangeconstraintjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RangeConstraintJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rangerefusaljson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RangeRefusalJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runmetadatajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunMetadataJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#samplingmetadatajson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SamplingMetadataJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selectorjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SelectorJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selfpairjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SelfPairJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sensitivityanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SensitivityAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sensitivityentryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SensitivityEntryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sensitivityqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SensitivityQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sourceflowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SourceFlowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sourcejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SourceJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sourceweightjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SourceWeightJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#splitcountconstraintjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SplitCountConstraintJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#standaloneanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        StandaloneAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stepquestionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        StepQuestionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stepresultjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        StepResultJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#syntheticamountjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticAmountJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#syntheticingressjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticIngressJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#syntheticprojectionjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SyntheticProjectionJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tablereportjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TableReportJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelcountanalysisjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelCountAnalysisJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelcountjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelCountJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelcountqueryjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelCountQueryJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelcountrowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelCountRowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelflowjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelFlowJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tunnelplanjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TunnelPlanJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unavailableoutputsjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UnavailableOutputsJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unitsreportjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UnitsReportJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#uppercertificatejson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UpperCertificateJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#weightapproximationjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WeightApproximationJSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h1>
+<p>Every JSON object of a results file (<code>ngraph/schemas/results.json</code>) and what each
+field means, generated from the result declarations. <a href="../../concepts/#results-and-their-units">How NetGraph
+computes</a> explains the numbers. They come
+in five kinds:</p>
+<ul>
+<li><strong>Bandwidth units:</strong> every <code>*_units</code> field and the native amounts, integers in
+  units of the run's resolution <code>q</code> (the units report holds <code>q</code>); units × <code>q</code> is the
+  physical amount.</li>
+<li><strong>Physical amounts:</strong> inputs, question offers and designs, <code>NetworkStats</code>
+  capacities and <code>split_bound.capacity</code> in the units report, as declared.</li>
+<li><strong>Ratios:</strong> delivery ratios, alpha, shares and caps, with no unit.</li>
+<li><strong>Routing costs:</strong> path costs, tunnel costs and their sums, which never take <code>q</code>.
+  <code>total_cost</code> is cost × bandwidth units, so <code>total_cost</code> × <code>q</code> is cost × physical
+  bandwidth.</li>
+<li><strong>Hardware money and power:</strong> capex and watts.</li>
+</ul>
+<p>Counts are plain integers. An exact fraction is written
+<code>{"numerator": n, "denominator": d}</code>. A missing key and a <code>null</code> value differ: each
+field says when it is absent and when it is null. The analysis's <code>outputs.details</code>
+selects which detail fields appear (<a href="../workflow/#output-selection">Output
+selection</a>). T1 is a <code>distributed_te</code> model; T2 is a
+<code>centralized_te</code> model with a <code>tunnel_count</code>.</p>
+<p>Placement totals and the run's <code>metadata</code> and <code>units_report</code> use the same field
+names in Python and JSON. In placement and capacity rows with a native <code>result</code>,
+that object and its <code>plan</code>, <code>by_source</code> and <code>by_tunnel</code> entries use the engine's
+field names. There a bandwidth amount drops <code>_units</code> and a drop count ends in
+<code>_drops</code>: <code>delivered</code> is <code>delivered_units</code>, <code>source_drops</code> is <code>source_drop_units</code>.
+Edges and nodes are ids (<code>PreparedTopology.edge_refs</code> names each edge), so
+<code>edge_drops</code> lists (edge, units) pairs, whose sum is <code>edge_drop_units</code>, and per-edge
+outputs are vectors in edge order; an unlimited request or design is infinite where
+JSON writes <code>null</code> with <code>request_kind</code> or <code>design_kind</code> <code>"unlimited"</code>. For placement
+rows and capacity rows with a native result, <code>kind</code> is JSON only; a placement row's
+<code>reference_shortfall_units</code> (<code>reference_request_units</code> minus <code>result.delivered</code>) is
+also JSON only. A step's
+<code>question</code> is its typed query in Python, written in normalized form here (<a href="../api/#results-and-export">Results
+and export</a>). Losses: <a href="../../concepts/#demands-how-traffic-enters">Demands: how traffic
+enters</a>; the worst failure case:
+<a href="../../concepts/#failures-patterns-cases-and-states">Failures: patterns, cases and
+states</a>.</p>
+<h2 id="alphasourcejson">AlphaSourceJSON<a class="headerlink" href="#alphasourcejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"query"</code> | <code>"msd_step"</code></td>
+<td>query (the query's own alpha) or msd_step.</td>
+</tr>
+<tr>
+<td><code>step</code></td>
+<td>string or null</td>
+<td>The step that supplies alpha. Null when the query gives its own alpha.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="analysisjson">AnalysisJSON<a class="headerlink" href="#analysisjson" title="Permanent link">&para;</a></h2>
+<p>One of: <a href="#capacityanalysisjson">CapacityAnalysisJSON</a> or <a href="#placementanalysisjson">PlacementAnalysisJSON</a> or <a href="#sensitivityanalysisjson">SensitivityAnalysisJSON</a> or <a href="#pathanalysisjson">PathAnalysisJSON</a> or <a href="#msdanalysisjson">MSDAnalysisJSON</a> or <a href="#tunnelcountanalysisjson">TunnelCountAnalysisJSON</a>.</p>
+<h2 id="analysismetadatajson">AnalysisMetadataJSON<a class="headerlink" href="#analysismetadatajson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>workers</code></td>
+<td>integer</td>
+<td>The effective number of workers.</td>
+</tr>
+<tr>
+<td><code>sampling</code></td>
+<td><a href="#samplingmetadatajson">SamplingMetadataJSON</a> or null</td>
+<td>The failure sampling metadata. Null when the analysis draws no failures.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="buildgraphparametersjson">BuildGraphParametersJSON<a class="headerlink" href="#buildgraphparametersjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>add_reverse</code></td>
+<td>boolean</td>
+<td>Whether the exported graph has a reverse edge per link.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="buildgraphquestionjson">BuildGraphQuestionJSON<a class="headerlink" href="#buildgraphquestionjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"build_graph"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>parameters</code></td>
+<td><a href="#buildgraphparametersjson">BuildGraphParametersJSON</a></td>
+<td>The step's parameters.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="buildgraphresultjson">BuildGraphResultJSON<a class="headerlink" href="#buildgraphresultjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"build_graph"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>add_reverse</code></td>
+<td>boolean</td>
+<td>Whether the exported graph has a reverse edge per link.</td>
+</tr>
+<tr>
+<td><code>node_count</code></td>
+<td>integer</td>
+<td>Nodes in the exported graph.</td>
+</tr>
+<tr>
+<td><code>edge_count</code></td>
+<td>integer</td>
+<td>Edges in the exported graph (two per link with add_reverse).</td>
+</tr>
+<tr>
+<td><code>graph</code></td>
+<td>object</td>
+<td>The node-link JSON of the network.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="capacityanalysisjson">CapacityAnalysisJSON<a class="headerlink" href="#capacityanalysisjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"capacity"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td><a href="#analysismetadatajson">AnalysisMetadataJSON</a></td>
+<td>Run or analysis metadata.</td>
+</tr>
+<tr>
+<td><code>outputs</code></td>
+<td><a href="#outputselectionjson">OutputSelectionJSON</a></td>
+<td>The output selection that applies to the rows.</td>
+</tr>
+<tr>
+<td><code>question</code></td>
+<td><code>"lossless_bound"</code> | <code>"fixed_offer_delivery"</code> | <code>"first_hop_experiment"</code></td>
+<td>The question this step or analysis asked.</td>
+</tr>
+<tr>
+<td><code>offer_source</code></td>
+<td><code>"unlimited"</code> | <code>"explicit"</code> | <code>"design"</code> | <code>"first_hop"</code></td>
+<td>Where the offer comes from: unlimited, explicit, the design demand, or the first hop.</td>
+</tr>
+<tr>
+<td><code>cases</code></td>
+<td>list of <a href="#capacitycasejson">CapacityCaseJSON</a></td>
+<td>The baseline case first, then each distinct failure pattern.</td>
+</tr>
+<tr>
+<td><code>query</code></td>
+<td><a href="#capacityqueryjson">CapacityQueryJSON</a></td>
+<td>The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="capacitycasejson">CapacityCaseJSON<a class="headerlink" href="#capacitycasejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>case</code></td>
+<td><a href="#failurecasejson">FailureCaseJSON</a></td>
+<td>The failure case.</td>
+</tr>
+<tr>
+<td><code>states</code></td>
+<td><a href="#capacitystatesjson">CapacityStatesJSON</a></td>
+<td>The capacity state of the case.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="capacityqueryjson">CapacityQueryJSON<a class="headerlink" href="#capacityqueryjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"capacity"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td><a href="#selectorjson">SelectorJSON</a></td>
+<td>The source selector.</td>
+</tr>
+<tr>
+<td><code>target</code></td>
+<td><a href="#selectorjson">SelectorJSON</a></td>
+<td>The target selector.</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>"combine"</code> | <code>"pairwise"</code></td>
+<td>How sources and targets pair: combine or pairwise.</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><a href="#modeljson">ModelJSON</a></td>
+<td>The routing model and admission of the question.</td>
+</tr>
+<tr>
+<td><code>offer</code></td>
+<td>number or null</td>
+<td>The physical offer. Null when no offer is set.</td>
+</tr>
+<tr>
+<td><code>design_demand</code></td>
+<td>number or null</td>
+<td>The physical design volume of tunnels. Null when no design volume is set.</td>
+</tr>
+<tr>
+<td><code>failures</code></td>
+<td><a href="#failurerequestjson">FailureRequestJSON</a> or null</td>
+<td>The failure request. Null when the question is the baseline only.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="capacityrowjson">CapacityRowJSON<a class="headerlink" href="#capacityrowjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"capacity"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td>string</td>
+<td>The row's stable identifier within its analysis.</td>
+</tr>
+<tr>
+<td><code>endpoints</code></td>
+<td><a href="#endpointsjson">EndpointsJSON</a></td>
+<td>The physical source and destination node names of the row.</td>
+</tr>
+<tr>
+<td><code>result</code></td>
+<td><a href="#nativeplacementjson">NativePlacementJSON</a></td>
+<td>The native placement result.</td>
+</tr>
+<tr>
+<td><code>pool</code></td>
+<td><a href="#poolmetadatajson">PoolMetadataJSON</a> or null</td>
+<td>The TE ingress pool the row's sources share. Null when the sources share no pool.</td>
+</tr>
+<tr>
+<td><code>cost_distribution</code></td>
+<td><a href="#costreportjson">CostReportJSON</a></td>
+<td>The requested cost report. Absent when the report was not requested or is not derivable.</td>
+</tr>
+<tr>
+<td><code>unavailable_outputs</code></td>
+<td><a href="#unavailableoutputsjson">UnavailableOutputsJSON</a></td>
+<td>Requested outputs that the model cannot provide, with the reason. Absent when every requested output is provided.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="capacitystatejson">CapacityStateJSON<a class="headerlink" href="#capacitystatejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rows</code></td>
+<td>list of <a href="#capacityrowjson">CapacityRowJSON</a> or <a href="#selfpairjson">SelfPairJSON</a></td>
+<td>The analysis rows, one per demand or endpoint pair.</td>
+</tr>
+<tr>
+<td><code>totals</code></td>
+<td>null</td>
+<td>Always null: capacity rows have no totals (each is its own question).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="capacitystatesjson">CapacityStatesJSON<a class="headerlink" href="#capacitystatesjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>converged</code></td>
+<td><a href="#capacitystatejson">CapacityStateJSON</a></td>
+<td>The capacity question on the case's network.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="costceilingjson">CostCeilingJSON<a class="headerlink" href="#costceilingjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"absolute"</code> | <code>"stretch"</code></td>
+<td>absolute or stretch.</td>
+</tr>
+<tr>
+<td><code>absolute</code></td>
+<td>integer or null</td>
+<td>The inclusive absolute cost ceiling. Null when the ceiling is a stretch.</td>
+</tr>
+<tr>
+<td><code>stretch</code></td>
+<td><a href="#fractionjson">FractionJSON</a> or null</td>
+<td>The inclusive stretch over the shortest cost (a fraction). Null when the ceiling is absolute.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="costpowerparametersjson">CostPowerParametersJSON<a class="headerlink" href="#costpowerparametersjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>include_disabled</code></td>
+<td>boolean</td>
+<td>Whether disabled nodes and links are counted.</td>
+</tr>
+<tr>
+<td><code>aggregation_level</code></td>
+<td>integer</td>
+<td>The deepest hierarchy level reported.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="costpowerquestionjson">CostPowerQuestionJSON<a class="headerlink" href="#costpowerquestionjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"cost_power"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>parameters</code></td>
+<td><a href="#costpowerparametersjson">CostPowerParametersJSON</a></td>
+<td>The step's parameters.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="costpowerresultjson">CostPowerResultJSON<a class="headerlink" href="#costpowerresultjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"cost_power"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>include_disabled</code></td>
+<td>boolean</td>
+<td>Whether disabled nodes and links are counted.</td>
+</tr>
+<tr>
+<td><code>aggregation_level</code></td>
+<td>integer</td>
+<td>The deepest hierarchy level reported.</td>
+</tr>
+<tr>
+<td><code>levels</code></td>
+<td>list of <a href="#hardwareleveljson">HardwareLevelJSON</a></td>
+<td>Hardware totals per hierarchy depth.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="costreportjson">CostReportJSON<a class="headerlink" href="#costreportjson" title="Permanent link">&para;</a></h2>
+<p>One of: <a href="#deliveredbypathcostjson">DeliveredByPathCostJSON</a> or <a href="#marginalcurvejson">MarginalCurveJSON</a>.</p>
+<h2 id="costunavailablereasonjson">CostUnavailableReasonJSON<a class="headerlink" href="#costunavailablereasonjson" title="Permanent link">&para;</a></h2>
+<p>One of: <code>"mixed_cost_dag"</code> | <code>"unsupported_model"</code> | <code>"controller_table"</code>.</p>
+<h2 id="customquestionjson">CustomQuestionJSON<a class="headerlink" href="#customquestionjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"custom"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>parameters</code></td>
+<td>object</td>
+<td>The custom step's own JSON parameters.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="deadcapjson">DeadCapJSON<a class="headerlink" href="#deadcapjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>destination</code></td>
+<td>string</td>
+<td>The destination node name.</td>
+</tr>
+<tr>
+<td><code>router</code></td>
+<td>string</td>
+<td>The router node name.</td>
+</tr>
+<tr>
+<td><code>forwarding_group</code></td>
+<td>string</td>
+<td>The forwarding group (tree) name.</td>
+</tr>
+<tr>
+<td><code>group</code></td>
+<td>integer</td>
+<td>The root group's index in the tree.</td>
+</tr>
+<tr>
+<td><code>cap</code></td>
+<td><a href="#fractionjson">FractionJSON</a></td>
+<td>The group's fixed cap: its share of the router's traffic (a fraction).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="declaredsourceweightjson">DeclaredSourceWeightJSON<a class="headerlink" href="#declaredsourceweightjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source</code></td>
+<td>string</td>
+<td>The physical source node's name. Absent when the weight is on a pool's head.</td>
+</tr>
+<tr>
+<td><code>pool_id</code></td>
+<td>string</td>
+<td>The TE ingress pool whose private head carries the weight (as PoolHeadJSON names it). Absent when the weight is on a physical source.</td>
+</tr>
+<tr>
+<td><code>weight</code></td>
+<td>integer</td>
+<td>Its declared weight (positive integer).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="deliveredbypathcostjson">DeliveredByPathCostJSON<a class="headerlink" href="#deliveredbypathcostjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"delivered_by_path_cost"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>cost_domain</code></td>
+<td><code>"physical_network"</code> | <code>"analysis_graph"</code></td>
+<td>physical_network, or analysis_graph when costs include the pool attachment's 1.</td>
+</tr>
+<tr>
+<td><code>bins</code></td>
+<td>list of <a href="#pathcostbinjson">PathCostBinJSON</a></td>
+<td>Delivered units per path cost, in ascending cost.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="demandquestionjson">DemandQuestionJSON<a class="headerlink" href="#demandquestionjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source</code></td>
+<td><a href="#selectorjson">SelectorJSON</a></td>
+<td>The source selector.</td>
+</tr>
+<tr>
+<td><code>target</code></td>
+<td><a href="#selectorjson">SelectorJSON</a></td>
+<td>The target selector.</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td>integer</td>
+<td>The demand's priority (lower places first).</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td>string</td>
+<td>The declared demand's identifier.</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><a href="#modeljson">ModelJSON</a></td>
+<td>The routing model and admission of the question.</td>
+</tr>
+<tr>
+<td><code>physical_volume</code></td>
+<td>number</td>
+<td>The declared volume in physical units.</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>"combine"</code> | <code>"pairwise"</code></td>
+<td>How sources and targets pair: combine or pairwise.</td>
+</tr>
+<tr>
+<td><code>group_mode</code></td>
+<td><code>"flatten"</code> | <code>"per_group"</code> | <code>"group_pairwise"</code></td>
+<td>How selector groups expand: flatten, per_group or group_pairwise.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="directedlinkjson">DirectedLinkJSON<a class="headerlink" href="#directedlinkjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>link</code></td>
+<td>string</td>
+<td>The physical link identifier.</td>
+</tr>
+<tr>
+<td><code>direction</code></td>
+<td><code>"forward"</code> | <code>"reverse"</code></td>
+<td>The direction of the physical link: forward (source to target) or reverse.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="discardedsharejson">DiscardedShareJSON<a class="headerlink" href="#discardedsharejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>label</code></td>
+<td>string</td>
+<td>The discarded expansion leaf.</td>
+</tr>
+<tr>
+<td><code>units</code></td>
+<td>integer</td>
+<td>Its discarded units.</td>
+</tr>
+<tr>
+<td><code>reason</code></td>
+<td><code>"self_pair"</code> | <code>"filtered"</code> | <code>"empty_selection"</code></td>
+<td>Why it was discarded: an empty selection, or an entirely excluded declaration (a self pair or identical group labels). If a declaration is excluded for both reasons, the first exclusion in canonical group and node order supplies its reason.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="domainquestionjson">DomainQuestionJSON<a class="headerlink" href="#domainquestionjson" title="Permanent link">&para;</a></h2>
+<p>One of: <a href="#buildgraphquestionjson">BuildGraphQuestionJSON</a> or <a href="#networkstatsquestionjson">NetworkStatsQuestionJSON</a> or <a href="#costpowerquestionjson">CostPowerQuestionJSON</a>.</p>
+<h2 id="domainresultjson">DomainResultJSON<a class="headerlink" href="#domainresultjson" title="Permanent link">&para;</a></h2>
+<p>One of: <a href="#buildgraphresultjson">BuildGraphResultJSON</a> or <a href="#networkstatsresultjson">NetworkStatsResultJSON</a> or <a href="#costpowerresultjson">CostPowerResultJSON</a>.</p>
+<h2 id="edgeamountjson">EdgeAmountJSON<a class="headerlink" href="#edgeamountjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>edge</code></td>
+<td><a href="#directedlinkjson">DirectedLinkJSON</a></td>
+<td>The directed physical link.</td>
+</tr>
+<tr>
+<td><code>units</code></td>
+<td>integer</td>
+<td>The amount (integer units of q).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="edgeweightjson">EdgeWeightJSON<a class="headerlink" href="#edgeweightjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>edge</code></td>
+<td><a href="#directedlinkjson">DirectedLinkJSON</a> or <a href="#syntheticingressjson">SyntheticIngressJSON</a></td>
+<td>The directed physical link, or a TE ingress pool's attachment.</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td>integer</td>
+<td>The edge's weight.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="endpointsjson">EndpointsJSON<a class="headerlink" href="#endpointsjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sources</code></td>
+<td>list of string</td>
+<td>Source node names, sorted.</td>
+</tr>
+<tr>
+<td><code>destinations</code></td>
+<td>list of string</td>
+<td>Destination node names, sorted.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="exactalphajson">ExactAlphaJSON<a class="headerlink" href="#exactalphajson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>value</code></td>
+<td>number</td>
+<td>Alpha as a binary64 value.</td>
+</tr>
+<tr>
+<td><code>numerator</code></td>
+<td>integer</td>
+<td>Alpha's exact numerator.</td>
+</tr>
+<tr>
+<td><code>denominator</code></td>
+<td>integer</td>
+<td>Alpha's exact denominator.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="expansionaccountingjson">ExpansionAccountingJSON<a class="headerlink" href="#expansionaccountingjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base_id</code></td>
+<td>string</td>
+<td>The declared demand's identifier, before expansion.</td>
+</tr>
+<tr>
+<td><code>declared_units</code></td>
+<td>integer</td>
+<td>The declared demand's units: its scaled total, converted to units once.</td>
+</tr>
+<tr>
+<td><code>resolved_units</code></td>
+<td>integer</td>
+<td>Units split among eligible leaves, after excluding self and same-label group pairs.</td>
+</tr>
+<tr>
+<td><code>discarded_units</code></td>
+<td>integer</td>
+<td>Units of its discarded leaves.</td>
+</tr>
+<tr>
+<td><code>discards</code></td>
+<td>list of <a href="#discardedsharejson">DiscardedShareJSON</a></td>
+<td>Empty-selection shares, or the whole declaration when all pairs are excluded, with their reasons.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="failurecasejson">FailureCaseJSON<a class="headerlink" href="#failurecasejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>string</td>
+<td>The case identifier: baseline, or failure-NNNNNN in draw order.</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>"baseline"</code> | <code>"failure"</code></td>
+<td>baseline or failure.</td>
+</tr>
+<tr>
+<td><code>pattern</code></td>
+<td><a href="#failurepatternjson">FailurePatternJSON</a></td>
+<td>The failure pattern: the failed nodes and links.</td>
+</tr>
+<tr>
+<td><code>occurrences</code></td>
+<td>integer</td>
+<td>How many draws produced this pattern.</td>
+</tr>
+<tr>
+<td><code>trace</code></td>
+<td><a href="#failuretracejson">FailureTraceJSON</a></td>
+<td>The first draw's trace of this pattern. Absent when failure traces are not requested, or no draw produced the pattern.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="failurepatternjson">FailurePatternJSON<a class="headerlink" href="#failurepatternjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>excluded_nodes</code></td>
+<td>list of string</td>
+<td>Failed nodes, sorted.</td>
+</tr>
+<tr>
+<td><code>excluded_links</code></td>
+<td>list of string</td>
+<td>Failed links (both directions), sorted.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="failurerequestjson">FailureRequestJSON<a class="headerlink" href="#failurerequestjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>policy_name</code></td>
+<td>string or null</td>
+<td>The named failure policy. Null when the policy is inline.</td>
+</tr>
+<tr>
+<td><code>inline_policy</code></td>
+<td>object or null</td>
+<td>An inline failure policy. Null when the policy is named.</td>
+</tr>
+<tr>
+<td><code>iterations</code></td>
+<td>integer</td>
+<td>The number of failure draws.</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td>integer or null</td>
+<td>The draws' base seed. Null when the draws are unseeded.</td>
+</tr>
+<tr>
+<td><code>failure_trace</code></td>
+<td>boolean</td>
+<td>Whether the first draw of each pattern records its trace.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="failureselectionjson">FailureSelectionJSON<a class="headerlink" href="#failureselectionjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rule_index</code></td>
+<td>integer</td>
+<td>The rule's index in its mode.</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td><code>"node"</code> | <code>"link"</code> | <code>"risk_group"</code></td>
+<td>What the rule selects: node, link or risk_group.</td>
+</tr>
+<tr>
+<td><code>selected</code></td>
+<td>list of string</td>
+<td>The selected entities.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="failuretracejson">FailureTraceJSON<a class="headerlink" href="#failuretracejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>draw_index</code></td>
+<td>integer</td>
+<td>The draw that first produced the pattern.</td>
+</tr>
+<tr>
+<td><code>mode_index</code></td>
+<td>integer or null</td>
+<td>The mode drawn. Null when the policy has no modes.</td>
+</tr>
+<tr>
+<td><code>mode_attrs</code></td>
+<td>object</td>
+<td>The drawn mode's attributes.</td>
+</tr>
+<tr>
+<td><code>selections</code></td>
+<td>list of <a href="#failureselectionjson">FailureSelectionJSON</a></td>
+<td>What each rule selected.</td>
+</tr>
+<tr>
+<td><code>expanded_nodes</code></td>
+<td>list of string</td>
+<td>Nodes the selections expand to.</td>
+</tr>
+<tr>
+<td><code>expanded_links</code></td>
+<td>list of string</td>
+<td>Links the selections expand to.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="forwardingfailurejson">ForwardingFailureJSON<a class="headerlink" href="#forwardingfailurejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"loss_iteration"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td>string</td>
+<td>The native error text.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="fractionjson">FractionJSON<a class="headerlink" href="#fractionjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>numerator</code></td>
+<td>integer</td>
+<td>The fraction's numerator.</td>
+</tr>
+<tr>
+<td><code>denominator</code></td>
+<td>integer</td>
+<td>The fraction's denominator (positive).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="hardwareleveljson">HardwareLevelJSON<a class="headerlink" href="#hardwareleveljson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>level</code></td>
+<td>integer</td>
+<td>The hierarchy depth of the rows.</td>
+</tr>
+<tr>
+<td><code>rows</code></td>
+<td>list of <a href="#hardwarerowjson">HardwareRowJSON</a></td>
+<td>One row per hierarchy path at this depth.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="hardwarerowjson">HardwareRowJSON<a class="headerlink" href="#hardwarerowjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>path</code></td>
+<td>string</td>
+<td>The hierarchy path of the row (empty for the root level).</td>
+</tr>
+<tr>
+<td><code>platform_capex</code></td>
+<td>number</td>
+<td>Platform cost of the path's nodes.</td>
+</tr>
+<tr>
+<td><code>platform_power_watts</code></td>
+<td>number</td>
+<td>Platform power of the path's nodes, in watts.</td>
+</tr>
+<tr>
+<td><code>optics_capex</code></td>
+<td>number</td>
+<td>Optic cost of the path's link ends.</td>
+</tr>
+<tr>
+<td><code>optics_power_watts</code></td>
+<td>number</td>
+<td>Optic power of the path's link ends, in watts.</td>
+</tr>
+<tr>
+<td><code>capex_total</code></td>
+<td>number</td>
+<td>Platform and optic cost.</td>
+</tr>
+<tr>
+<td><code>power_total_watts</code></td>
+<td>number</td>
+<td>Platform and optic power, in watts.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="headdesignjson">HeadDesignJSON<a class="headerlink" href="#headdesignjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>head</code></td>
+<td><a href="#sourcejson">SourceJSON</a></td>
+<td>The tunnel head: a node name, or the pool head of a TE ingress pool.</td>
+</tr>
+<tr>
+<td><code>units</code></td>
+<td>integer</td>
+<td>The head's share of the design volume (integer units of q).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="inputconstraintjson">InputConstraintJSON<a class="headerlink" href="#inputconstraintjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"input"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>string</td>
+<td>The input or constraint label: where the value is declared.</td>
+</tr>
+<tr>
+<td><code>q_upper_bound</code></td>
+<td><a href="#fractionjson">FractionJSON</a></td>
+<td>The largest q at which rounding this input is guaranteed within the precision: 2 times the precision times the input (rounding moves it half a unit at most).</td>
+</tr>
+<tr>
+<td><code>met</code></td>
+<td>boolean</td>
+<td>Whether the chosen q meets it.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="jsonvalue">JSONValue<a class="headerlink" href="#jsonvalue" title="Permanent link">&para;</a></h2>
+<p>One of: null or boolean or integer or number or string or list of <a href="#jsonvalue">JSONValue</a> or object.</p>
+<h2 id="msdanalysisjson">MSDAnalysisJSON<a class="headerlink" href="#msdanalysisjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"msd"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td><a href="#analysismetadatajson">AnalysisMetadataJSON</a></td>
+<td>Run or analysis metadata.</td>
+</tr>
+<tr>
+<td><code>outputs</code></td>
+<td><a href="#outputselectionjson">OutputSelectionJSON</a></td>
+<td>The output selection of the best and probe rows.</td>
+</tr>
+<tr>
+<td><code>alpha_feasible</code></td>
+<td><a href="#exactalphajson">ExactAlphaJSON</a> or null</td>
+<td>The largest tested feasible alpha. Null when no tested alpha was feasible.</td>
+</tr>
+<tr>
+<td><code>best_probe_index</code></td>
+<td>integer or null</td>
+<td>The history index of the probe at alpha_feasible. Null when no tested alpha was feasible.</td>
+</tr>
+<tr>
+<td><code>monotone_proven</code></td>
+<td>boolean</td>
+<td>Whether feasibility (every demand fits) is proven downward closed in alpha for this question class: an alpha below a feasible one is feasible, so the search's bracket is sound. Delivery itself need not be monotone in alpha.</td>
+</tr>
+<tr>
+<td><code>proof</code></td>
+<td><a href="#msdproofjson">MSDProofJSON</a></td>
+<td>What makes feasibility downward closed in alpha (every alpha below a feasible one is feasible). Values: fixed_program (every demand forwards a program that does not change with alpha); single_controller (one centralized-TE demand without a tunnel count, or one optimized shortest-paths demand with a static route choice, alone in its set); nothing_offered (the set offers no traffic); unproved (no proof: the search is a heuristic).</td>
+</tr>
+<tr>
+<td><code>upper_certificate</code></td>
+<td><a href="#uppercertificatejson">UpperCertificateJSON</a> or null</td>
+<td>A proved bracket around the largest feasible alpha. Null when no bracket is proved.</td>
+</tr>
+<tr>
+<td><code>search_status</code></td>
+<td><a href="#msdstatusjson">MSDStatusJSON</a></td>
+<td>How the search ended. Values: feasible (the gap between a feasible and an infeasible alpha closed to alpha_tolerance); limit (a feasible alpha was found, but the search reached alpha_max or an iteration limit); none_feasible (no tested alpha was feasible); range (a probe's scaled volumes left the native range, and the search stopped there); stagnation (the next bracketing value equals the current alpha, or a bisection midpoint rounds to a bracket endpoint); trivial (the set offers no traffic and one probe at alpha_max succeeded).</td>
+</tr>
+<tr>
+<td><code>stop_reason</code></td>
+<td><a href="#msdstopreasonjson">MSDStopReasonJSON</a></td>
+<td>Why the search stopped. Values: tolerance (the gap closed to alpha_tolerance); alpha_bound (the search reached alpha_min or alpha_max); bracket_limit (max_bracket_iters ran out before a feasible and an infeasible alpha were found); bisect_limit (max_bisect_iters ran out before the gap closed); offer_range (a probe left the native range); representable_limit (the next bracketing value equals the current alpha, or a bisection midpoint rounds to a bracket endpoint); nothing_offered (the set offers no traffic); unit_resolution (no feasible alpha: each tested alpha either rounds some positive volume to zero units or does not fit).</td>
+</tr>
+<tr>
+<td><code>history</code></td>
+<td>list of <a href="#msdprobejson">MSDProbeJSON</a></td>
+<td>Every probe in the order tested.</td>
+</tr>
+<tr>
+<td><code>best_rows</code></td>
+<td>list of <a href="#placementrowjson">PlacementRowJSON</a> or null</td>
+<td>The rows at alpha_feasible. Null when no tested alpha was feasible.</td>
+</tr>
+<tr>
+<td><code>best_accounting</code></td>
+<td>list of <a href="#expansionaccountingjson">ExpansionAccountingJSON</a> or null</td>
+<td>The accounting at alpha_feasible. Null when no tested alpha was feasible.</td>
+</tr>
+<tr>
+<td><code>probe_rows</code></td>
+<td>list of <a href="#proberowsjson">ProbeRowsJSON</a></td>
+<td>Rows of every probe. Absent when probe rows are not requested.</td>
+</tr>
+<tr>
+<td><code>query</code></td>
+<td><a href="#msdqueryjson">MSDQueryJSON</a></td>
+<td>The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.</td>
+</tr>
+<tr>
+<td><code>controller</code></td>
+<td>list of <a href="#tablereportjson">TableReportJSON</a></td>
+<td>The WCMP controller's tables of this demand set. Absent when no WCMP controller programs the set.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="msdprobejson">MSDProbeJSON<a class="headerlink" href="#msdprobejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>index</code></td>
+<td>integer</td>
+<td>The probe's position in the search history (0 first).</td>
+</tr>
+<tr>
+<td><code>alpha</code></td>
+<td><a href="#exactalphajson">ExactAlphaJSON</a></td>
+<td>The probe's exact alpha.</td>
+</tr>
+<tr>
+<td><code>outcome</code></td>
+<td><code>"feasible"</code> | <code>"infeasible"</code> | <code>"below_resolution"</code> | <code>"range"</code></td>
+<td>feasible, infeasible, below_resolution (rounds to zero) or range (out of native range).</td>
+</tr>
+<tr>
+<td><code>totals</code></td>
+<td><a href="#placementtotalsjson">PlacementTotalsJSON</a> or null</td>
+<td>The probe's totals. Null when the probe was out of range.</td>
+</tr>
+<tr>
+<td><code>range_refusal</code></td>
+<td><a href="#rangerefusaljson">RangeRefusalJSON</a> or null</td>
+<td>Why the probe was out of range. Null when the probe was in range.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="msdproofjson">MSDProofJSON<a class="headerlink" href="#msdproofjson" title="Permanent link">&para;</a></h2>
+<p>One of: <code>"fixed_program"</code> | <code>"single_controller"</code> | <code>"nothing_offered"</code> | <code>"unproved"</code>.</p>
+<h2 id="msdqueryjson">MSDQueryJSON<a class="headerlink" href="#msdqueryjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"msd"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>demand_set</code></td>
+<td>string</td>
+<td>The demand set's name.</td>
+</tr>
+<tr>
+<td><code>demands</code></td>
+<td>list of <a href="#demandquestionjson">DemandQuestionJSON</a></td>
+<td>The declared demands of the set, as they were asked.</td>
+</tr>
+<tr>
+<td><code>alpha_start</code></td>
+<td>number</td>
+<td>The first alpha probed.</td>
+</tr>
+<tr>
+<td><code>growth_factor</code></td>
+<td>number</td>
+<td>The factor between bracket probes.</td>
+</tr>
+<tr>
+<td><code>alpha_min</code></td>
+<td>number</td>
+<td>The smallest alpha searched.</td>
+</tr>
+<tr>
+<td><code>alpha_max</code></td>
+<td>number</td>
+<td>The largest alpha searched.</td>
+</tr>
+<tr>
+<td><code>alpha_tolerance</code></td>
+<td>number</td>
+<td>The absolute width of the final alpha bracket at which bisection stops.</td>
+</tr>
+<tr>
+<td><code>max_bracket_iters</code></td>
+<td>integer</td>
+<td>The largest number of bracket probes.</td>
+</tr>
+<tr>
+<td><code>max_bisect_iters</code></td>
+<td>integer</td>
+<td>The largest number of bisection probes.</td>
+</tr>
+<tr>
+<td><code>export_probe_rows</code></td>
+<td>boolean</td>
+<td>Whether every probe's rows are exported.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="msdstatusjson">MSDStatusJSON<a class="headerlink" href="#msdstatusjson" title="Permanent link">&para;</a></h2>
+<p>One of: <code>"feasible"</code> | <code>"none_feasible"</code> | <code>"range"</code> | <code>"stagnation"</code> | <code>"limit"</code> | <code>"trivial"</code>.</p>
+<h2 id="msdstopreasonjson">MSDStopReasonJSON<a class="headerlink" href="#msdstopreasonjson" title="Permanent link">&para;</a></h2>
+<p>One of: <code>"tolerance"</code> | <code>"alpha_bound"</code> | <code>"bracket_limit"</code> | <code>"bisect_limit"</code> | <code>"offer_range"</code> | <code>"representable_limit"</code> | <code>"nothing_offered"</code> | <code>"unit_resolution"</code>.</p>
+<h2 id="marginalcostbinjson">MarginalCostBinJSON<a class="headerlink" href="#marginalcostbinjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>marginal_cost</code></td>
+<td>integer</td>
+<td>The increase of the minimum total cost per additional unit.</td>
+</tr>
+<tr>
+<td><code>units</code></td>
+<td>integer</td>
+<td>The units delivered at that marginal cost.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="marginalcurvejson">MarginalCurveJSON<a class="headerlink" href="#marginalcurvejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"marginal_curve"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>cost_domain</code></td>
+<td><code>"physical_network"</code> | <code>"analysis_graph"</code></td>
+<td>physical_network, or analysis_graph when costs include the pool attachment's 1.</td>
+</tr>
+<tr>
+<td><code>bins</code></td>
+<td>list of <a href="#marginalcostbinjson">MarginalCostBinJSON</a></td>
+<td>The native marginal cost curve: each piece's marginal cost and units, in ascending cost.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="memberweightjson">MemberWeightJSON<a class="headerlink" href="#memberweightjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>edge</code></td>
+<td><a href="#directedlinkjson">DirectedLinkJSON</a></td>
+<td>The member: a directed link leaving the router.</td>
+</tr>
+<tr>
+<td><code>weight</code></td>
+<td>integer</td>
+<td>Its integer weight (0 included).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="modeljson">ModelJSON<a class="headerlink" href="#modeljson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>routing</code></td>
+<td><code>"shortest_paths"</code> | <code>"distributed_te"</code> | <code>"centralized_te"</code> | <code>"pinned"</code></td>
+<td>The routing model.</td>
+</tr>
+<tr>
+<td><code>admission</code></td>
+<td><code>"lossless"</code> | <code>"lossy"</code></td>
+<td>lossless (admit the largest total whose splits fit, and refuse the rest before it enters) or lossy (send the whole offer; what does not fit is lost at the sources or on the links).</td>
+</tr>
+<tr>
+<td><code>allocation</code></td>
+<td><code>"equal"</code> | <code>"weighted"</code> | <code>"optimized"</code> or null</td>
+<td>How a router splits over its members: equal, weighted or optimized. Null when it does not apply to the model.</td>
+</tr>
+<tr>
+<td><code>source_allocation</code></td>
+<td><code>"equal"</code> | <code>"optimized"</code> | <code>"weighted"</code> or null</td>
+<td>How sources share the demand: equal, weighted or optimized. Null when it does not apply to the model.</td>
+</tr>
+<tr>
+<td><code>source_weights</code></td>
+<td>list of <a href="#declaredsourceweightjson">DeclaredSourceWeightJSON</a> or null</td>
+<td>Weighted sources (CentralizedTE without tunnels): the question's declared weights, each graph node with a nonzero weight in node order (a zero weight receives nothing; all zero gives an empty list); a TE ingress pool's private head is named by its pool. Null when the sources are not weighted.</td>
+</tr>
+<tr>
+<td><code>weight_basis</code></td>
+<td><code>"capacity"</code> | <code>"explicit"</code> | <code>"residual_snapshot"</code> or null</td>
+<td>What weighted splits are proportional to. Null when it does not apply to the model.</td>
+</tr>
+<tr>
+<td><code>edge_weights</code></td>
+<td>list of <a href="#edgeweightjson">EdgeWeightJSON</a> or null</td>
+<td>Explicit edge weights. Null when the model has none.</td>
+</tr>
+<tr>
+<td><code>tie_break</code></td>
+<td><code>"fewer_hops"</code> | <code>"higher_capacity"</code> | <code>"higher_available_capacity"</code> | <code>"higher_headroom"</code> or null</td>
+<td>How equal-cost choices are ordered (ShortestPaths and T1). Null when the model is another one, or the WCMP controller programs the demand.</td>
+</tr>
+<tr>
+<td><code>multipath</code></td>
+<td>boolean or null</td>
+<td>ShortestPaths: whether every equal-cost walk is used (false: one canonical path). Null when the model is not ShortestPaths, or the WCMP controller programs the demand.</td>
+</tr>
+<tr>
+<td><code>parallel_edges</code></td>
+<td>boolean or null</td>
+<td>ShortestPaths and T1: whether every parallel link is used (false: one per node pair). Null when the model is neither, or the WCMP controller programs the demand.</td>
+</tr>
+<tr>
+<td><code>tunnel_count</code></td>
+<td><a href="#tunnelcountjson">TunnelCountJSON</a> or null</td>
+<td>The tunnel count per head. Null when the model has no tunnels.</td>
+</tr>
+<tr>
+<td><code>prefer_headroom</code></td>
+<td>boolean or null</td>
+<td>CentralizedTE: whether T2, after minimizing total tunnel cost, minimizes the plan's headroom penalty, based on occupied fractions of link capacity. Null when the model is not CentralizedTE.</td>
+</tr>
+<tr>
+<td><code>cost_ceiling</code></td>
+<td><a href="#costceilingjson">CostCeilingJSON</a> or null</td>
+<td>The tunnels' cost ceiling. Null when there is none.</td>
+</tr>
+<tr>
+<td><code>min_unreserved_bandwidth_units</code></td>
+<td>integer or null</td>
+<td>T1: a setup-search filter (integer units of q): a tunnel's search uses a link only when its unreserved capacity is at least both the tunnel's request and this minimum; nothing is kept free. Null when the model is not T1.</td>
+</tr>
+<tr>
+<td><code>route_names</code></td>
+<td>list of string or null</td>
+<td>The named routes of a pinned model. Null when the model is not pinned by named routes.</td>
+</tr>
+<tr>
+<td><code>controller</code></td>
+<td><code>"next_hop"</code> | <code>"group"</code> | <code>"all_routers"</code> or null</td>
+<td>The WCMP controller scope that programs the demand. Null when no controller programs it.</td>
+</tr>
+<tr>
+<td><code>supplied_support</code></td>
+<td>boolean</td>
+<td>Whether a CentralizedTE model was given its own support DAG.</td>
+</tr>
+<tr>
+<td><code>supplied_program</code></td>
+<td>boolean</td>
+<td>Whether a pinned model was given a native program (its routes are not exported).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="namedpathjson">NamedPathJSON<a class="headerlink" href="#namedpathjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source</code></td>
+<td>string</td>
+<td>The path's source node.</td>
+</tr>
+<tr>
+<td><code>destination</code></td>
+<td>string</td>
+<td>The path's destination node.</td>
+</tr>
+<tr>
+<td><code>cost</code></td>
+<td>integer</td>
+<td>The path's cost.</td>
+</tr>
+<tr>
+<td><code>hops</code></td>
+<td>list of list of <a href="#directedlinkjson">DirectedLinkJSON</a></td>
+<td>The path's hops in order; each hop lists the parallel directed links it may use.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="nativeoutputsjson">NativeOutputsJSON<a class="headerlink" href="#nativeoutputsjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>edge_flows</code></td>
+<td>boolean</td>
+<td>Request each row's per-link flows.</td>
+</tr>
+<tr>
+<td><code>residual</code></td>
+<td>boolean</td>
+<td>Request each row's per-link residual capacity.</td>
+</tr>
+<tr>
+<td><code>edge_reservations</code></td>
+<td>boolean</td>
+<td>Request each row's per-link tunnel holds.</td>
+</tr>
+<tr>
+<td><code>saturated_boundary_edges</code></td>
+<td>boolean</td>
+<td>Request each row's saturated boundary links.</td>
+</tr>
+<tr>
+<td><code>min_cut</code></td>
+<td>boolean</td>
+<td>Request the minimum cut where it is defined.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="nativeplacementjson">NativePlacementJSON<a class="headerlink" href="#nativeplacementjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>request_kind</code></td>
+<td><code>"finite"</code> | <code>"unlimited"</code></td>
+<td>Whether the request is finite or unlimited.</td>
+</tr>
+<tr>
+<td><code>requested_units</code></td>
+<td>integer or null</td>
+<td>The request (integer units of q). Null when the request is unlimited.</td>
+</tr>
+<tr>
+<td><code>offered_units</code></td>
+<td>integer or null</td>
+<td>Lossy: the units sent into the network. Null when admission is lossless.</td>
+</tr>
+<tr>
+<td><code>delivered_units</code></td>
+<td>integer</td>
+<td>The units delivered to the destinations.</td>
+</tr>
+<tr>
+<td><code>unadmitted_units</code></td>
+<td>integer or null</td>
+<td>Lossless: the request minus the delivery; lossy: 0. Null when the request is unlimited.</td>
+</tr>
+<tr>
+<td><code>source_drop_units</code></td>
+<td>integer</td>
+<td>Lossy: units lost at sources without a usable route; 0 when lossless.</td>
+</tr>
+<tr>
+<td><code>edge_drop_units</code></td>
+<td>integer</td>
+<td>Lossy: units dropped on physical links and TE ingress pool attachments, in all; 0 when lossless.</td>
+</tr>
+<tr>
+<td><code>termination</code></td>
+<td><code>"complete"</code> | <code>"no_route"</code> | <code>"exhausted"</code> | <code>"no_active_weight"</code></td>
+<td>The native call's outcome. Values: complete (the offer is 0, admitted in full when lossless, or forwarded in full when lossy, its losses included); no_route (a positive offer and no source with a route); no_active_weight (the program has routes, but none of positive weight can send anything); exhausted (lossless and less than the offer admitted, or an unlimited offer).</td>
+</tr>
+<tr>
+<td><code>total_cost</code></td>
+<td>integer or null</td>
+<td>The controllers only (CentralizedTE without tunnels, ShortestPaths with optimized allocation): the exact sum over links of cost times carried units. Null when the model is another one (T1, T2, pinned, other ShortestPaths).</td>
+</tr>
+<tr>
+<td><code>call_delivered_units</code></td>
+<td>integer</td>
+<td>The units this call delivered. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>call_undelivered_units</code></td>
+<td>integer or null</td>
+<td>The request minus this call's delivery. Null when the request is unlimited. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>delivery_delta_units</code></td>
+<td>integer</td>
+<td>The delivery after the call minus before it. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>call_edge_drops</code></td>
+<td>list of <a href="#edgeamountjson">EdgeAmountJSON</a></td>
+<td>This call's drops on physical links. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>call_source_drop_units</code></td>
+<td>integer</td>
+<td>This call's offered units lost at sources without a usable route. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>admitted_units</code></td>
+<td>integer</td>
+<td>Lossless: the units carried; lossy: the units offered. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>edge_drops</code></td>
+<td>list of <a href="#edgeamountjson">EdgeAmountJSON</a></td>
+<td>Drops on physical links, by directed link. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>by_source</code></td>
+<td>list of <a href="#sourceflowjson">SourceFlowJSON</a></td>
+<td>One row per source, in source order (zero rows included). Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>by_tunnel</code></td>
+<td>list of <a href="#tunnelflowjson">TunnelFlowJSON</a></td>
+<td>One row per tunnel of the program, in entry order. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>plan</code></td>
+<td><a href="#tunnelplanjson">TunnelPlanJSON</a> or null</td>
+<td>T1 and T2: the tunnel plan after the call. Null when the model is not T1 or T2. Absent when details are not requested, and in a tunnel-count row's result (the row records the plan).</td>
+</tr>
+<tr>
+<td><code>edge_flows</code></td>
+<td>list of <a href="#edgeamountjson">EdgeAmountJSON</a></td>
+<td>The units each directed physical link carries. Absent when it was not requested.</td>
+</tr>
+<tr>
+<td><code>residual</code></td>
+<td>list of <a href="#edgeamountjson">EdgeAmountJSON</a></td>
+<td>Each directed physical link's residual capacity (integer units of q): after this row, or, in simultaneous placement, the one final residual every row shares. Absent when it was not requested.</td>
+</tr>
+<tr>
+<td><code>edge_reservations</code></td>
+<td>list of <a href="#edgeamountjson">EdgeAmountJSON</a></td>
+<td>Each directed physical link's tunnel holds (integer units of q). Absent when it was not requested.</td>
+</tr>
+<tr>
+<td><code>saturated_boundary_edges</code></td>
+<td>list of <a href="#directedlinkjson">DirectedLinkJSON</a></td>
+<td>The saturated links at the sources' reachable boundary. Absent when it was not requested.</td>
+</tr>
+<tr>
+<td><code>min_cut</code></td>
+<td>list of <a href="#directedlinkjson">DirectedLinkJSON</a> or null</td>
+<td>The minimum cut closest to the sources, where one is defined (unrestricted optimized CentralizedTE at its maximum). Null when no cut is defined. Absent when it was not requested.</td>
+</tr>
+<tr>
+<td><code>synthetic_ingress</code></td>
+<td><a href="#syntheticprojectionjson">SyntheticProjectionJSON</a></td>
+<td>Amounts on the private pool attachments (the synthetic ingress edges). Absent when the row has no TE ingress pool, or no native output is requested and details record no attachment drops.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="networkstatsparametersjson">NetworkStatsParametersJSON<a class="headerlink" href="#networkstatsparametersjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>include_disabled</code></td>
+<td>boolean</td>
+<td>Whether disabled nodes and links are counted.</td>
+</tr>
+<tr>
+<td><code>excluded_nodes</code></td>
+<td>list of string</td>
+<td>Nodes left out of the statistics.</td>
+</tr>
+<tr>
+<td><code>excluded_links</code></td>
+<td>list of string</td>
+<td>Links left out of the statistics.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="networkstatsquestionjson">NetworkStatsQuestionJSON<a class="headerlink" href="#networkstatsquestionjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"network_stats"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>parameters</code></td>
+<td><a href="#networkstatsparametersjson">NetworkStatsParametersJSON</a></td>
+<td>The step's parameters.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="networkstatsresultjson">NetworkStatsResultJSON<a class="headerlink" href="#networkstatsresultjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"network_stats"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>node_count</code></td>
+<td>integer</td>
+<td>Nodes counted.</td>
+</tr>
+<tr>
+<td><code>link_count</code></td>
+<td>integer</td>
+<td>Links counted.</td>
+</tr>
+<tr>
+<td><code>total_capacity</code></td>
+<td>number</td>
+<td>The sum of link capacities.</td>
+</tr>
+<tr>
+<td><code>mean_capacity</code></td>
+<td>number</td>
+<td>The mean link capacity.</td>
+</tr>
+<tr>
+<td><code>median_capacity</code></td>
+<td>number</td>
+<td>The median link capacity.</td>
+</tr>
+<tr>
+<td><code>min_capacity</code></td>
+<td>number</td>
+<td>The smallest link capacity.</td>
+</tr>
+<tr>
+<td><code>max_capacity</code></td>
+<td>number</td>
+<td>The largest link capacity.</td>
+</tr>
+<tr>
+<td><code>mean_cost</code></td>
+<td>number</td>
+<td>The mean link cost.</td>
+</tr>
+<tr>
+<td><code>median_cost</code></td>
+<td>number</td>
+<td>The median link cost.</td>
+</tr>
+<tr>
+<td><code>min_cost</code></td>
+<td>integer</td>
+<td>The smallest link cost.</td>
+</tr>
+<tr>
+<td><code>max_cost</code></td>
+<td>integer</td>
+<td>The largest link cost.</td>
+</tr>
+<tr>
+<td><code>mean_degree</code></td>
+<td>number</td>
+<td>The mean node degree.</td>
+</tr>
+<tr>
+<td><code>median_degree</code></td>
+<td>number</td>
+<td>The median node degree.</td>
+</tr>
+<tr>
+<td><code>min_degree</code></td>
+<td>number</td>
+<td>The smallest node degree.</td>
+</tr>
+<tr>
+<td><code>max_degree</code></td>
+<td>number</td>
+<td>The largest node degree.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="outputselectionjson">OutputSelectionJSON<a class="headerlink" href="#outputselectionjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>native</code></td>
+<td><a href="#nativeoutputsjson">NativeOutputsJSON</a></td>
+<td>The native output flags.</td>
+</tr>
+<tr>
+<td><code>cost_distribution</code></td>
+<td>boolean</td>
+<td>Whether cost reports are exported.</td>
+</tr>
+<tr>
+<td><code>details</code></td>
+<td>boolean</td>
+<td>Whether native per-source, per-tunnel, plan and call fields are exported.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="pathanalysisjson">PathAnalysisJSON<a class="headerlink" href="#pathanalysisjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"paths"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td><a href="#analysismetadatajson">AnalysisMetadataJSON</a></td>
+<td>Run or analysis metadata.</td>
+</tr>
+<tr>
+<td><code>algorithm</code></td>
+<td><code>"spf"</code> | <code>"ksp"</code></td>
+<td>The path search: spf (shortest paths) or ksp (k shortest paths).</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>"combine"</code> | <code>"pairwise"</code></td>
+<td>How sources and targets pair: combine or pairwise.</td>
+</tr>
+<tr>
+<td><code>costs_only</code></td>
+<td>boolean</td>
+<td>Only path costs, without the paths.</td>
+</tr>
+<tr>
+<td><code>rows</code></td>
+<td>list of <a href="#pathrowjson">PathRowJSON</a></td>
+<td>The analysis rows, one per demand or endpoint pair.</td>
+</tr>
+<tr>
+<td><code>query</code></td>
+<td><a href="#pathqueryjson">PathQueryJSON</a></td>
+<td>The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="pathcostbinjson">PathCostBinJSON<a class="headerlink" href="#pathcostbinjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cost</code></td>
+<td>integer</td>
+<td>The path cost (analysis graph for a pool).</td>
+</tr>
+<tr>
+<td><code>physical_path_cost</code></td>
+<td>integer</td>
+<td>The path cost without the pool attachment.</td>
+</tr>
+<tr>
+<td><code>delivered_units</code></td>
+<td>integer</td>
+<td>The units delivered over paths of this cost.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="pathqueryjson">PathQueryJSON<a class="headerlink" href="#pathqueryjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"paths"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td><a href="#selectorjson">SelectorJSON</a></td>
+<td>The source selector.</td>
+</tr>
+<tr>
+<td><code>target</code></td>
+<td><a href="#selectorjson">SelectorJSON</a></td>
+<td>The target selector.</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>"combine"</code> | <code>"pairwise"</code></td>
+<td>How sources and targets pair: combine or pairwise.</td>
+</tr>
+<tr>
+<td><code>algorithm</code></td>
+<td><code>"spf"</code> | <code>"ksp"</code></td>
+<td>The path search: spf (shortest paths) or ksp (k shortest paths).</td>
+</tr>
+<tr>
+<td><code>costs_only</code></td>
+<td>boolean</td>
+<td>Only path costs, without the paths.</td>
+</tr>
+<tr>
+<td><code>max_paths</code></td>
+<td>integer or null</td>
+<td>The largest number of paths per row. Null when every path is kept.</td>
+</tr>
+<tr>
+<td><code>split_parallel_edges</code></td>
+<td>boolean or null</td>
+<td>SPF: whether each parallel link is its own path. Null when the algorithm is KSP.</td>
+</tr>
+<tr>
+<td><code>k</code></td>
+<td>integer or null</td>
+<td>KSP: the number of shortest paths. Null when the algorithm is SPF.</td>
+</tr>
+<tr>
+<td><code>cost_ceiling</code></td>
+<td><a href="#costceilingjson">CostCeilingJSON</a> or null</td>
+<td>KSP: the cost ceiling. Null when there is none or the algorithm is SPF.</td>
+</tr>
+<tr>
+<td><code>tie_break</code></td>
+<td><code>"fewer_hops"</code> | <code>"higher_capacity"</code> | <code>"higher_available_capacity"</code> | <code>"higher_headroom"</code></td>
+<td>How equal-cost choices are ordered.</td>
+</tr>
+<tr>
+<td><code>multipath</code></td>
+<td>boolean or null</td>
+<td>SPF: whether every equal-cost walk is used. Null when the algorithm is KSP.</td>
+</tr>
+<tr>
+<td><code>parallel_edges</code></td>
+<td>boolean</td>
+<td>Whether every parallel link is used (false: one per node pair).</td>
+</tr>
+<tr>
+<td><code>excluded_nodes</code></td>
+<td>list of string or <a href="#poolnodejson">PoolNodeJSON</a></td>
+<td>Nodes excluded from the question: physical nodes by name, a TE ingress pool's private head by its pool.</td>
+</tr>
+<tr>
+<td><code>excluded_edges</code></td>
+<td>list of <a href="#directedlinkjson">DirectedLinkJSON</a> or <a href="#syntheticingressjson">SyntheticIngressJSON</a></td>
+<td>Directed links excluded from the question.</td>
+</tr>
+<tr>
+<td><code>residual_units</code></td>
+<td>list of integer or null</td>
+<td>The supplied residual capacities the search used (SPF or KSP), one per edge of the prepared graph in edge order (pool attachments included; integer units of q). Null when no residual vector is supplied.</td>
+</tr>
+<tr>
+<td><code>min_residual</code></td>
+<td>integer or null</td>
+<td>SPF: when residual_units is supplied, a link is usable only when that residual is at least this many units; without the vector there is no residual filter (KSP's supplied vector uses a minimum of one unit). Null when the algorithm is KSP.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="pathrowjson">PathRowJSON<a class="headerlink" href="#pathrowjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>string</td>
+<td>The row's stable identifier within its analysis.</td>
+</tr>
+<tr>
+<td><code>endpoints</code></td>
+<td><a href="#endpointsjson">EndpointsJSON</a></td>
+<td>The physical source and destination node names of the row.</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>"paths"</code> | <code>"self"</code></td>
+<td>paths, or self for a source equal to its target.</td>
+</tr>
+<tr>
+<td><code>cost</code></td>
+<td>integer or null</td>
+<td>The shortest cost of the row. Null when the destination is unreachable.</td>
+</tr>
+<tr>
+<td><code>paths</code></td>
+<td>list of <a href="#namedpathjson">NamedPathJSON</a></td>
+<td>The paths of this row. Absent when the query is costs-only.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="placementanalysisjson">PlacementAnalysisJSON<a class="headerlink" href="#placementanalysisjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"placement"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td><a href="#analysismetadatajson">AnalysisMetadataJSON</a></td>
+<td>Run or analysis metadata.</td>
+</tr>
+<tr>
+<td><code>outputs</code></td>
+<td><a href="#outputselectionjson">OutputSelectionJSON</a></td>
+<td>The output selection that applies to the rows.</td>
+</tr>
+<tr>
+<td><code>alpha</code></td>
+<td><a href="#exactalphajson">ExactAlphaJSON</a></td>
+<td>The exact scaling of the declared demands.</td>
+</tr>
+<tr>
+<td><code>accounting</code></td>
+<td>list of <a href="#expansionaccountingjson">ExpansionAccountingJSON</a></td>
+<td>Each declared demand's units: declared, resolved and discarded.</td>
+</tr>
+<tr>
+<td><code>cases</code></td>
+<td>list of <a href="#placementcasejson">PlacementCaseJSON</a></td>
+<td>The baseline case first, then each distinct failure pattern.</td>
+</tr>
+<tr>
+<td><code>query</code></td>
+<td><a href="#placementqueryjson">PlacementQueryJSON</a></td>
+<td>The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.</td>
+</tr>
+<tr>
+<td><code>controller</code></td>
+<td>list of <a href="#tablereportjson">TableReportJSON</a></td>
+<td>The WCMP controller's tables of this demand set. Absent when no WCMP controller programs the set.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="placementcasejson">PlacementCaseJSON<a class="headerlink" href="#placementcasejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>case</code></td>
+<td><a href="#failurecasejson">FailureCaseJSON</a></td>
+<td>The failure case.</td>
+</tr>
+<tr>
+<td><code>states</code></td>
+<td><a href="#placementstatesjson">PlacementStatesJSON</a></td>
+<td>One entry per requested failure state.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="placementqueryjson">PlacementQueryJSON<a class="headerlink" href="#placementqueryjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"placement"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>demand_set</code></td>
+<td>string</td>
+<td>The demand set's name.</td>
+</tr>
+<tr>
+<td><code>demands</code></td>
+<td>list of <a href="#demandquestionjson">DemandQuestionJSON</a></td>
+<td>The declared demands of the set, as they were asked.</td>
+</tr>
+<tr>
+<td><code>alpha</code></td>
+<td><a href="#exactalphajson">ExactAlphaJSON</a></td>
+<td>The exact scaling of the declared demands.</td>
+</tr>
+<tr>
+<td><code>alpha_source</code></td>
+<td><a href="#alphasourcejson">AlphaSourceJSON</a></td>
+<td>Where alpha comes from: the query, or an MSD step.</td>
+</tr>
+<tr>
+<td><code>failures</code></td>
+<td><a href="#failurerequestjson">FailureRequestJSON</a> or null</td>
+<td>The failure request. Null when the question is the baseline only.</td>
+</tr>
+<tr>
+<td><code>states</code></td>
+<td>list of <code>"converged"</code> | <code>"stale"</code> | <code>"repair"</code></td>
+<td>One entry per requested failure state.</td>
+</tr>
+<tr>
+<td><code>interaction</code></td>
+<td><code>"ordered"</code> | <code>"simultaneous"</code></td>
+<td>ordered (priority order) or simultaneous (one lossy fixed-program forwarding).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="placementrowjson">PlacementRowJSON<a class="headerlink" href="#placementrowjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"placement"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td>string</td>
+<td>The row's stable identifier within its analysis.</td>
+</tr>
+<tr>
+<td><code>base_id</code></td>
+<td>string</td>
+<td>The declared demand's identifier, before expansion.</td>
+</tr>
+<tr>
+<td><code>endpoints</code></td>
+<td><a href="#endpointsjson">EndpointsJSON</a></td>
+<td>The physical source and destination node names of the row.</td>
+</tr>
+<tr>
+<td><code>reference_request_units</code></td>
+<td>integer</td>
+<td>The scaled declared request (integer units of q), the denominator of the delivery ratio.</td>
+</tr>
+<tr>
+<td><code>reference_shortfall_units</code></td>
+<td>integer</td>
+<td>The reference request minus the delivery (integer units of q).</td>
+</tr>
+<tr>
+<td><code>result</code></td>
+<td><a href="#nativeplacementjson">NativePlacementJSON</a></td>
+<td>The native placement result.</td>
+</tr>
+<tr>
+<td><code>pool</code></td>
+<td><a href="#poolmetadatajson">PoolMetadataJSON</a> or null</td>
+<td>The TE ingress pool the row's sources share. Null when the sources share no pool.</td>
+</tr>
+<tr>
+<td><code>cost_distribution</code></td>
+<td><a href="#costreportjson">CostReportJSON</a></td>
+<td>The requested cost report. Absent when the report was not requested or is not derivable.</td>
+</tr>
+<tr>
+<td><code>unavailable_outputs</code></td>
+<td><a href="#unavailableoutputsjson">UnavailableOutputsJSON</a></td>
+<td>Requested outputs that the model cannot provide, with the reason. Absent when every requested output is provided.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="placementstatejson">PlacementStateJSON<a class="headerlink" href="#placementstatejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rows</code></td>
+<td>list of <a href="#placementrowjson">PlacementRowJSON</a></td>
+<td>The analysis rows, one per demand or endpoint pair.</td>
+</tr>
+<tr>
+<td><code>totals</code></td>
+<td><a href="#placementtotalsjson">PlacementTotalsJSON</a> or null</td>
+<td>Exact totals over the state's rows. Null when the state's forwarding calculation cycled or reached its round limit (see failure).</td>
+</tr>
+<tr>
+<td><code>failure</code></td>
+<td><a href="#forwardingfailurejson">ForwardingFailureJSON</a></td>
+<td>The state's bounded lossy forwarding calculation cycled or reached its round limit. This does not prove that no stable answer exists. Absent when the forwarding calculation finished.</td>
+</tr>
+<tr>
+<td><code>dead_caps</code></td>
+<td>list of <a href="#deadcapjson">DeadCapJSON</a></td>
+<td>Declared root groups with no live member in this case, with their fixed caps. Absent when the WCMP controller's scope is not group, and in the stale state.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="placementstatesjson">PlacementStatesJSON<a class="headerlink" href="#placementstatesjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>converged</code></td>
+<td><a href="#placementstatejson">PlacementStateJSON</a></td>
+<td>The demands computed again on the failed network. Absent when the query does not ask this state.</td>
+</tr>
+<tr>
+<td><code>stale</code></td>
+<td><a href="#placementstatejson">PlacementStateJSON</a></td>
+<td>The no-failure programs forwarded unchanged on the failed network. Absent when the query does not ask this state.</td>
+</tr>
+<tr>
+<td><code>repair</code></td>
+<td><a href="#placementstatejson">PlacementStateJSON</a></td>
+<td>The no-failure programs over their surviving routes. Absent when the query does not ask this state.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="placementtotalsjson">PlacementTotalsJSON<a class="headerlink" href="#placementtotalsjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>reference_request_units</code></td>
+<td>integer</td>
+<td>The scaled declared requests over the rows (integer units of q).</td>
+</tr>
+<tr>
+<td><code>delivered_units</code></td>
+<td>integer</td>
+<td>Units delivered over the rows.</td>
+</tr>
+<tr>
+<td><code>unadmitted_units</code></td>
+<td>integer</td>
+<td>Lossless units not admitted over the rows.</td>
+</tr>
+<tr>
+<td><code>source_drop_units</code></td>
+<td>integer</td>
+<td>Lossy units lost at sources over the rows.</td>
+</tr>
+<tr>
+<td><code>edge_drop_units</code></td>
+<td>integer</td>
+<td>Lossy units dropped on physical links and TE ingress pool attachments over the rows.</td>
+</tr>
+<tr>
+<td><code>reference_shortfall_units</code></td>
+<td>integer</td>
+<td>The reference request minus the delivery (integer units of q).</td>
+</tr>
+<tr>
+<td><code>delivery_ratio</code></td>
+<td><a href="#fractionjson">FractionJSON</a></td>
+<td>Delivered over the reference request (a fraction; 1 for no request).</td>
+</tr>
+<tr>
+<td><code>feasible</code></td>
+<td>boolean</td>
+<td>Whether every row delivered its whole reference request, without loss.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="poolheadjson">PoolHeadJSON<a class="headerlink" href="#poolheadjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pool_id</code></td>
+<td>string</td>
+<td>The pool's identifier.</td>
+</tr>
+<tr>
+<td><code>physical_sources</code></td>
+<td>list of string</td>
+<td>The physical sources behind the pool head.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="poolmetadatajson">PoolMetadataJSON<a class="headerlink" href="#poolmetadatajson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>head</code></td>
+<td><a href="#poolheadjson">PoolHeadJSON</a></td>
+<td>The pool head and its physical sources.</td>
+</tr>
+<tr>
+<td><code>offer_limit_units</code></td>
+<td>integer</td>
+<td>The prepared lossy offer budget of the pool (integer units of q).</td>
+</tr>
+<tr>
+<td><code>synthetic_ingress_cost</code></td>
+<td><code>1</code></td>
+<td>The cost of each pool attachment (1).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="poolnodejson">PoolNodeJSON<a class="headerlink" href="#poolnodejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pool_id</code></td>
+<td>string</td>
+<td>The pool's identifier (as PoolHeadJSON names it).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="preparationscopejson">PreparationScopeJSON<a class="headerlink" href="#preparationscopejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>workflow_steps</code></td>
+<td>list of string</td>
+<td>The workflow steps prepared.</td>
+</tr>
+<tr>
+<td><code>workflow_demand_sets</code></td>
+<td>list of string</td>
+<td>The demand sets the workflow names.</td>
+</tr>
+<tr>
+<td><code>library_demand_sets</code></td>
+<td>list of string</td>
+<td>The demand sets the library caller named.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="proberowsjson">ProbeRowsJSON<a class="headerlink" href="#proberowsjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>index</code></td>
+<td>integer</td>
+<td>The probe's history index.</td>
+</tr>
+<tr>
+<td><code>rows</code></td>
+<td>list of <a href="#placementrowjson">PlacementRowJSON</a></td>
+<td>The probe's rows.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="programmedrouterjson">ProgrammedRouterJSON<a class="headerlink" href="#programmedrouterjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>router</code></td>
+<td>string</td>
+<td>The programmed router.</td>
+</tr>
+<tr>
+<td><code>members</code></td>
+<td>list of <a href="#memberweightjson">MemberWeightJSON</a></td>
+<td>Its members with their integer weights.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="rangeconstraintjson">RangeConstraintJSON<a class="headerlink" href="#rangeconstraintjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"capacity_sum"</code> | <code>"cost_sum"</code> | <code>"amount"</code></td>
+<td>What is bounded: a capacity sum, a cost sum, or one amount.</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>string</td>
+<td>The input or constraint label: where the value is declared.</td>
+</tr>
+<tr>
+<td><code>tested_q</code></td>
+<td>number</td>
+<td>The q tested.</td>
+</tr>
+<tr>
+<td><code>units_value</code></td>
+<td>integer</td>
+<td>The value at that q (integer units of q).</td>
+</tr>
+<tr>
+<td><code>exclusive_limit</code></td>
+<td>integer</td>
+<td>The exclusive native limit (2^62).</td>
+</tr>
+<tr>
+<td><code>met</code></td>
+<td>boolean</td>
+<td>Whether the value is below the limit.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="rangerefusaljson">RangeRefusalJSON<a class="headerlink" href="#rangerefusaljson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>label</code></td>
+<td>string</td>
+<td>The input or constraint label: where the value is declared.</td>
+</tr>
+<tr>
+<td><code>reason</code></td>
+<td><code>"scaled_nonfinite"</code> | <code>"native_units_range"</code></td>
+<td>scaled_nonfinite or native_units_range.</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td>string</td>
+<td>The refusal text.</td>
+</tr>
+<tr>
+<td><code>binary64_hex</code></td>
+<td>string or null</td>
+<td>The refused binary64 value in hexadecimal. Null when the refused amount is not a binary64 value.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="runjson">RunJSON<a class="headerlink" href="#runjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>metadata</code></td>
+<td><a href="#runmetadatajson">RunMetadataJSON</a></td>
+<td>The run's metadata: versions and the seed.</td>
+</tr>
+<tr>
+<td><code>steps</code></td>
+<td>list of <a href="#stepresultjson">StepResultJSON</a></td>
+<td>The workflow steps in declaration order.</td>
+</tr>
+<tr>
+<td><code>units_report</code></td>
+<td><a href="#unitsreportjson">UnitsReportJSON</a></td>
+<td>The units report of the preparation: q, its input/count bounds and range sums.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="runmetadatajson">RunMetadataJSON<a class="headerlink" href="#runmetadatajson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>schema_version</code></td>
+<td><code>"1.0"</code></td>
+<td>The results schema version.</td>
+</tr>
+<tr>
+<td><code>netgraph_version</code></td>
+<td>string</td>
+<td>The installed ngraph package version.</td>
+</tr>
+<tr>
+<td><code>core_version</code></td>
+<td>string</td>
+<td>The netgraph-core version.</td>
+</tr>
+<tr>
+<td><code>core_extension_sha256</code></td>
+<td>string</td>
+<td>The SHA-256 of the loaded native extension.</td>
+</tr>
+<tr>
+<td><code>python_version</code></td>
+<td>string</td>
+<td>The Python version.</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td>integer or null</td>
+<td>The scenario seed. Null when the scenario sets no seed.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="samplingmetadatajson">SamplingMetadataJSON<a class="headerlink" href="#samplingmetadatajson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>random_rule_algorithm</code></td>
+<td><code>"per_entity_bernoulli"</code></td>
+<td>The random-rule algorithm: one Bernoulli trial per entity.</td>
+</tr>
+<tr>
+<td><code>rng</code></td>
+<td><code>"random.Random"</code></td>
+<td>The random number generator.</td>
+</tr>
+<tr>
+<td><code>python_version</code></td>
+<td>string</td>
+<td>The Python version that drew.</td>
+</tr>
+<tr>
+<td><code>seed</code></td>
+<td>integer or null</td>
+<td>The base seed. Null when the draws are unseeded.</td>
+</tr>
+<tr>
+<td><code>seed_source</code></td>
+<td><code>"query"</code> | <code>"step"</code> | <code>"scenario"</code> | <code>"policy"</code> | <code>"unseeded"</code></td>
+<td>Where the base seed comes from.</td>
+</tr>
+<tr>
+<td><code>draw_seed_rule</code></td>
+<td><code>"base_plus_draw_index"</code></td>
+<td>Draw i uses the base seed plus i.</td>
+</tr>
+<tr>
+<td><code>entity_order</code></td>
+<td><code>"sorted_identifier"</code></td>
+<td>Entities are drawn in sorted identifier order.</td>
+</tr>
+<tr>
+<td><code>rule_order</code></td>
+<td><code>"declaration"</code></td>
+<td>Rules are applied in declaration order.</td>
+</tr>
+<tr>
+<td><code>iterations</code></td>
+<td>integer</td>
+<td>The number of draws.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="selectorjson">SelectorJSON<a class="headerlink" href="#selectorjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>path</code></td>
+<td>string or null</td>
+<td>The path pattern (a regular expression matched at the start of node names). Null when every node is selected.</td>
+</tr>
+<tr>
+<td><code>group_by</code></td>
+<td>string or null</td>
+<td>A node attribute that groups the selection. Null when there is none.</td>
+</tr>
+<tr>
+<td><code>match</code></td>
+<td>object or null</td>
+<td>Attribute conditions that filter the selection. Null when there are none.</td>
+</tr>
+<tr>
+<td><code>active_only</code></td>
+<td>boolean or null</td>
+<td>Whether disabled nodes are left out. Null when the caller's default applies.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="selfpairjson">SelfPairJSON<a class="headerlink" href="#selfpairjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"self"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td>string</td>
+<td>The row's stable identifier within its analysis.</td>
+</tr>
+<tr>
+<td><code>node</code></td>
+<td>string</td>
+<td>The node that is both source and target.</td>
+</tr>
+<tr>
+<td><code>capacity_units</code></td>
+<td><code>0</code></td>
+<td>Always 0: a node's capacity to itself is not a question.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sensitivityanalysisjson">SensitivityAnalysisJSON<a class="headerlink" href="#sensitivityanalysisjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"sensitivity"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td><a href="#analysismetadatajson">AnalysisMetadataJSON</a></td>
+<td>Run or analysis metadata.</td>
+</tr>
+<tr>
+<td><code>outputs</code></td>
+<td><a href="#outputselectionjson">OutputSelectionJSON</a></td>
+<td>The output selection that applies to the rows.</td>
+</tr>
+<tr>
+<td><code>endpoints</code></td>
+<td><a href="#endpointsjson">EndpointsJSON</a></td>
+<td>The physical source and destination node names of the row.</td>
+</tr>
+<tr>
+<td><code>question</code></td>
+<td><code>"lossless_bound"</code> | <code>"fixed_offer_delivery"</code></td>
+<td>The question this step or analysis asked.</td>
+</tr>
+<tr>
+<td><code>offer_source</code></td>
+<td><code>"unlimited"</code> | <code>"explicit"</code> | <code>"design"</code></td>
+<td>Where the offer comes from: unlimited, explicit or the design demand.</td>
+</tr>
+<tr>
+<td><code>baseline</code></td>
+<td><a href="#nativeplacementjson">NativePlacementJSON</a></td>
+<td>The native result without deletions.</td>
+</tr>
+<tr>
+<td><code>entries</code></td>
+<td>list of <a href="#sensitivityentryjson">SensitivityEntryJSON</a></td>
+<td>Each directed link whose deletion changes delivery, with the reduction.</td>
+</tr>
+<tr>
+<td><code>query</code></td>
+<td><a href="#sensitivityqueryjson">SensitivityQueryJSON</a></td>
+<td>The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sensitivityentryjson">SensitivityEntryJSON<a class="headerlink" href="#sensitivityentryjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>edge</code></td>
+<td><a href="#directedlinkjson">DirectedLinkJSON</a></td>
+<td>The directed physical link.</td>
+</tr>
+<tr>
+<td><code>delivery_reduction_units</code></td>
+<td>integer</td>
+<td>Baseline delivery minus the delivery without this link (negative: deleting it helps).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sensitivityqueryjson">SensitivityQueryJSON<a class="headerlink" href="#sensitivityqueryjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"sensitivity"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td><a href="#selectorjson">SelectorJSON</a></td>
+<td>The source selector.</td>
+</tr>
+<tr>
+<td><code>target</code></td>
+<td><a href="#selectorjson">SelectorJSON</a></td>
+<td>The target selector.</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><a href="#modeljson">ModelJSON</a></td>
+<td>The routing model and admission of the question.</td>
+</tr>
+<tr>
+<td><code>offer</code></td>
+<td>number or null</td>
+<td>The physical offer. Null when no offer is set.</td>
+</tr>
+<tr>
+<td><code>design_demand</code></td>
+<td>number or null</td>
+<td>The physical design volume of tunnels. Null when no design volume is set.</td>
+</tr>
+<tr>
+<td><code>excluded_nodes</code></td>
+<td>list of string or <a href="#poolnodejson">PoolNodeJSON</a></td>
+<td>Nodes excluded from the question: physical nodes by name, a TE ingress pool's private head by its pool.</td>
+</tr>
+<tr>
+<td><code>excluded_edges</code></td>
+<td>list of <a href="#directedlinkjson">DirectedLinkJSON</a> or <a href="#syntheticingressjson">SyntheticIngressJSON</a></td>
+<td>Directed links excluded from the question.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sourceflowjson">SourceFlowJSON<a class="headerlink" href="#sourceflowjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source</code></td>
+<td><a href="#sourcejson">SourceJSON</a></td>
+<td>The source: a node name, or the pool head of a TE ingress pool.</td>
+</tr>
+<tr>
+<td><code>offered_units</code></td>
+<td>integer or null</td>
+<td>Lossy: the units this source sent. Null when admission is lossless.</td>
+</tr>
+<tr>
+<td><code>admitted_units</code></td>
+<td>integer</td>
+<td>Lossless: the units it delivers; lossy: offered.</td>
+</tr>
+<tr>
+<td><code>delivered_units</code></td>
+<td>integer</td>
+<td>The units this source delivers.</td>
+</tr>
+<tr>
+<td><code>source_drop_units</code></td>
+<td>integer</td>
+<td>Lossy: units lost at sources without a usable route; 0 when lossless.</td>
+</tr>
+<tr>
+<td><code>total_edge_drop_units</code></td>
+<td>integer</td>
+<td>Lossy: this source's units dropped on physical links and TE ingress pool attachments; 0 when lossless.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sourcejson">SourceJSON<a class="headerlink" href="#sourcejson" title="Permanent link">&para;</a></h2>
+<p>One of: string or <a href="#poolheadjson">PoolHeadJSON</a>.</p>
+<h2 id="sourceweightjson">SourceWeightJSON<a class="headerlink" href="#sourceweightjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source</code></td>
+<td>string</td>
+<td>The source node.</td>
+</tr>
+<tr>
+<td><code>nominal_physical</code></td>
+<td><a href="#fractionjson">FractionJSON</a></td>
+<td>Its share of declared physical volumes toward the destination (a fraction, before alpha).</td>
+</tr>
+<tr>
+<td><code>weight</code></td>
+<td>integer</td>
+<td>Its integer source weight.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="splitcountconstraintjson">SplitCountConstraintJSON<a class="headerlink" href="#splitcountconstraintjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"split_count"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>capacity_label</code></td>
+<td>string</td>
+<td>The first smallest positive link capacity in link insertion order.</td>
+</tr>
+<tr>
+<td><code>capacity</code></td>
+<td>number</td>
+<td>The smallest positive physical link capacity, including disabled links.</td>
+</tr>
+<tr>
+<td><code>nodes</code></td>
+<td>integer</td>
+<td>The physical network's node count, including disabled nodes.</td>
+</tr>
+<tr>
+<td><code>directed_links</code></td>
+<td>integer</td>
+<td>Twice the physical link count, including disabled links and excluding pool attachments.</td>
+</tr>
+<tr>
+<td><code>group</code></td>
+<td>string or null</td>
+<td>The demand set or workflow.<step> that sets the count; the floor wins ties. Null when the floor sets the count.</td>
+</tr>
+<tr>
+<td><code>demands</code></td>
+<td>integer</td>
+<td>Lossless shared equal-split leaves in the winning group, or zero for the floor.</td>
+</tr>
+<tr>
+<td><code>tunnels</code></td>
+<td>integer</td>
+<td>Heads times declared tunnels per head in the winning group, or zero for the floor.</td>
+</tr>
+<tr>
+<td><code>count</code></td>
+<td><a href="#fractionjson">FractionJSON</a></td>
+<td>The maximum of the floor L/4 + 2 and max(k, 1) times that floor plus t over prepared groups.</td>
+</tr>
+<tr>
+<td><code>q_upper_bound</code></td>
+<td><a href="#fractionjson">FractionJSON</a></td>
+<td>The split-count upper bound on q: precision times the smallest positive capacity divided by the count.</td>
+</tr>
+<tr>
+<td><code>met</code></td>
+<td>boolean</td>
+<td>Whether the prepared q meets this bound; the delivery theorem has additional premises.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="standaloneanalysisjson">StandaloneAnalysisJSON<a class="headerlink" href="#standaloneanalysisjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>metadata</code></td>
+<td><a href="#runmetadatajson">RunMetadataJSON</a></td>
+<td>The export's metadata: versions.</td>
+</tr>
+<tr>
+<td><code>analysis</code></td>
+<td><a href="#analysisjson">AnalysisJSON</a> (with <code>query</code>)</td>
+<td>The exported analysis.</td>
+</tr>
+<tr>
+<td><code>units_report</code></td>
+<td><a href="#unitsreportjson">UnitsReportJSON</a></td>
+<td>The units report of the preparation: q, its input/count bounds and range sums.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="stepquestionjson">StepQuestionJSON<a class="headerlink" href="#stepquestionjson" title="Permanent link">&para;</a></h2>
+<p>One of: <a href="#capacityqueryjson">CapacityQueryJSON</a> or <a href="#placementqueryjson">PlacementQueryJSON</a> or <a href="#sensitivityqueryjson">SensitivityQueryJSON</a> or <a href="#pathqueryjson">PathQueryJSON</a> or <a href="#msdqueryjson">MSDQueryJSON</a> or <a href="#tunnelcountqueryjson">TunnelCountQueryJSON</a> or <a href="#domainquestionjson">DomainQuestionJSON</a> or <a href="#customquestionjson">CustomQuestionJSON</a>.</p>
+<h2 id="stepresultjson">StepResultJSON<a class="headerlink" href="#stepresultjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>The workflow step's name.</td>
+</tr>
+<tr>
+<td><code>step_type</code></td>
+<td>string</td>
+<td>The step's class name.</td>
+</tr>
+<tr>
+<td><code>execution_order</code></td>
+<td>integer</td>
+<td>The step's position in the run (0 first).</td>
+</tr>
+<tr>
+<td><code>scenario_seed</code></td>
+<td>integer or null</td>
+<td>The scenario seed. Null when the scenario sets no seed.</td>
+</tr>
+<tr>
+<td><code>step_seed</code></td>
+<td>integer or null</td>
+<td>The step's effective seed. Null when the step has no effective seed.</td>
+</tr>
+<tr>
+<td><code>seed_source</code></td>
+<td><code>"explicit-step"</code> | <code>"scenario-derived"</code> | <code>"none"</code></td>
+<td>Where the step's seed comes from.</td>
+</tr>
+<tr>
+<td><code>result</code></td>
+<td><a href="#analysisjson">AnalysisJSON</a> or <a href="#domainresultjson">DomainResultJSON</a> or <a href="#jsonvalue">JSONValue</a></td>
+<td>The step's exported result. Null when a custom step returns no result, or its registered exporter writes null.</td>
+</tr>
+<tr>
+<td><code>question</code></td>
+<td><a href="#stepquestionjson">StepQuestionJSON</a></td>
+<td>The question the step asked.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="syntheticamountjson">SyntheticAmountJSON<a class="headerlink" href="#syntheticamountjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>edge</code></td>
+<td><a href="#syntheticingressjson">SyntheticIngressJSON</a></td>
+<td>The pool attachment: its pool and source.</td>
+</tr>
+<tr>
+<td><code>units</code></td>
+<td>integer</td>
+<td>The amount (integer units of q).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="syntheticingressjson">SyntheticIngressJSON<a class="headerlink" href="#syntheticingressjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pool_id</code></td>
+<td>string</td>
+<td>The pool's identifier.</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>string</td>
+<td>The physical source this attachment feeds.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="syntheticprojectionjson">SyntheticProjectionJSON<a class="headerlink" href="#syntheticprojectionjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>call_edge_drops</code></td>
+<td>list of <a href="#syntheticamountjson">SyntheticAmountJSON</a></td>
+<td>This call's drops on pool attachments. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>edge_drops</code></td>
+<td>list of <a href="#syntheticamountjson">SyntheticAmountJSON</a></td>
+<td>Drops on pool attachments. Absent when details are not requested.</td>
+</tr>
+<tr>
+<td><code>edge_flows</code></td>
+<td>list of <a href="#syntheticamountjson">SyntheticAmountJSON</a></td>
+<td>The units each pool attachment carries. Absent when it was not requested.</td>
+</tr>
+<tr>
+<td><code>residual</code></td>
+<td>list of <a href="#syntheticamountjson">SyntheticAmountJSON</a></td>
+<td>Each pool attachment's residual capacity (integer units of q): after this row, or, in simultaneous placement, the one final residual every row shares. Absent when it was not requested.</td>
+</tr>
+<tr>
+<td><code>edge_reservations</code></td>
+<td>list of <a href="#syntheticamountjson">SyntheticAmountJSON</a></td>
+<td>Each pool attachment's holds (integer units of q). Absent when it was not requested.</td>
+</tr>
+<tr>
+<td><code>saturated_boundary_edges</code></td>
+<td>list of <a href="#syntheticingressjson">SyntheticIngressJSON</a></td>
+<td>The saturated pool attachments at the boundary. Absent when it was not requested.</td>
+</tr>
+<tr>
+<td><code>min_cut</code></td>
+<td>list of <a href="#syntheticingressjson">SyntheticIngressJSON</a> or null</td>
+<td>The pool attachments in the minimum cut. Null when no cut is defined. Absent when it was not requested.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tablereportjson">TableReportJSON<a class="headerlink" href="#tablereportjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>destination</code></td>
+<td>string</td>
+<td>The destination of the table.</td>
+</tr>
+<tr>
+<td><code>programmed</code></td>
+<td>list of <a href="#programmedrouterjson">ProgrammedRouterJSON</a></td>
+<td>The routers the controller programs, with their member weights.</td>
+</tr>
+<tr>
+<td><code>source_weights</code></td>
+<td>list of <a href="#sourceweightjson">SourceWeightJSON</a> or null</td>
+<td>all_routers: each source's share of declared physical volumes and its weight. Null when the scope is not all_routers.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tunnelcountanalysisjson">TunnelCountAnalysisJSON<a class="headerlink" href="#tunnelcountanalysisjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"tunnel_counts"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td><a href="#analysismetadatajson">AnalysisMetadataJSON</a></td>
+<td>Run or analysis metadata.</td>
+</tr>
+<tr>
+<td><code>outputs</code></td>
+<td><a href="#outputselectionjson">OutputSelectionJSON</a></td>
+<td>The output selection that applies to the rows.</td>
+</tr>
+<tr>
+<td><code>rows</code></td>
+<td>list of <a href="#tunnelcountrowjson">TunnelCountRowJSON</a></td>
+<td>One row per demand and tunnel count.</td>
+</tr>
+<tr>
+<td><code>query</code></td>
+<td><a href="#tunnelcountqueryjson">TunnelCountQueryJSON</a></td>
+<td>The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tunnelcountjson">TunnelCountJSON<a class="headerlink" href="#tunnelcountjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>per_head</code></td>
+<td>integer</td>
+<td>Tunnels per head.</td>
+</tr>
+<tr>
+<td><code>up_to</code></td>
+<td>boolean</td>
+<td>Whether the count is a limit: every head gets one common count up to it, the smallest whose program carries the live heads' design shares (if none does, the count with the largest live-share score, then the smallest).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tunnelcountqueryjson">TunnelCountQueryJSON<a class="headerlink" href="#tunnelcountqueryjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"tunnel_counts"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>demand_set</code></td>
+<td>string</td>
+<td>The demand set's name.</td>
+</tr>
+<tr>
+<td><code>demands</code></td>
+<td>list of <a href="#demandquestionjson">DemandQuestionJSON</a></td>
+<td>The declared demands of the set, as they were asked.</td>
+</tr>
+<tr>
+<td><code>counts</code></td>
+<td>list of integer</td>
+<td>The tunnel counts asked, one row each per demand.</td>
+</tr>
+<tr>
+<td><code>up_to</code></td>
+<td>integer or null</td>
+<td>The up-to limit asked. Null when there is none.</td>
+</tr>
+<tr>
+<td><code>design_demand</code></td>
+<td>number</td>
+<td>The physical design volume of every demand.</td>
+</tr>
+<tr>
+<td><code>offer</code></td>
+<td>number</td>
+<td>The physical offer of every demand.</td>
+</tr>
+<tr>
+<td><code>excluded_nodes</code></td>
+<td>list of string or <a href="#poolnodejson">PoolNodeJSON</a></td>
+<td>Nodes excluded from the question: physical nodes by name, a TE ingress pool's private head by its pool.</td>
+</tr>
+<tr>
+<td><code>excluded_edges</code></td>
+<td>list of <a href="#directedlinkjson">DirectedLinkJSON</a> or <a href="#syntheticingressjson">SyntheticIngressJSON</a></td>
+<td>Directed links excluded from the question.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tunnelcountrowjson">TunnelCountRowJSON<a class="headerlink" href="#tunnelcountrowjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>string</td>
+<td>The row's stable identifier within its analysis.</td>
+</tr>
+<tr>
+<td><code>base_id</code></td>
+<td>string</td>
+<td>The declared demand's identifier, before expansion.</td>
+</tr>
+<tr>
+<td><code>endpoints</code></td>
+<td><a href="#endpointsjson">EndpointsJSON</a></td>
+<td>The physical source and destination node names of the row.</td>
+</tr>
+<tr>
+<td><code>count</code></td>
+<td>integer</td>
+<td>The tunnels per head of this row (an up-to row: its limit).</td>
+</tr>
+<tr>
+<td><code>up_to</code></td>
+<td>boolean</td>
+<td>Whether this row is the up-to row.</td>
+</tr>
+<tr>
+<td><code>pool</code></td>
+<td><a href="#poolmetadatajson">PoolMetadataJSON</a> or null</td>
+<td>The TE ingress pool the row's sources share. Null when the sources share no pool.</td>
+</tr>
+<tr>
+<td><code>lossless_at_design_units</code></td>
+<td>integer</td>
+<td>The lossless delivery at the design volume: min(design, the plan's lossless maximum).</td>
+</tr>
+<tr>
+<td><code>physical_tunnel_cost</code></td>
+<td>integer</td>
+<td>For a TE ingress pool: the total tunnel cost without the pool attachments; else the total tunnel cost.</td>
+</tr>
+<tr>
+<td><code>plan</code></td>
+<td><a href="#tunnelplanjson">TunnelPlanJSON</a></td>
+<td>The tunnel plan after the call.</td>
+</tr>
+<tr>
+<td><code>result</code></td>
+<td><a href="#nativeplacementjson">NativePlacementJSON</a> (without <code>plan</code>)</td>
+<td>The native placement result.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tunnelflowjson">TunnelFlowJSON<a class="headerlink" href="#tunnelflowjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>entry_id</code></td>
+<td>integer</td>
+<td>The tunnel's entry identifier in the program.</td>
+</tr>
+<tr>
+<td><code>head</code></td>
+<td><a href="#sourcejson">SourceJSON</a></td>
+<td>The tunnel head: a node name, or the pool head of a TE ingress pool.</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>"up"</code> | <code>"insufficient_bandwidth"</code> | <code>"cost_ceiling_exceeded"</code> | <code>"failed"</code> | <code>"blackholed"</code></td>
+<td>The tunnel's status in this forwarding. Values: up (set up and available for forwarding; it may carry zero units); insufficient_bandwidth (down: no path had enough unreserved bandwidth); cost_ceiling_exceeded (down: the cheapest path with enough bandwidth costs more than the cost ceiling); failed (repair state: a failure touches the tunnel, so its route is removed); blackholed (stale state: the tunnel stays up but its path reaches a failed node or link, where its traffic is dropped).</td>
+</tr>
+<tr>
+<td><code>assigned_units</code></td>
+<td>integer</td>
+<td>The units assigned to the tunnel (lossy: sent to it; lossless: carried).</td>
+</tr>
+<tr>
+<td><code>delivered_units</code></td>
+<td>integer</td>
+<td>The units this tunnel delivers.</td>
+</tr>
+<tr>
+<td><code>total_edge_drop_units</code></td>
+<td>integer</td>
+<td>Lossy: this tunnel's units dropped on physical links and TE ingress pool attachments; 0 when lossless.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tunnelplanjson">TunnelPlanJSON<a class="headerlink" href="#tunnelplanjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tunnels_per_head</code></td>
+<td>integer</td>
+<td>Tunnels per head (an up-to count: the chosen count).</td>
+</tr>
+<tr>
+<td><code>design_kind</code></td>
+<td><code>"finite"</code> | <code>"unlimited"</code></td>
+<td>Whether the design volume is finite or unlimited.</td>
+</tr>
+<tr>
+<td><code>design_demand_units</code></td>
+<td>integer or null</td>
+<td>The design volume D (integer units of q). Null when the design is unlimited.</td>
+</tr>
+<tr>
+<td><code>design_by_head</code></td>
+<td>list of <a href="#headdesignjson">HeadDesignJSON</a></td>
+<td>Each head's share of the design volume.</td>
+</tr>
+<tr>
+<td><code>total_reserved_bandwidth_units</code></td>
+<td>integer</td>
+<td>The holds of the up tunnels (integer units of q).</td>
+</tr>
+<tr>
+<td><code>heads_with_capacity</code></td>
+<td>list of <a href="#sourcejson">SourceJSON</a> or null</td>
+<td>T2: the live heads, those that reach a destination over links with at least one free unit (this policy's own traffic released). Null when the plan is T1's.</td>
+</tr>
+<tr>
+<td><code>insufficient_resolution</code></td>
+<td>boolean or null</td>
+<td>T2: live heads exist but no whole unit per tunnel fits. Null when the plan is T1's.</td>
+</tr>
+<tr>
+<td><code>max_fractional_bandwidth_per_tunnel</code></td>
+<td><a href="#fractionjson">FractionJSON</a> or null</td>
+<td>T2: the exact fluid optimum per tunnel (a fraction). Null when the plan is T1's.</td>
+</tr>
+<tr>
+<td><code>max_bandwidth_per_tunnel_units</code></td>
+<td>integer or null</td>
+<td>T2: the largest common whole-unit tunnel size U. Null when the plan is T1's.</td>
+</tr>
+<tr>
+<td><code>planned_bandwidth_per_tunnel_units</code></td>
+<td>integer or null</td>
+<td>T2: every tunnel's planned bandwidth u. Null when the plan is T1's.</td>
+</tr>
+<tr>
+<td><code>total_planned_bandwidth_units</code></td>
+<td>integer or null</td>
+<td>T2: the planned bandwidth over all tunnels. Null when the plan is T1's.</td>
+</tr>
+<tr>
+<td><code>total_tunnel_cost</code></td>
+<td>integer or null</td>
+<td>T2: the sum of link cost times tunnel count over the links (exact). Null when the plan is T1's.</td>
+</tr>
+<tr>
+<td><code>headroom_penalty</code></td>
+<td>integer or null</td>
+<td>T2 with prefer_headroom: the headroom penalty of the plan. Null when the plan is T1's or prefer_headroom is off.</td>
+</tr>
+<tr>
+<td><code>max_lossless_offer_units</code></td>
+<td>integer or null</td>
+<td>T2: the program's lossless maximum offer F. Null when the plan is T1's.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="unavailableoutputsjson">UnavailableOutputsJSON<a class="headerlink" href="#unavailableoutputsjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cost_distribution</code></td>
+<td><a href="#costunavailablereasonjson">CostUnavailableReasonJSON</a></td>
+<td>Why the cost report is not derivable for this row. Absent when it is derivable or was not requested.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="unitsreportjson">UnitsReportJSON<a class="headerlink" href="#unitsreportjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>q</code></td>
+<td>number</td>
+<td>The bandwidth unit: one unit is q in physical terms.</td>
+</tr>
+<tr>
+<td><code>exponent</code></td>
+<td>integer</td>
+<td>q as a power of two: q = 2^exponent.</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td><code>"auto"</code> | <code>"manual"</code></td>
+<td>auto (chosen from static bounds) or manual (declared).</td>
+</tr>
+<tr>
+<td><code>precision</code></td>
+<td>number</td>
+<td>The target input/count budget, greater than zero and at most 0.5.</td>
+</tr>
+<tr>
+<td><code>target_met</code></td>
+<td>boolean</td>
+<td>Whether both present input/count bounds hold at q; this does not certify arbitrary analysis answers.</td>
+</tr>
+<tr>
+<td><code>input_convention</code></td>
+<td><code>"promoted_binary64_half_up"</code></td>
+<td>Physical inputs round half-up from their binary64 value.</td>
+</tr>
+<tr>
+<td><code>display_convention</code></td>
+<td><code>"units_authoritative_binary64_display"</code></td>
+<td>Units are authoritative; physical values are binary64 displays.</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td><a href="#preparationscopejson">PreparationScopeJSON</a></td>
+<td>What the preparation covered.</td>
+</tr>
+<tr>
+<td><code>limited_by</code></td>
+<td><code>"input"</code> | <code>"split_count"</code> | <code>"range"</code> | <code>"resolution_floor"</code> | <code>"declared"</code> | <code>"unbounded"</code></td>
+<td>Which bound selected q; input wins an equal input/split bound.</td>
+</tr>
+<tr>
+<td><code>achieved_precision</code></td>
+<td><a href="#fractionjson">FractionJSON</a> or null</td>
+<td>The maximum of q/(2<em>v_min) and q</em>count/c_min over present denominators; an input/count budget, not a general answer guarantee. Null when there is no positive input or capacity.</td>
+</tr>
+<tr>
+<td><code>input_bound</code></td>
+<td><a href="#inputconstraintjson">InputConstraintJSON</a> or null</td>
+<td>The smallest positive input's bound, with ties in preparation insertion order. Null when there is no positive prepared bandwidth input.</td>
+</tr>
+<tr>
+<td><code>split_bound</code></td>
+<td><a href="#splitcountconstraintjson">SplitCountConstraintJSON</a> or null</td>
+<td>The prepared split-count bound, subject to the documented delivery theorem's premises. Null when there is no positive link capacity.</td>
+</tr>
+<tr>
+<td><code>range_limit</code></td>
+<td><a href="#rangeconstraintjson">RangeConstraintJSON</a> or null</td>
+<td>The range failure at the next finer q when range forced a coarser unit. Null when limited_by is not range.</td>
+</tr>
+<tr>
+<td><code>augmented_capacity_sum_units</code></td>
+<td>integer</td>
+<td>The graph's capacity sum with pool attachments (integer units of q).</td>
+</tr>
+<tr>
+<td><code>augmented_cost_sum</code></td>
+<td>integer</td>
+<td>The graph's cost sum with pool attachments.</td>
+</tr>
+<tr>
+<td><code>weight_approximations</code></td>
+<td>list of <a href="#weightapproximationjson">WeightApproximationJSON</a></td>
+<td>Controller weights apportioned because they reached 2^62.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="uppercertificatejson">UpperCertificateJSON<a class="headerlink" href="#uppercertificatejson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>proof</code></td>
+<td><code>"fixed_program"</code> | <code>"single_controller"</code></td>
+<td>What proves the bracket.</td>
+</tr>
+<tr>
+<td><code>lower</code></td>
+<td><a href="#exactalphajson">ExactAlphaJSON</a></td>
+<td>The feasible lower alpha.</td>
+</tr>
+<tr>
+<td><code>upper</code></td>
+<td><a href="#exactalphajson">ExactAlphaJSON</a></td>
+<td>The infeasible upper alpha.</td>
+</tr>
+<tr>
+<td><code>lower_probe_index</code></td>
+<td>integer</td>
+<td>The history index of the lower probe.</td>
+</tr>
+<tr>
+<td><code>upper_probe_index</code></td>
+<td>integer</td>
+<td>The history index of the upper probe.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="weightapproximationjson">WeightApproximationJSON<a class="headerlink" href="#weightapproximationjson" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td><code>"weight_approximation"</code></td>
+<td>The record kind, a fixed tag.</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>string</td>
+<td>The router (controller.<set>.<t>.router.<r>) or all_routers source (controller.<set>.<t>.source.<s>) whose weights were apportioned.</td>
+</tr>
+<tr>
+<td><code>max_relative_error</code></td>
+<td><a href="#fractionjson">FractionJSON</a></td>
+<td>The largest relative error of the apportioned weights (a fraction).</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.tabs", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
