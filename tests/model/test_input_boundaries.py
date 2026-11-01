@@ -499,7 +499,12 @@ def test_other_public_input_constructors_use_the_same_kind_rules():
 @pytest.mark.parametrize("end", ["node", "link"])
 @pytest.mark.parametrize("bad", ["false", 0])
 def test_rule_updates_apply_the_flag_rule_without_schema(end, bad):
-    from ngraph.dsl.blueprints.expand import _update_links, _update_nodes
+    from ngraph.dsl.blueprints.expand import (
+        _LinkRuleIndex,
+        _NodeSelection,
+        _update_links,
+        _update_nodes,
+    )
 
     network = Network(nodes={name: Node(name) for name in ("s", "t")})
     network.add_link(Link("s", "t"))
@@ -507,14 +512,28 @@ def test_rule_updates_apply_the_flag_rule_without_schema(end, bad):
         if end == "node":
             _update_nodes(network, "s", None, {}, disabled_val=bad)
         else:
-            _update_links(network, "s", "t", {"disabled": bad})
+            _update_links(
+                network,
+                "s",
+                "t",
+                {"disabled": bad},
+                selection=_NodeSelection(network),
+                index=_LinkRuleIndex(network),
+            )
     assert str(error.value) == f"{end} rule.disabled: expected bool, got {bad!r}"
     assert not network.nodes["s"].disabled and not network.links["s|t|0"].disabled
     if end == "node":
         _update_nodes(network, "s", None, {}, disabled_val=True)
         assert network.nodes["s"].disabled is True
     else:
-        _update_links(network, "s", "t", {"disabled": True})
+        _update_links(
+            network,
+            "s",
+            "t",
+            {"disabled": True},
+            selection=_NodeSelection(network),
+            index=_LinkRuleIndex(network),
+        )
         assert network.links["s|t|0"].disabled is True
 
 

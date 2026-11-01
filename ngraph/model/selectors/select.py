@@ -7,7 +7,7 @@ condition evaluation runs against.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Dict, List, Set
 
 from ngraph.utils.values import flag
@@ -53,6 +53,17 @@ def select_nodes(
         Dict mapping group labels to lists of nodes. Groups that filter down
         to nothing are dropped.
     """
+    return _select_nodes(
+        network, selector, default_active_only, network.select_node_groups_by_path
+    )
+
+
+def _select_nodes(
+    network: "Network",
+    selector: Selector,
+    default_active_only: bool,
+    path_candidates: Callable[[str], Dict[str, List["Node"]]],
+) -> Dict[str, List["Node"]]:
     default_active_only = flag(default_active_only, "select_nodes.default_active_only")
     active_only = (
         selector.active_only
@@ -61,7 +72,7 @@ def select_nodes(
     )
 
     if selector.path is not None:
-        candidates = network.select_node_groups_by_path(selector.path)
+        candidates = path_candidates(selector.path)
     else:
         candidates = {"_all_": list(network.nodes.values())}
 

@@ -9,6 +9,7 @@ Covers:
 import pytest
 
 from ngraph.dsl.blueprints.expand import (
+    _NodeSelection,
     _process_link_rules,
     _process_node_rules,
     expand_network_dsl,
@@ -62,7 +63,11 @@ class TestLinkRulesFullSelectors:
             }
         }
 
-        _process_link_rules(network_with_roles, scenario["network"])
+        _process_link_rules(
+            network_with_roles,
+            scenario["network"],
+            selection=_NodeSelection(network_with_roles),
+        )
 
         # Links from spine_1 should have updated capacity
         spine1_links = [
@@ -110,7 +115,11 @@ class TestLinkRulesFullSelectors:
             }
         }
 
-        _process_link_rules(network_with_roles, scenario["network"])
+        _process_link_rules(
+            network_with_roles,
+            scenario["network"],
+            selection=_NodeSelection(network_with_roles),
+        )
 
         # All spine->leaf links should have the 'tagged' attr
         for link in network_with_roles.links.values():
@@ -145,7 +154,11 @@ class TestLinkMatch:
             }
         }
 
-        _process_link_rules(network_with_roles, scenario["network"])
+        _process_link_rules(
+            network_with_roles,
+            scenario["network"],
+            selection=_NodeSelection(network_with_roles),
+        )
 
         # Only links with capacity < 100 should have risk_groups
         for link in network_with_roles.links.values():
@@ -171,7 +184,11 @@ class TestLinkMatch:
             }
         }
 
-        _process_link_rules(network_with_roles, scenario["network"])
+        _process_link_rules(
+            network_with_roles,
+            scenario["network"],
+            selection=_NodeSelection(network_with_roles),
+        )
 
         # Only links with cost > 1 should be disabled
         for link in network_with_roles.links.values():
@@ -201,7 +218,11 @@ class TestLinkMatch:
             }
         }
 
-        _process_link_rules(network_with_roles, scenario["network"])
+        _process_link_rules(
+            network_with_roles,
+            scenario["network"],
+            selection=_NodeSelection(network_with_roles),
+        )
 
         # Only spine_1 -> leaf_* links with capacity=100 should have the attr
         for link in network_with_roles.links.values():
@@ -358,6 +379,7 @@ def test_link_rule_attrs_merge_into_existing_attrs_and_keep_link_ids() -> None:
     _process_link_rules(
         net,
         {"link_rules": [{"source": "a", "target": "b", "attrs": {"km": 5, "tag": 1}}]},
+        selection=_NodeSelection(net),
     )
     link = net.links["a|b|0"]
     assert link.id == "a|b|0"
@@ -371,11 +393,11 @@ def test_link_rule_capacity_refusal_names_the_link_it_updates() -> None:
     net.add_link(Link("a", "b"))
     rules = {"link_rules": [{"source": "a", "target": "b", "capacity": -1}]}
     with pytest.raises(ValueError) as error:
-        _process_link_rules(net, rules)
+        _process_link_rules(net, rules, selection=_NodeSelection(net))
     assert (
         str(error.value)
         == "network.link_rules[0].capacity: expected a finite nonnegative amount, got -1"
     )
     rules["link_rules"][0]["capacity"] = 4
-    _process_link_rules(net, rules)
+    _process_link_rules(net, rules, selection=_NodeSelection(net))
     assert net.links["a|b|0"].capacity == 4.0

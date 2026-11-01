@@ -30,6 +30,8 @@ from ngraph.model.selectors import (
     parse_match_spec,
     select_nodes,
 )
+from ngraph.model.selectors.schema import Selector
+from ngraph.model.selectors.select import _select_nodes
 from ngraph.utils.values import _input_error, _shown, flag, frozen_attrs, integer, text
 from ngraph.utils.yaml_utils import _declaration_error, check_no_extra_keys, declared
 
@@ -52,6 +54,41 @@ class Blueprint:
     links: List[Dict[str, Any]]
 
 
+class _NodeSelection:
+    def __init__(self, network: Network):
+        self.network = network
+        self.paths: Dict[str, Dict[str, List[Node]]] = {}
+
+    def path_candidates(self, path: str) -> Dict[str, List[Node]]:
+        if path not in self.paths:
+            self.paths[path] = self.network.select_node_groups_by_path(path)
+        return {label: list(nodes) for label, nodes in self.paths[path].items()}
+
+    def select(self, selector: Selector) -> Dict[str, List[Node]]:
+        return _select_nodes(self.network, selector, False, self.path_candidates)
+
+
+class _LinkRuleIndex:
+    def __init__(self, network: Network):
+        self.incident: Dict[str, List[tuple[int, str]]] = {}
+        for ordinal, (link_id, link) in enumerate(network.links.items()):
+            entry = (ordinal, link_id)
+            self.incident.setdefault(link.source, []).append(entry)
+            if link.target != link.source:
+                self.incident.setdefault(link.target, []).append(entry)
+
+    def candidates(self, sources: Set[str], targets: Set[str]) -> Iterable[str]:
+        endpoints = min((sources, targets), key=len)
+        entries = sorted(
+            entry for name in endpoints for entry in self.incident.get(name, ())
+        )
+        previous = -1
+        for ordinal, link_id in entries:
+            if ordinal != previous:
+                yield link_id
+                previous = ordinal
+
+
 @dataclass
 class DSLExpansionContext:
     """Blueprint definitions and the Network populated during DSL expansion.
@@ -68,6 +105,7 @@ class DSLExpansionContext:
     pending_bp_links: List[tuple[Dict[str, Any], str, str]] = field(
         default_factory=list
     )
+    _node_selection: _NodeSelection = field(init=False, repr=False)
 
 
 def expand_network_dsl(data: Dict[str, Any]) -> Network:
@@ -164,6 +202,10 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
     # 4) Process node rules early so they influence link selection
     _process_node_rules(ctx.network, network_data)
 
+    # Nodes are stable through link expansion and link rules. Keep this cache
+    # inside the expansion context so later Network edits always read fresh records.
+    ctx._node_selection = _NodeSelection(ctx.network)
+
     # 5) Expand deferred blueprint links
     for _link_def, _parent, _location in ctx.pending_bp_links:
         _expand_link(ctx, _link_def, _parent, context=_location)
@@ -175,7 +217,7 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
         _expand_link(ctx, link_def, context=f"network.links[{link_index}]")
 
     # 7) Process link rules (in order)
-    _process_link_rules(ctx.network, network_data)
+    _process_link_rules(ctx.network, network_data, selection=ctx._node_selection)
 
     return net
 
@@ -676,8 +718,8 @@ def _expand_link_pattern(
     # Validate the declaration before matching, including self-pairs and empty selections.
     _link_properties(link_def, location)
     count = integer(count, location + ".count", minimum=1)
-    source_nodes = _select_link_nodes(ctx.network, source_selector)
-    target_nodes = _select_link_nodes(ctx.network, target_selector)
+    source_nodes = _select_link_nodes(ctx, source_selector)
+    target_nodes = _select_link_nodes(ctx, target_selector)
 
     # A link entry whose endpoint matches no node declares nothing: refuse it, naming
     # the entry, so that a mistyped name fails where it is given.
@@ -734,21 +776,21 @@ def _expand_link_pattern(
         raise ValueError(f"Unknown link pattern: {pattern}")
 
 
-def _select_link_nodes(network: Network, selector: Any) -> List[Node]:
+def _select_link_nodes(ctx: DSLExpansionContext, selector: Any) -> List[Node]:
     """Select link endpoint nodes.
 
     For links, active_only defaults to False (links to disabled nodes are
     created).
 
     Args:
-        network: The network to select from.
+        ctx: The expansion context whose nodes are stable.
         selector: String path or dict with path/group_by/match.
 
     Returns:
         List of matching nodes (flattened from all groups).
     """
     normalized = normalize_selector(selector, context="link")
-    groups = select_nodes(network, normalized, default_active_only=False)
+    groups = ctx._node_selection.select(normalized)
     return [node for nodes in groups.values() for node in nodes]
 
 
@@ -871,7 +913,12 @@ def _apply_node_rule(net: Network, rule: Dict[str, Any], location="node rule") -
     )
 
 
-def _process_link_rules(net: Network, network_data: Dict[str, Any]) -> None:
+def _process_link_rules(
+    net: Network,
+    network_data: Dict[str, Any],
+    *,
+    selection: _NodeSelection,
+) -> None:
     """Apply the 'link_rules' section of the network DSL to existing links.
 
     Rules apply in list order, so a later rule wins where several match the
@@ -888,6 +935,8 @@ def _process_link_rules(net: Network, network_data: Dict[str, Any]) -> None:
     link_rules = network_data.get("link_rules", [])
     if not isinstance(link_rules, list):
         raise ValueError("'link_rules' must be a list.")
+
+    link_index = None
 
     for index, link_rule in enumerate(link_rules):
         if not isinstance(link_rule, dict):
@@ -914,22 +963,42 @@ def _process_link_rules(net: Network, network_data: Dict[str, Any]) -> None:
         location = f"network.link_rules[{index}]"
         _, rows = _expand_declaration(link_rule, location)
         for expanded_rule in rows:
+            if link_index is None:
+                link_index = _LinkRuleIndex(net)
             declared(
                 location,
-                lambda expanded_rule=expanded_rule, location=location: _apply_link_rule(
-                    net, expanded_rule, location
+                lambda expanded_rule=expanded_rule,
+                location=location,
+                link_index=link_index: _apply_link_rule(
+                    net, expanded_rule, location, selection=selection, index=link_index
                 ),
             )
 
 
-def _apply_link_rule(net: Network, rule: Dict[str, Any], location="link rule") -> None:
+def _apply_link_rule(
+    net: Network,
+    rule: Dict[str, Any],
+    location="link rule",
+    *,
+    selection: _NodeSelection,
+    index: _LinkRuleIndex,
+) -> None:
     """Apply a single link rule to matching links."""
     _link_properties(rule, location)
     source = rule["source"]
     target = rule["target"]
     bidirectional = flag(rule.get("bidirectional", True), "link rule.bidirectional")
 
-    _update_links(net, source, target, rule, bidirectional, location)
+    _update_links(
+        net,
+        source,
+        target,
+        rule,
+        bidirectional,
+        location,
+        selection=selection,
+        index=index,
+    )
 
 
 def _update_links(
@@ -939,6 +1008,9 @@ def _update_links(
     rule: Dict[str, Any],
     bidirectional: bool = True,
     location: str = "link rule",
+    *,
+    selection: _NodeSelection,
+    index: _LinkRuleIndex,
 ) -> None:
     """Update links between nodes selected by source and target.
 
@@ -965,8 +1037,8 @@ def _update_links(
         "selector",
     )
 
-    source_node_groups = select_nodes(net, src_sel, default_active_only=False)
-    target_node_groups = select_nodes(net, tgt_sel, default_active_only=False)
+    source_node_groups = selection.select(src_sel)
+    target_node_groups = selection.select(tgt_sel)
 
     source_nodes = {
         node.name for _, nodes in source_node_groups.items() for node in nodes
@@ -984,7 +1056,8 @@ def _update_links(
     link_match_raw = rule.get("link_match")
     link_match = parse_match_spec(link_match_raw) if link_match_raw else None
 
-    for link_id, link in net.links.items():
+    for link_id in index.candidates(source_nodes, target_nodes):
+        link = net.links[link_id]
         forward_match = link.source in source_nodes and link.target in target_nodes
         reverse_match = (
             bidirectional
