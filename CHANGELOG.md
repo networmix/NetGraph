@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Loading: scenarios with many narrow link rules and repeated node paths load faster, preserving rule order and parallel-link updates.
+- Failure analyses build a case's eligibility mask only while that case is solved, instead of keeping one per case. Reading `FailureCase.eligibility` later rebuilds the mask once and keeps it: it allows the same nodes and edges, but may be a different object with a different uid.
 
 ## [0.26.0] - 2026-10-29
 

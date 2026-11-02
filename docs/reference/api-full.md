@@ -421,6 +421,12 @@ What a result encoder receives: the prepared scenario and the run's units report
 One failure case: the baseline or one distinct failure pattern, how many draws
 produced it, and its eligibility (the engine's mask of what the case can use).
 
+Cases that an analysis or `failure_cases` returns build their mask when it is
+first read, and keep it; repr, equality, hashing and dataclasses.replace read it
+too. Until then a case holds the prepared topology. The mask allows the same
+nodes and edges as the one the analysis used, but may be a different object with
+a different uid.
+
 **Attributes:**
 
 - `id` (str)

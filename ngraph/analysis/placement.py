@@ -13,6 +13,7 @@ from ngraph.analysis.demands import controlled, scaled_expansion
 from ngraph.analysis.failures import (
     FailureRequest,
     Workers,
+    _active_case,
     checked_workers,
     failure_cases,
     resolve_workers,
@@ -477,7 +478,9 @@ def place(prepared: PreparedScenario, query: PlacementQuery) -> PlacementAnalysi
     )
 
     def solve(case, baseline=None):
-        return _place_case(prepared, query, case, shared, baseline)
+        active = _active_case(case, topology)
+        result, next_baseline = _place_case(prepared, query, active, shared, baseline)
+        return replace(result, case=case), next_baseline
 
     if {"stale", "repair"} & set(query.states):
         # Stale and repair replay the baseline programs: the baseline goes first.

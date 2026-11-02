@@ -12,6 +12,7 @@ from ngraph.analysis.demands import controlled, pooled, selected_pairs
 from ngraph.analysis.failures import (
     FailureRequest,
     Workers,
+    _active_case,
     checked_workers,
     failure_cases,
     resolve_workers,
@@ -244,12 +245,13 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
     cases = failure_cases(prepared, query.failures)
     completed = []
     for case in cases:
+        active = _active_case(case, topology)
         options = evaluation_options(
             topology,
             query.config,
             query.offer,
             query.design_demand,
-            case.eligibility,
+            active.eligibility,
             query.outputs,
         )
         results = evaluate(topology, query, native_pairs, options, workers)
@@ -274,7 +276,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
                             topology.graph,
                             [topology.node_id_by_name[name] for name in key],
                             ngc.SpfOptions(
-                                ngc.Direction.REVERSE, eligibility=case.eligibility
+                                ngc.Direction.REVERSE, eligibility=active.eligibility
                             ),
                         )
                         report_costs[key] = search.costs
@@ -284,7 +286,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
                     query.config,
                     result,
                     [topology.node_id_by_name[name] for name in pair.destinations],
-                    case.eligibility,
+                    active.eligibility,
                     pool=pools.get(index),
                     shortest_costs=shortest_costs,
                 )
@@ -298,6 +300,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
                 case, MappingProxyType({"converged": CaseState(tuple(rows), None)})
             )
         )
+        del options, active
     question, source = question_kind(query.config, query.offer, query.design_demand)
     return CapacityAnalysis(
         prepared,

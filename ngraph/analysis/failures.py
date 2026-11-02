@@ -10,10 +10,13 @@ import re
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from threading import Lock
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, TypeVar
 
-from ngraph.analysis.topology import eligibility
+import netgraph_core as ngc
+
+from ngraph.analysis.topology import PreparedTopology, eligibility
 from ngraph.model.failure import FailurePolicy
 from ngraph.model.network import Network
 from ngraph.model.risk import MembershipIndex
@@ -304,6 +307,42 @@ def _draw(
     return pattern, trace
 
 
+class _CaseEligibility:
+    """A shared topology until the first successful read, then its owned mask."""
+
+    def __init__(self, topology: PreparedTopology, pattern: FailurePattern):
+        self.topology: PreparedTopology | None = topology
+        self.pattern = pattern
+        self.mask: ngc.Eligibility | None = None
+        self.lock = Lock()
+
+    def get(self) -> ngc.Eligibility:
+        # Native construction releases the GIL. Copies of an unread case share
+        # this lock and cache, so they also keep one stable published value.
+        with self.lock:
+            if self.mask is None:
+                assert self.topology is not None
+                self.mask = eligibility(
+                    self.topology,
+                    self.pattern.excluded_nodes,
+                    self.pattern.excluded_links,
+                )
+                self.topology = None
+            return self.mask
+
+
+def _active_case(case: FailureCase, topology: PreparedTopology) -> FailureCase:
+    """A solve's mask without reading or warming its queued case."""
+    return FailureCase(
+        case.id,
+        case.kind,
+        case.pattern,
+        case.occurrences,
+        eligibility(topology, case.pattern.excluded_nodes, case.pattern.excluded_links),
+        case.trace,
+    )
+
+
 def failure_cases(
     prepared: PreparedScenario, request: FailureRequest | None
 ) -> tuple[FailureCase, ...]:
@@ -322,21 +361,21 @@ def failure_cases(
             counts[pattern] = counts.get(pattern, 0) + 1
             if trace is not None and pattern not in traces:
                 traces[pattern] = trace
-    return tuple(
-        FailureCase(
-            "baseline" if index == 0 else f"failure-{index:06d}",
-            "baseline" if index == 0 else "failure",
-            pattern,
-            count,
-            eligibility(
-                topology,
-                excluded_nodes=pattern.excluded_nodes,
-                excluded_links=pattern.excluded_links,
-            ),
-            traces.get(pattern),
+    cases = []
+    for index, (pattern, count) in enumerate(counts.items()):
+        # The public constructor takes a built mask; generated cases leave
+        # that field absent until its first read.
+        case = object.__new__(FailureCase)
+        vars(case).update(
+            id="baseline" if index == 0 else f"failure-{index:06d}",
+            kind="baseline" if index == 0 else "failure",
+            pattern=pattern,
+            occurrences=count,
+            trace=traces.get(pattern),
+            _eligibility=_CaseEligibility(topology, pattern),
         )
-        for index, (pattern, count) in enumerate(counts.items())
-    )
+        cases.append(case)
+    return tuple(cases)
 
 
 _Result = TypeVar("_Result")
