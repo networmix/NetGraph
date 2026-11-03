@@ -1,6 +1,6 @@
 # NetGraph 0.24.1 against 0.26.0: speed and memory
 
-This directory records a measured comparison of NetGraph 0.24.1 on NetGraph-Core 0.11.0 (before the 0.25 rebuild) with NetGraph 0.26.0 on Core 0.12.0, made in October 2026. It is internal documentation for maintainers, excluded from the site. It says how the two releases were made to compute the same thing, what was measured, where 0.26.0 spends its time and memory on the large data-centre workload, which changes could remove it, and how to rerun the DC-BB timings and diagnostic controls. No change to 0.26 is part of it.
+This directory records a measured comparison of NetGraph 0.24.1 on NetGraph-Core 0.11.0 (before the 0.25 rebuild) with NetGraph 0.26.0 on Core 0.12.0, made in October 2026. It is internal documentation for maintainers, excluded from the site. It says how the two releases were made to compute the same thing, what was measured, where 0.26.0 spends its time and memory on the large data-centre workload, which changes could remove it, and how to rerun the DC-BB timings and diagnostic controls. The later landed-implementation section measures the unreleased implementation separately from the historical release rows.
 
 The 0.26.0 changelog's "15 to 30 times faster" compares 0.26.0 with 0.25.0. Against 0.24.1, 0.26.0 is slower on the large workload below.
 
@@ -138,7 +138,7 @@ The opportunities overlap, so their savings do not add up, and their measures di
 2. **Stop building disposable single-source plans and copying shared route continuations.** A ceiling of about half of the native action cost on the reduced runs; its full-run share is extrapolated, not measured, so re-measure D1 before trusting it.
 3. **Forward in aggregate without source-edge records when nothing asks for them.** 37 to 40 % of clean CPU work, estimated from additional kernel calls as a cost screen. The end-to-end elapsed gain is unmeasured. Aggregate edge results agree with and without attribution on every case.
 
-None of them may change the source roster, the equal per-source shares, the routes, or any field of the default JSON export except the four recorded build/runtime identity fields named under "Judging a fix". Native-program consumers still need the contract review stated above.
+None of them may change the source roster, the equal per-source shares, the routes, or any computed field of the default JSON export. The permitted identity and request-metadata differences are named under "Judging a fix". Native-program consumers still need the contract review stated above.
 
 ## Reproducing
 
@@ -192,7 +192,7 @@ The same reduced commands on D2 gave 19 686 DAGs, 7.30 s against 0.010 s, and 10
 
 ## Judging a fix
 
-A change to 0.26 that is meant to keep results must reproduce released 0.26.0's computed export fields on the same inputs and settings. The raw hashes below identify the unmodified released exports on the recorded machine (stored inputs, no worker or draw overrides), byte-identical across every run there; they include build and runtime identity and are not candidate pass/fail hashes.
+A change to 0.26 that is meant to keep results must reproduce released 0.26.0's computed export fields on the same inputs and settings. This version of `--expect` expects the landed exports' seven-flag native request echo; to compare five-flag 0.26.0 exports, use `measure.py` from commit `4f8cd6a`. The raw hashes below identify the unmodified released exports on the recorded machine (stored inputs, no worker or draw overrides), byte-identical across every run there; they include build and runtime identity and are not candidate pass/fail hashes.
 
 | Input | SHA-256 of released 0.26.0's export |
 | --- | --- |
@@ -201,7 +201,9 @@ A change to 0.26 that is meant to keep results must reproduce released 0.26.0's 
 
 Install the fix before judging it: `v0260` holds the released wheel, so rerunning it judges the release again. Make a third environment `vfix` with the same pins, then replace the package under test: for a NetGraph change, `vfix/bin/pip install --no-deps -e .` from this checkout; for a Core change, build that checkout's wheel by its own instructions and `vfix/bin/pip install --no-deps --force-reinstall <wheel>`.
 
-Run released 0.26.0 once on the target platform and pass that export to `--expect` (for example `vfix/bin/python -I $D/measure.py $D/inputs/dcbb96-0.26.0.yml.gz d1-fix.json --expect d1-0260.json`, and likewise for D2). The comparison records both exports' `netgraph_version`, `core_version`, `core_extension_sha256` and `python_version`, excludes exactly those four identity fields, and requires every other field to match. In particular, schema version, seed, the units report and every step and failure case remain exact. Then compare the same phase boundary on a recorded machine state, with the protocol above for a speed claim. A change that alters computed results needs its own qualification.
+Run released 0.26.0 once on the target platform and pass that export to `--expect` (for example `vfix/bin/python -I $D/measure.py $D/inputs/dcbb96-0.26.0.yml.gz d1-fix.json --expect d1-0260.json`, and likewise for D2). The comparison records both exports' `netgraph_version`, `core_version`, `core_extension_sha256` and `python_version`, requires string values and excludes exactly those four identity fields. For a default candidate export, it also requires all seven flags in each `outputs.native` request echo, asserts that `program` and `by_source` are both boolean `false`, then removes exactly those two new keys. An absent flag, `true`, or the integer `0` fails this check. These are the only additional metadata exceptions; the released export has five native request flags.
+
+Every remaining key and value must match, including JSON types and key/list order. In particular, schema version, seed, the units report and every step and failure case remain exact. `--expect` checks the default export; opt-in native outputs need their own expected values. Then compare the same phase boundary on a recorded machine state, with the protocol above for a speed claim. A change that alters computed results needs its own qualification.
 
 ## The 0.24.1 reference
 
@@ -260,7 +262,138 @@ vref/bin/python -I $D/measure.py $D/inputs/dcbb96-0.24.1.yml.gz d1-ref.json
 - In Core's `FlowPolicy`, an explicit `target_per_flow` with `shortest_path=true` reaches the first record only, so `rebalance_demand` can shed volume; and lossy reoptimisation (`reoptimize_flows_on_each_placement`) can leave the ledger below the returned delivery. NetGraph 0.24.1 never calls `rebalance_demand`, and none of its lossy presets reoptimises.
 - Capacities below 2^-12 are below the engine's resolution: such an edge can block lossless admission as a capacity of 0 does.
 
-## Open questions
+## Landed implementation against the reference
+
+The 2026-11-03 remeasurement uses NetGraph `4f8cd6a59c71ab8e4936b924d8ad17446c298fd3` and Core `b16163de6f11bcfb9005459c82b72cfbc819d833` (tree `60a22f4a5464983dcdfa8e0273f3f430574d865e`). The installed Core wheel was built from tree-identical commit `6ba980d5cdc029749518a8e9820e4ed98769a3dd`. Their version metadata still reads 0.26.0/0.12.0; the commit/tree and extension hash identify the candidate. A is the locally built `d9b5595` reference; B is this landed pair. The runtime pins and CPython 3.13.13 are unchanged.
+
+Fresh reduced/full D1 (8 workers) and D2 (1 worker) exports matched released 0.26.0, with 102/2460 cases respectively and 19 request echoes checked per export. The comparator rejected deliberate computed-value/type, request-flag, structural and key-order differences. Every primary timed B export and each retained diagnostic/profile export was audited separately after timing. This preserves 0.26.0's default-export contract; A keeps its rounding-attributable qualification above.
+
+Each primary row has seven fresh-process A/B/A triples and two prior A/A reference controls. The statistic is mean(B/mean(A1,A2)); the 95% interval uses all 7^7 whole-triple bootstrap resamples and linear percentiles. Pass requires upper bound <1.03, all per-triple and calibration reference drifts <=3%, and no separated cluster (>3% sorted gap with at least two observations on either side). No row was rerun.
+
+| Row | Reference mean, s | Candidate mean, s | B/A [95%] | Max drift / A/A | Clusters | Decision |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| D1, prepare + run + export | 5.4667 | 3.0791 | 0.5633 [0.5615, 0.5650] | 0.65% / 0.20% | none | pass |
+| D1, Scenario.from_yaml | 25.4060 | 7.2441 | 0.2851 [0.2818, 0.2902] | 1.02% / 0.22% | none | pass |
+| D2, prepare + run + export | 38.0838 | 18.0884 | 0.4750 [0.4731, 0.4767] | 1.01% / 0.48% | none | pass |
+| D2, Scenario.from_yaml | 38.0070 | 7.9868 | 0.2101 [0.2089, 0.2113] | 1.38% / 1.42% | none | pass |
+
+| Row | Mean peak A → B, GiB | Largest A → B, GiB | Ratio of means / decision |
+| --- | --- | --- | --- |
+| D1 | 0.4867 → 0.5300 | 0.5077 → 0.5557 | 1.0890, pass |
+| D2 | 0.4164 → 0.4477 | 0.4230 → 0.4541 | 1.0749, pass |
+
+The per-process times, absolute peaks, one-minute loads and swap deltas for all 84 primary and eight A/A processes are in [landed-measurements.json](landed-measurements.json), with startup controls and their ranges, hashes and the machine summary. Memory compares the mean of seven B peaks with fourteen A peaks per row, with a <=2× budget; maxima are reported separately. Loading-process peaks remain separate from the run/export memory objective.
+
+| Row | Whole process A → B, s | Ratio of means | Import + empty-run control A / B, s | Empty-control share A / B |
+| --- | --- | --- | --- | --- |
+| D1 | 31.060 → 10.577 | 0.3405 | 0.1275 / 0.1563 | 0.41% / 1.48% |
+| D2 | 76.133 → 26.212 | 0.3443 | 0.1376 / 0.1673 | 0.18% / 0.64% |
+
+Whole-process figures are descriptive ratios of means; they include imports, input I/O, loading and cleanup. Each side/session has seven fresh import-only and seven one-node empty-workflow controls. These controls include their driver's imports and Scenario import. Startup is a small share of the full-run boundary; it is not subtracted from the primary phase times.
+
+**Machine.** The machine of the historical measurements: a Mac16,6 (Apple M4 Max, 14 cores: 10 performance and 4 efficiency, 36 GB), read with `system_profiler SPHardwareDataType` at 2026-11-03T15:43:24Z, after the timing sessions, on macOS 27.0.1 (26A434). `perf_counter` uses `mach_absolute_time`, resolution 4.17e-8 s. Swap occupancy and per-process CPU were not recorded.
+
+Both sessions ran on AC power with the lid open, with no other heavy job allowed to start and no recorded sleep or battery event. Process CPU was not sampled continuously; spot checks with `top` before the first session and twice during the second showed no other busy process.
+
+The D1 and D2 sessions lasted 17.35 and 37.13 minutes and began at one-minute load averages of 1.895 and 1.816; sampled maxima were 5.757 and 6.912. System-wide swap-in/out were 481.19/0 and 1104.25/505.28 MiB. All of the D2 session's swap-out, and about half its swap-in, occurred during the first reference process of triple 4 (505.28 MiB out, 512.27 MiB in); its reference drift was 1.01%. No per-process paging or stall-time attribution is available. All observations, including that episode, remain in the ratios.
+
+The 100 ms null-sleep intervals were [0.9379, 1.0168] and [0.9994, 1.0321]. Their ratio intervals describe wake-up jitter and do not qualify second-scale rows. The clock checks that apply passed: each sleep lasted at least 100 ms, the steady and wall clocks agreed within 10 ms, and the parent's elapsed time was at least the child's steady time minus 10 ms. Workload A/A, drift and cluster checks qualify the numerical row decisions. These results apply to this recorded machine state, not an empty or paging-free machine.
+
+**Memory observations.** The mean whole-process peak is 9% above the reference on D1 and 7.5% above it on D2. The phase marks below come from one diagnostic process per side with the same driver and show where comparable gaps arise.
+
+| Row | High water after load / run / export, reference → candidate, MiB |
+| --- | --- |
+| D1 | 296.5 → 310.2 / 443.8 → 484.0 / 499.6 → 544.1 |
+| D2 | 294.9 → 311.1 / 391.5 → 372.5 / 421.8 → 456.1 |
+
+The candidate's high water is 13.7 to 16.2 MiB above the reference after loading. On D1 the gap grows to 40.3 MiB during the run and 44.5 MiB by export. On D2 the run ends 19.0 MiB below the reference, and the gap appears during export, which raises the candidate's high water by about 84 MiB against the reference's 30 MiB. Which allocations make up these differences is not measured.
+
+A separate passive inventory found all 2460 completed-case masks unread on each candidate workload. The inventory reads only cached fields, so it builds none of the masks it counts; a check that the cache is unchanged after it guards this.
+
+| Row | Unread cases / cached case masks | Graph arrays / prepared mask, MiB |
+| --- | --- | --- |
+| D1 | 2460 / 0 | 2.828 / 0.091 |
+| D2 | 2460 / 0 | 4.569 / 0.146 |
+
+The exposed graph and mask payloads are lower bounds, not a partition of RSS. Native/TLS/allocator ownership is not exactly partitioned; high-water marks are not additive and no subtraction of logical payloads is presented as an RSS saving. Default completed programs and per-source rows remain an output-option contract, described in the user documentation.
+
+**Small combine profiles.** Four inputs cover one source, two unequal sources (lossless/lossy), and three pods through two planes. Both sides executed 100 prepare/run/export repetitions with one worker, loading once. Their fluid/whole-unit answers were checked before profiling; the two-source lossless result differs by a quantum as expected. Observed self-time leaders are:
+
+| Small input | Observed reference self-time leaders | Observed candidate self-time leaders |
+| --- | --- | --- |
+| one | `_place_cached_fanout`, `_deep_convert`, `_build_graph_core` | `compile_topology`, `project`, `iterencode` |
+| two-lossless | `_place_cached_fanout`, `_build_graph_core`, `_deep_convert` | `compile_topology`, `project`, `<built-in method builtins.isinstance>` |
+| two-lossy | `_build_graph_core`, `_deep_convert`, `_place_cached` | `compile_topology`, `project`, `<built-in method builtins.isinstance>` |
+| three | `_build_graph_core`, `_place_cached_fanout`, `_deep_convert` | `compile_topology`, `project`, `<built-in method builtins.isinstance>` |
+
+The input documents are in the JSON record. cProfile did not retain outer driver/Scenario.run frames; the 100 real placement calls verify the repetition count. These profiles locate observed Python/native boundaries descriptively. Inclusive times overlap; no profile total or apparent small-input ratio is a speed verdict.
+
+**Reproducing the landed pair.** Use fresh local checkouts containing the commits above, the toolchain and deployment target used for the reference, and a fresh environment. The candidate build used Apple clang 21.0.0; its extension records SDK 27.0 and minOS 15.0. The measured Core wheel used `uv build --wheel --no-build-isolation` with the compiler and deployment-target variables below; NetGraph used `uv build --wheel` with isolated setuptools. This build recipe, including its PyPI installs, was not rerun here. From a directory containing fresh `NetGraph` and `NetGraph-Core` checkouts:
+
+```sh
+git -C NetGraph switch --detach 4f8cd6a59c71ab8e4936b924d8ad17446c298fd3
+git -C NetGraph-Core switch --detach b16163de6f11bcfb9005459c82b72cfbc819d833
+python3.13 -m venv vfix
+vfix/bin/pip install numpy==2.5.4 pyyaml==6.0.3 networkx==3.7 jsonschema==4.26.0
+vfix/bin/pip install scikit-build-core==1.1.1 pybind11==3.1.0 cmake==4.4.4 ninja==1.13.2
+CC="$(xcrun --find clang)" CXX="$(xcrun --find clang++)" MACOSX_DEPLOYMENT_TARGET=15.0 uv build --wheel --no-build-isolation --python vfix/bin/python --out-dir wheels ./NetGraph-Core
+uv build --wheel --out-dir wheels ./NetGraph
+vfix/bin/pip install --no-deps wheels/netgraph_core-0.12.0-*.whl wheels/ngraph-0.26.0-py3-none-any.whl
+D=NetGraph/docs/design/perf-0.24-vs-0.26
+mkdir results
+PODS=96
+```
+
+Build `vref` as in “The 0.24.1 reference”. Preserve the input spellings, worker declarations, failure replay and full draws. Run the startup controls below before these row measurements. Before each row's seven triples, run the reference twice with that row's driver; their drift is the row's A/A control. For prepare + run + export:
+
+```sh
+for CONTROL in 1 2; do
+  /usr/bin/time -l vref/bin/python -I -B "$D/measure.py" "$D/inputs/dcbb$PODS-0.24.1.yml.gz" "results/$PODS-engine-AA-$CONTROL.json"
+done
+```
+
+Run the following sequence seven times with distinct `RUN` values, first for PODS=96 then set PODS=192 and repeat the startup, A/A and A/B/A sequences, inside a quiet serial timing window. No diagnostic flags or YAML overrides belong in timed children:
+
+```sh
+RUN=1
+/usr/bin/time -l vref/bin/python -I -B "$D/measure.py" "$D/inputs/dcbb$PODS-0.24.1.yml.gz" "results/$PODS-$RUN-A1.json"
+/usr/bin/time -l vfix/bin/python -I -B "$D/measure.py" "$D/inputs/dcbb$PODS-0.26.0.yml.gz" "results/$PODS-$RUN-B.json"
+/usr/bin/time -l vref/bin/python -I -B "$D/measure.py" "$D/inputs/dcbb$PODS-0.24.1.yml.gz" "results/$PODS-$RUN-A2.json"
+```
+
+For isolated loading, run the reference twice with the following minimal script and its corresponding input for the loading row's A/A control, then use the same seven A/B/A triples with each environment's Python and input spelling. Imports and file decompression precede the timer; do not execute the workflow:
+
+```python
+import gzip
+import sys
+import time
+from pathlib import Path
+
+from ngraph.scenario import Scenario
+
+text = gzip.decompress(Path(sys.argv[1]).read_bytes()).decode()
+start = time.perf_counter()
+scenario = Scenario.from_yaml(text)
+print(time.perf_counter() - start)
+```
+
+The startup controls use seven fresh processes per interpreter for importing `ngraph.scenario.Scenario`, and seven for the one-node empty workflow below. The recorded controls include their harness imports as noted above; report the scope and times of fresh controls separately.
+
+```sh
+printf '%s\n' '{"network":{"nodes":{"S":{}},"links":[]},"demands":{},"workflow":[]}' > results/empty.json
+for TIMING_ENV in vref vfix; do
+  for CONTROL in 1 2 3 4 5 6 7; do
+    /usr/bin/time -l "$TIMING_ENV/bin/python" -I -B -c 'from ngraph.scenario import Scenario'
+    /usr/bin/time -l "$TIMING_ENV/bin/python" -I -B "$D/measure.py" results/empty.json "results/startup-$PODS-$TIMING_ENV-$CONTROL.json"
+  done
+done
+```
+
+Wrap each child to record whole-process time and its absolute peak, capture machine/power/paging before and after, retain every block, and apply the fixed statistic and decision rules above. Validate B exports against fresh released 0.26.0 outside timed children using the comparator's rule; its normalization functions can audit existing files without rerunning the workload. The installed extension hashes recorded here are `5ac684845fbc28560a94c945b9676904af5fe6743079491db92b4779cf3c1314` (reference) and `18f9661ebc0c43c4f627e10fec6e1cd2ce84ba99203c7a8bfb4db27bf779f423` (candidate). Fresh builds must record their own hashes and toolchain. These workload measurements do not establish platform CI, sanitizer or consumer release acceptance.
+
+## Open questions from the original diagnosis
+
+The landed rows above answer the default-output timing and memory questions for D1/D2. The original questions below retain the diagnosis's scope; they are not a statement that the landed default-output contract is unresolved.
 
 - Whether compact retention can serve every consumer of native programs (replay, repair, detailed routes), and at what contract.
 - How much of the per-source preparation can be shared without changing the source roster, the equal shares or the routes.

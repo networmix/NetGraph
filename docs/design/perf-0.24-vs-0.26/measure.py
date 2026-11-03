@@ -13,8 +13,9 @@ export's SHA-256, which README.md states for the released 0.26.0.
 draws; fewer draws give the reduced runs of README.md. The other options apply to
 0.26 only and are diagnostics, not supported modes:
 
-- `--expect` compares every decoded export field with another 0.26 export,
-  except the four recorded build/runtime identity fields named in README.md.
+- `--expect` compares a default candidate export with released 0.26.0,
+  except the four build/runtime identities and the two false native request
+  flags named in README.md. JSON types and key/list order must also match.
 - `--reuse` repeats each native action list on its retained programs, checks
   that the repeat delivers the same amounts, and times both calls.
 - `--probe` loads the compiled `ngprobe` module. `--discard` drops each case's
@@ -56,7 +57,7 @@ def override(text: str, key: str, value: int) -> str:
     return yaml.safe_dump(data, sort_keys=False)
 
 
-def comparison_export(path: Path) -> tuple[dict, dict]:
+def comparison_export(path: Path, *, native_outputs: bool = False) -> tuple[dict, dict]:
     data = json.loads(path.read_text())
     metadata = data["metadata"]
     provenance = {
@@ -70,6 +71,39 @@ def comparison_export(path: Path) -> tuple[dict, dict]:
     }
     if not all(isinstance(value, str) for value in provenance.values()):
         raise ValueError("export build/runtime identity fields must be strings")
+    if native_outputs:
+        requests = 0
+
+        def walk(value):
+            nonlocal requests
+            if isinstance(value, dict):
+                if "outputs" in value:
+                    native = value["outputs"]["native"]
+                    if set(native) != {
+                        "edge_flows",
+                        "residual",
+                        "edge_reservations",
+                        "saturated_boundary_edges",
+                        "min_cut",
+                        "program",
+                        "by_source",
+                    }:
+                        raise ValueError("export native request must have seven flags")
+                    for key in ("program", "by_source"):
+                        if native.pop(key) is not False:
+                            raise ValueError(
+                                f"default export native {key} must be false"
+                            )
+                    requests += 1
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+
+        walk(data)
+        if not requests:
+            raise ValueError("export has no native output requests")
     return data, provenance
 
 
@@ -258,13 +292,17 @@ def main() -> None:
     if args.reuse:
         summary["reuse"] = dict(reuse)
     if args.expect:
-        actual, actual_provenance = comparison_export(args.results)
+        actual, actual_provenance = comparison_export(args.results, native_outputs=True)
         expected, expected_provenance = comparison_export(args.expect)
         summary["comparison_provenance"] = {
             "actual": actual_provenance,
             "expected": expected_provenance,
         }
-        summary["equal_to_expected"] = actual == expected
+        summary["equal_to_expected"] = json.dumps(
+            actual, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        ) == json.dumps(
+            expected, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        )
     print(json.dumps(summary, indent=2))
     if args.expect and not summary["equal_to_expected"]:
         sys.exit(f"{args.results} differs from {args.expect}")
