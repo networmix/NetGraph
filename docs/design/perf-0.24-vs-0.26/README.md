@@ -264,34 +264,53 @@ vref/bin/python -I $D/measure.py $D/inputs/dcbb96-0.24.1.yml.gz d1-ref.json
 
 ## Landed implementation against the reference
 
-The 2026-11-03 remeasurement uses NetGraph `4f8cd6a59c71ab8e4936b924d8ad17446c298fd3` and Core `b16163de6f11bcfb9005459c82b72cfbc819d833` (tree `60a22f4a5464983dcdfa8e0273f3f430574d865e`). The installed Core wheel was built from tree-identical commit `6ba980d5cdc029749518a8e9820e4ed98769a3dd`. Their version metadata still reads 0.26.0/0.12.0; the commit/tree and extension hash identify the candidate. A is the locally built `d9b5595` reference; B is this landed pair. The runtime pins and CPython 3.13.13 are unchanged.
+The 2026-11-03 remeasurement uses NetGraph `4f8cd6a59c71ab8e4936b924d8ad17446c298fd3` and Core commit `3e919ec0010bc370a6ea0b95ad94b4b1665ceb1a` (tree `fbd1a6d2c4583e7ac13dd91fa84a45307df18b97`). The installed Core wheel was built from commit `507fb9810711b451418beb951df54172bfb14f83`. Their version metadata still reads 0.26.0/0.12.0; the commit/tree and extension hash identify the candidate. A is the locally built `d9b5595` reference; B is this pair. The runtime pins and CPython 3.13.13 are unchanged.
 
-Fresh reduced/full D1 (8 workers) and D2 (1 worker) exports matched released 0.26.0, with 102/2460 cases respectively and 19 request echoes checked per export. The comparator rejected deliberate computed-value/type, request-flag, structural and key-order differences. Every primary timed B export and each retained diagnostic/profile export was audited separately after timing. This preserves 0.26.0's default-export contract; A keeps its rounding-attributable qualification above.
+Fresh full D1 (8 workers) and D2 (1 worker) exports matched released 0.26.0, with 2460 cases and 19 request echoes checked per export. The comparator rejected deliberate computed-value/type, request-flag, structural and key-order differences. Every timed candidate export was audited separately after timing. This preserves 0.26.0's default-export contract; A keeps its rounding-attributable qualification above.
+
+Only prepare + run + export and whole-process memory were remeasured on this Core tree. The `Scenario.from_yaml` rows below retain their earlier measurements on Core `b16163d`: the plan-building change does not touch loading. The phase-memory observations, passive inventory and small profiles below also retain that earlier build explicitly; they were not rerun on the new tree.
+
+The new rows' decisions are numerical passes on the recorded machine state. The opening process-CPU observation is missing, so the quiet-opening process check remains unverified. Later spot checks do not establish the opening state.
 
 Each primary row has seven fresh-process A/B/A triples and two prior A/A reference controls. The statistic is mean(B/mean(A1,A2)); the 95% interval uses all 7^7 whole-triple bootstrap resamples and linear percentiles. Pass requires upper bound <1.03, all per-triple and calibration reference drifts <=3%, and no separated cluster (>3% sorted gap with at least two observations on either side). No row was rerun.
 
 | Row | Reference mean, s | Candidate mean, s | B/A [95%] | Max drift / A/A | Clusters | Decision |
 | --- | ---: | ---: | --- | --- | --- | --- |
-| D1, prepare + run + export | 5.4667 | 3.0791 | 0.5633 [0.5615, 0.5650] | 0.65% / 0.20% | none | pass |
+| D1, prepare + run + export | 5.4678 | 3.0809 | 0.5635 [0.5626, 0.5643] | 0.97% / 0.00% | none | pass |
 | D1, Scenario.from_yaml | 25.4060 | 7.2441 | 0.2851 [0.2818, 0.2902] | 1.02% / 0.22% | none | pass |
-| D2, prepare + run + export | 38.0838 | 18.0884 | 0.4750 [0.4731, 0.4767] | 1.01% / 0.48% | none | pass |
+| D2, prepare + run + export | 38.1791 | 18.1786 | 0.4762 [0.4743, 0.4781] | 1.89% / 0.96% | none | pass |
 | D2, Scenario.from_yaml | 38.0070 | 7.9868 | 0.2101 [0.2089, 0.2113] | 1.38% / 1.42% | none | pass |
+
+**Comparison with the previous Core head.** A separate direct comparison uses Core `b16163d` as A and the new Core tree as B, with the same NetGraph, compiler, full inputs and worker counts. Each row uses its own two A/A controls and seven fresh A/B/A triples. The upper 95% bound must be below 1.03 under the same drift and cluster rules.
+
+| Row | Previous mean, s | New mean, s | New / previous [95%] | Max drift / A/A | Clusters | Decision |
+| --- | ---: | ---: | --- | --- | --- | --- |
+| D1, prepare + run + export | 3.0846 | 3.0898 | 1.0017 [0.9989, 1.0044] | 0.85% / 0.37% | none | pass |
+| D2, prepare + run + export | 18.1431 | 18.2170 | 1.0041 [1.0022, 1.0058] | 1.13% / 0.47% | none | pass |
+
+**Memory against the 0.24.1 reference.** A is the `d9b5595` reference; B is the new Core pair. The mean-peak budget is 2× the reference.
 
 | Row | Mean peak A → B, GiB | Largest A → B, GiB | Ratio of means / decision |
 | --- | --- | --- | --- |
-| D1 | 0.4867 → 0.5300 | 0.5077 → 0.5557 | 1.0890, pass |
-| D2 | 0.4164 → 0.4477 | 0.4230 → 0.4541 | 1.0749, pass |
+| D1 | 0.4870 → 0.5303 | 0.5078 → 0.5368 | 1.0889, pass |
+| D2 | 0.4182 → 0.4469 | 0.4223 → 0.4494 | 1.0687, pass |
 
-The per-process times, absolute peaks, one-minute loads and swap deltas for all 84 primary and eight A/A processes are in [landed-measurements.json](landed-measurements.json), with startup controls and their ranges, hashes and the machine summary. Memory compares the mean of seven B peaks with fourteen A peaks per row, with a <=2× budget; maxima are reported separately. Loading-process peaks remain separate from the run/export memory objective.
+The per-process times, absolute peaks, one-minute loads and swap deltas for the four new timing comparisons, and the earlier loading observations, are in [landed-measurements.json](landed-measurements.json), with startup controls and their ranges, hashes and the machine summary. Memory compares the mean of seven B peaks with fourteen A peaks per row, with a <=2× budget; maxima are reported separately. Loading-process peaks remain separate from the run/export memory objective.
 
 | Row | Whole process A → B, s | Ratio of means | Import + empty-run control A / B, s | Empty-control share A / B |
 | --- | --- | --- | --- | --- |
-| D1 | 31.060 → 10.577 | 0.3405 | 0.1275 / 0.1563 | 0.41% / 1.48% |
-| D2 | 76.133 → 26.212 | 0.3443 | 0.1376 / 0.1673 | 0.18% / 0.64% |
+| D1 | 31.107 → 10.570 | 0.3398 | 0.1373 / 0.1678 | 0.44% / 1.59% |
+| D2 | 76.317 → 26.330 | 0.3450 | 0.1373 / 0.1678 | 0.18% / 0.64% |
+| D1, previous Core → new Core | 10.587 → 10.575 | 0.9989 | 0.1753 / 0.1678 | 1.66% / 1.59% |
+| D2, previous Core → new Core | 26.279 → 26.370 | 1.0034 | 0.1753 / 0.1678 | 0.67% / 0.64% |
 
-Whole-process figures are descriptive ratios of means; they include imports, input I/O, loading and cleanup. Each side/session has seven fresh import-only and seven one-node empty-workflow controls. These controls include their driver's imports and Scenario import. Startup is a small share of the full-run boundary; it is not subtracted from the primary phase times.
+Whole-process figures are descriptive ratios of means; they include imports, input I/O, loading and cleanup. Each of the three interpreters in the new session has seven fresh import-only and seven one-node empty-workflow controls. The earlier loading sessions retain their own controls. These controls include their driver's imports and Scenario import. Startup is a small share of the full-run boundary; it is not subtracted from the primary phase times.
 
-**Machine.** The machine of the historical measurements: a Mac16,6 (Apple M4 Max, 14 cores: 10 performance and 4 efficiency, 36 GB), read with `system_profiler SPHardwareDataType` at 2026-11-03T15:43:24Z, after the timing sessions, on macOS 27.0.1 (26A434). `perf_counter` uses `mach_absolute_time`, resolution 4.17e-8 s. Swap occupancy and per-process CPU were not recorded.
+**Machine for the new Core rows.** Mac16,6, Apple M4 Max, 14 cores (10 performance, 4 efficiency), 36 GB, read with `system_profiler SPHardwareDataType` at 2026-11-03T20:00:52.774608+00:00; macOS 27.0.1 (26A434). The session ran from 2026-11-03T20:11:08.960213+00:00 to 2026-11-03T20:58:31.543093+00:00 (47.38 minutes), on AC with the lid open. Opening one-minute load was 1.861, sampled maximum 3.781. System-wide swap-in/out was 2141.23/443.97 MiB. Process CPU (`ps` and `top`) and swap occupancy (`sysctl`) were unavailable in the measurement process. No external process-CPU snapshot was recorded at opening. External `top` observations at 20:27 and 20:57 UTC found no other process above 10% CPU; these are spot checks during the session, not continuous coverage. The JSON record retains these limitations. These are system-wide counters, with no per-child stall attribution. No sleep or battery event was recorded.
+
+The new session's null-sleep interval was [0.9688, 1.0334]. Its ratio interval describes wake-up jitter; the binding clock sanity checks passed. Workload A/A, drift and cluster results above determine the row decisions. The new absolute peaks show the remaining memory gap but do not partition allocation ownership; the earlier phase observations below describe the previous Core build.
+
+**Machine for the retained loading and diagnostic observations.** Mac16,6 (Apple M4 Max, 14 cores: 10 performance and 4 efficiency, 36 GB), read with `system_profiler SPHardwareDataType` at 2026-11-03T15:43:24Z, after the timing sessions, on macOS 27.0.1 (26A434). `perf_counter` uses `mach_absolute_time`, resolution 4.17e-8 s. Swap occupancy and per-process CPU were not recorded.
 
 Both sessions ran on AC power with the lid open, with no other heavy job allowed to start and no recorded sleep or battery event. Process CPU was not sampled continuously; spot checks with `top` before the first session and twice during the second showed no other busy process.
 
@@ -299,7 +318,7 @@ The D1 and D2 sessions lasted 17.35 and 37.13 minutes and began at one-minute lo
 
 The 100 ms null-sleep intervals were [0.9379, 1.0168] and [0.9994, 1.0321]. Their ratio intervals describe wake-up jitter and do not qualify second-scale rows. The clock checks that apply passed: each sleep lasted at least 100 ms, the steady and wall clocks agreed within 10 ms, and the parent's elapsed time was at least the child's steady time minus 10 ms. Workload A/A, drift and cluster checks qualify the numerical row decisions. These results apply to this recorded machine state, not an empty or paging-free machine.
 
-**Memory observations.** The mean whole-process peak is 9% above the reference on D1 and 7.5% above it on D2. The phase marks below come from one diagnostic process per side with the same driver and show where comparable gaps arise.
+**Earlier memory observations (Core `b16163d`).** The mean whole-process peak was 9% above the reference on D1 and 7.5% above it on D2. The phase marks below come from one diagnostic process per side with the same driver and show where comparable gaps arise.
 
 | Row | High water after load / run / export, reference → candidate, MiB |
 | --- | --- |
@@ -317,7 +336,7 @@ A separate passive inventory found all 2460 completed-case masks unread on each 
 
 The exposed graph and mask payloads are lower bounds, not a partition of RSS. Native/TLS/allocator ownership is not exactly partitioned; high-water marks are not additive and no subtraction of logical payloads is presented as an RSS saving. Default completed programs and per-source rows remain an output-option contract, described in the user documentation.
 
-**Small combine profiles.** Four inputs cover one source, two unequal sources (lossless/lossy), and three pods through two planes. Both sides executed 100 prepare/run/export repetitions with one worker, loading once. Their fluid/whole-unit answers were checked before profiling; the two-source lossless result differs by a quantum as expected. Observed self-time leaders are:
+**Earlier small combine profiles (Core `b16163d`).** Four inputs cover one source, two unequal sources (lossless/lossy), and three pods through two planes. Both sides executed 100 prepare/run/export repetitions with one worker, loading once. Their fluid/whole-unit answers were checked before profiling; the two-source lossless result differs by a quantum as expected. Observed self-time leaders are:
 
 | Small input | Observed reference self-time leaders | Observed candidate self-time leaders |
 | --- | --- | --- |
@@ -332,7 +351,7 @@ The input documents are in the JSON record. cProfile did not retain outer driver
 
 ```sh
 git -C NetGraph switch --detach 4f8cd6a59c71ab8e4936b924d8ad17446c298fd3
-git -C NetGraph-Core switch --detach b16163de6f11bcfb9005459c82b72cfbc819d833
+git -C NetGraph-Core switch --detach 3e919ec0010bc370a6ea0b95ad94b4b1665ceb1a
 python3.13 -m venv vfix
 vfix/bin/pip install numpy==2.5.4 pyyaml==6.0.3 networkx==3.7 jsonschema==4.26.0
 vfix/bin/pip install scikit-build-core==1.1.1 pybind11==3.1.0 cmake==4.4.4 ninja==1.13.2
@@ -361,7 +380,9 @@ RUN=1
 /usr/bin/time -l vref/bin/python -I -B "$D/measure.py" "$D/inputs/dcbb$PODS-0.24.1.yml.gz" "results/$PODS-$RUN-A2.json"
 ```
 
-For isolated loading, run the reference twice with the following minimal script and its corresponding input for the loading row's A/A control, then use the same seven A/B/A triples with each environment's Python and input spelling. Imports and file decompression precede the timer; do not execute the workflow:
+To reproduce the direct previous-head comparison, build another environment from Core `b16163de6f11bcfb9005459c82b72cfbc819d833` and the same NetGraph commit, pins, compiler and flags. Use that interpreter and the 0.26.0 input spelling in both A slots and in the two A/A controls; use the new build in B. Retain the same seven triples, startup controls, phase boundary and qualification rules.
+
+The loading rows were not rerun for the plan-building change. To reproduce their original scope, use the previous-head environment (Core `b16163d`) in B. For isolated loading, run the reference twice with the following minimal script and its corresponding input for the loading row's A/A control, then use the same seven A/B/A triples with each environment's Python and input spelling. Imports and file decompression precede the timer; do not execute the workflow:
 
 ```python
 import gzip
@@ -389,7 +410,7 @@ for TIMING_ENV in vref vfix; do
 done
 ```
 
-Wrap each child to record whole-process time and its absolute peak, capture machine/power/paging before and after, retain every block, and apply the fixed statistic and decision rules above. Validate B exports against fresh released 0.26.0 outside timed children using the comparator's rule; its normalization functions can audit existing files without rerunning the workload. The installed extension hashes recorded here are `5ac684845fbc28560a94c945b9676904af5fe6743079491db92b4779cf3c1314` (reference) and `18f9661ebc0c43c4f627e10fec6e1cd2ce84ba99203c7a8bfb4db27bf779f423` (candidate). Fresh builds must record their own hashes and toolchain. These workload measurements do not establish platform CI, sanitizer or consumer release acceptance.
+Wrap each child to record whole-process time and its absolute peak, capture machine/power/paging before and after, retain every block, and apply the fixed statistic and decision rules above. Validate B exports against fresh released 0.26.0 outside timed children using the comparator's rule; its normalization functions can audit existing files without rerunning the workload. The installed extension hashes recorded here are `5ac684845fbc28560a94c945b9676904af5fe6743079491db92b4779cf3c1314` (reference) and `13dda8869312dbf740f3b05667a34c674e3847bccfa20690981fc33523e9cfe1` (candidate). Fresh builds must record their own hashes and toolchain. These workload measurements do not establish platform CI, sanitizer or consumer release acceptance.
 
 ## Open questions from the original diagnosis
 
