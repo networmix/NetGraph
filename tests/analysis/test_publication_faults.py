@@ -20,7 +20,7 @@ BOUNDARIES = (
     ("netgraph_core", "FlowPolicy", 3, False),
     ("netgraph_core", "Replace", 3, False),
     ("netgraph_core", "apply_actions", 1, True),
-    ("policy", "records", 3, False),
+    ("ngraph.analysis.placement", "required_outputs", 1, False),
     ("ngraph.analysis.placement", "PlacementRow", 3, False),
     ("ngraph.analysis.costs", "cost_distribution", 3, False),
     ("ngraph.analysis.placement", "placement_totals", 1, False),

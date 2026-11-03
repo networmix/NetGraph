@@ -134,7 +134,9 @@ For K shortest paths, pass `options=ngc.KspOptions(k, cost_ceiling=...)`. In `co
 
 [`write_json(result, file)`](api-full.md#ngraphwrite_json) is the export path. It writes each plain record as its declared constants and fields, in declaration order; `ngraph/schemas/results.json` is generated from the same declarations. The file's format is in [Output Format](cli.md#output-format), and what its numbers mean in [Results and their units](../concepts.md#results-and-their-units).
 
-`CapacityQuery`, `PlacementQuery`, `SensitivityQuery`, [`TunnelCountQuery`](api-full.md#ngraphtunnelcountquery) and `MSDQuery` take `export_details` (default `False`), which adds the detail fields to the JSON only: `row.result` and the sensitivity baseline are always complete in Python. The analysis records it as `outputs.details`. MSD applies it to its best rows and any exported probe rows; its history stays compact.
+`CapacityQuery`, `PlacementQuery`, `SensitivityQuery`, [`TunnelCountQuery`](api-full.md#ngraphtunnelcountquery) and `MSDQuery` take `export_details` (default `False`), which requests source rows and adds the detail fields to JSON. The analysis records it as `outputs.details`. MSD applies it to its best rows and any exported probe rows; its history stays compact.
+
+All five queries accept native `outputs`. A completed `row.result` or sensitivity baseline has `program=None` and `by_source=None` by default. The native `program` and `by_source` flags request those fields; selected details and reports also request their required fields internally. For direct access, pass `outputs=ngc.OutputOptions(program=True, by_source=True)` and check optional fields before reading them. A zero call that has not prepared a program can still return `program=None`. The result's `plan` and `by_tunnel` keep their model-specific defaults. Placement reads live policies for cost reports and failure replay; capacity tunnel-cost reports request a result program internally. Exported `outputs.native` echoes the user's seven flags, excluding internal requests.
 
 ## Custom steps and exporters
 

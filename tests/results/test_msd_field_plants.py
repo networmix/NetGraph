@@ -264,6 +264,8 @@ def oracle(case, monkeypatch):
                     "edge_reservations",
                     "saturated_boundary_edges",
                     "min_cut",
+                    "program",
+                    "by_source",
                 )
             },
             "cost_distribution": False,

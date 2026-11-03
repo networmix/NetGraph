@@ -214,7 +214,10 @@ def test_converged_only_builds_no_baseline_and_schedules_cases_alone(monkeypatch
     monkeypatch.setattr(
         placement.Baseline,
         "of",
-        classmethod(lambda cls, state: built.append(1) or original(state)),
+        classmethod(
+            lambda cls, state, demands, policies: built.append(1)
+            or original(state, demands, policies)
+        ),
     )
     scheduled = []
     original_schedule = placement.schedule_cases
@@ -389,7 +392,12 @@ def test_a_pool_replays_its_tunnels_through_its_own_attachments():
         [("S1", "T", 10), ("S2", "T", 10)],
         [demand("^S[12]$", "^T$", 20, FlowPolicyPreset.TE_ECMP_16_LSP, id="p")],
     )
-    analysis = run(prep, nodes_failing("^S1$"), export_details=True)
+    analysis = run(
+        prep,
+        nodes_failing("^S1$"),
+        export_details=True,
+        outputs=ngc.OutputOptions(program=True),
+    )
     base = analysis.cases[0].states["converged"].rows[0].result
     s1 = prep.topology.node_id_by_name["S1"]
     sources = prep.topology.graph.edge_sources()

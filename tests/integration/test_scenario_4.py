@@ -15,7 +15,9 @@ Validation helpers come from integration.helpers.
 """
 
 import re
+from dataclasses import replace
 
+import netgraph_core as ngc
 import pytest
 
 from ngraph.explorer import NetworkExplorer
@@ -46,7 +48,16 @@ class TestScenario4:
     @pytest.fixture(scope="module")
     def scenario_4_executed(self, scenario_4):
         """Execute scenario 4 workflow and return with results."""
-        return run(prepare(scenario_4))
+        selected = replace(
+            scenario_4,
+            workflow=[
+                replace(step, outputs=ngc.OutputOptions(by_source=True))
+                if hasattr(step, "outputs")
+                else step
+                for step in scenario_4.workflow
+            ],
+        )
+        return run(prepare(selected))
 
     @pytest.fixture(scope="module")
     def helper(self, scenario_4, scenario_4_executed):

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Results**: **BREAKING** completed native analysis results have `program=None` and `by_source=None` by default; request them through a query's `outputs=OutputOptions(program=True, by_source=True)`. JSON details and cost reports request what they read automatically, `MSDQuery` accepts native `outputs`, and the exported `outputs.native` gains `program` and `by_source`.
 - Loading: scenarios with many narrow link rules and repeated node paths load faster, preserving rule order and parallel-link updates.
 - Failure analyses build a case's eligibility mask only while that case is solved, instead of keeping one per case. Reading `FailureCase.eligibility` later rebuilds the mask once and keeps it: it allows the same nodes and edges, but may be a different object with a different uid.
 

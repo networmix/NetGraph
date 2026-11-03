@@ -186,7 +186,9 @@ def test_two_ordered_controllers_have_feasibility_reentry_and_exact_optima():
                     for policy, offer in zip(policies, offers, strict=True)
                 ],
                 mode=ngc.BatchMode.ORDERED,
-                outputs=ngc.OutputOptions(edge_flows=True, min_cut=True),
+                outputs=ngc.OutputOptions(
+                    edge_flows=True, min_cut=True, by_source=True
+                ),
             )
             available = [4] * 5
             for index, (result, offer, endpoints) in enumerate(

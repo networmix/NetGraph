@@ -721,6 +721,14 @@
         "min_cut": {
           "description": "Request the minimum cut where it is defined.",
           "type": "boolean"
+        },
+        "program": {
+          "description": "Request each completed result's forwarding program in Python.",
+          "type": "boolean"
+        },
+        "by_source": {
+          "description": "Request each completed result's source rows in Python.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -728,7 +736,9 @@
         "residual",
         "edge_reservations",
         "saturated_boundary_edges",
-        "min_cut"
+        "min_cut",
+        "program",
+        "by_source"
       ],
       "additionalProperties": false
     },

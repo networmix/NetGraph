@@ -223,7 +223,12 @@ def test_extension_exception_is_the_original_object(base):
 def test_loading_does_not_store_diagnostic_state(entry):
     step = loaded(entry).workflow[1]
     assert set(vars(step)) == {f.name for f in fields(step)} | {"_constructed"}
-    if entry["type"] in {"MaxFlow", "TrafficMatrixPlacement", "TunnelCountAnalysis"}:
+    if entry["type"] in {
+        "MaxFlow",
+        "TrafficMatrixPlacement",
+        "TunnelCountAnalysis",
+        "MaximumSupportedDemand",
+    }:
         with pytest.raises(
             TypeError, match="cannot pickle '_netgraph_core.OutputOptions' object"
         ):

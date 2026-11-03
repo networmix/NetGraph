@@ -15,6 +15,7 @@ from ngraph.analysis.capacity import (
 from ngraph.analysis.demands import selected_pairs
 from ngraph.analysis.failures import Workers, checked_workers, resolve_workers
 from ngraph.analysis.metadata import analysis_metadata
+from ngraph.analysis.outputs import required_outputs
 from ngraph.model.selectors import Selector
 from ngraph.results import (
     OutputSelection,
@@ -98,7 +99,12 @@ def edge_sensitivity(
     )
     workers = resolve_workers(query.workers)
     options = evaluation_options(
-        topology, query.config, query.offer, query.design_demand, mask, query.outputs
+        topology,
+        query.config,
+        query.offer,
+        query.design_demand,
+        mask,
+        required_outputs(query.outputs, by_source=query.export_details),
     )
     result = ngc.evaluate_edge_failures(
         topology.graph,

@@ -112,6 +112,7 @@ def count_rows(state, counts, q="auto"):
     )
     step = TunnelCountAnalysis(
         "counts",
+        outputs=ngc.OutputOptions(program=True),
         demand_set="d",
         counts=counts,
         up_to=256,
@@ -130,7 +131,12 @@ def count_rows(state, counts, q="auto"):
         analysis = run(prep).steps[0].result
     else:
         query = TunnelCountQuery(
-            prep.demand_sets["d"], counts, IDEAL[state], IDEAL[state], up_to=256
+            prep.demand_sets["d"],
+            counts,
+            IDEAL[state],
+            IDEAL[state],
+            up_to=256,
+            outputs=ngc.OutputOptions(program=True),
         )
         analysis = tunnel_counts(prep, query)
     return prep, analysis.rows

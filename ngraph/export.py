@@ -151,6 +151,8 @@ def _output_options(value: ngc.OutputOptions) -> dict[str, JSONValue]:
         "edge_reservations": value.edge_reservations,
         "saturated_boundary_edges": value.saturated_boundary_edges,
         "min_cut": value.min_cut,
+        "program": value.program,
+        "by_source": value.by_source,
     }
 
 
@@ -789,6 +791,8 @@ def _native(value, topology, outputs, pool=None):
         undelivered = value.call_undelivered
         call_drops = value.call_edge_drops
         sources = value.by_source
+        if sources is None:
+            raise ValueError("details: source rows were not requested")
         tunnels = value.by_tunnel
         plan = value.plan
         call_physical, call_synthetic = _amounts(topology, call_drops)

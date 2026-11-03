@@ -2,6 +2,7 @@
 
 from fractions import Fraction
 
+import netgraph_core as ngc
 import pytest
 
 from ngraph.analysis.demands import resolve_demands
@@ -38,17 +39,20 @@ def test_fixed_path_bracket_is_tested_and_not_a_global_rounded_float_optimum(
     ledgers = []
     observations = []
 
-    def observe(ledger, policies, requests):
+    def observe(ledger, policies, requests, outputs):
         assert list(ledger.carried()) == [0, 0]
         assert list(ledger.reserved()) == [0, 0]
         ledgers.append(ledger)
         rosters.append(tuple(policies))
-        results = original(ledger, policies, requests)
+        results = original(ledger, policies, requests, outputs)
         observations.append(results)
         return results
 
     monkeypatch.setattr(msd, "_apply_matrix", observe)
-    result = maximum_supported_demand(context, MSDQuery(demands, alpha_tolerance=1))
+    result = maximum_supported_demand(
+        context,
+        MSDQuery(demands, alpha_tolerance=1, outputs=ngc.OutputOptions(by_source=True)),
+    )
     assert len(result.history) == 2
     assert [row.alpha.value for row in result.history] == [1, 2]
     assert [row.outcome for row in result.history] == ["feasible", "infeasible"]

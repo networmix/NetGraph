@@ -205,7 +205,9 @@ def test_pool_counts_fraction_floor_working_size_costs_and_failures(
             ledger,
             owners,
             [32],
-            ngc.OutputOptions(edge_flows=True, edge_reservations=True, min_cut=True),
+            ngc.OutputOptions(
+                program=True, edge_flows=True, edge_reservations=True, min_cut=True
+            ),
         )
         verify(topology, demands.demands[0], result, expected, count, 32, cheap, wide)
         if not failed_node and not failed_link and count == 16:
@@ -223,7 +225,9 @@ def test_up_to_finite_design_changes_working_route_and_keeps_its_maximum():
         PlacementQuery(
             demands,
             workers=1,
-            outputs=ngc.OutputOptions(edge_flows=True, edge_reservations=True),
+            outputs=ngc.OutputOptions(
+                program=True, edge_flows=True, edge_reservations=True
+            ),
             export_cost_distribution=True,
         ),
     )

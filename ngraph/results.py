@@ -1,6 +1,7 @@
 """Owned analysis envelopes, exact reports and normalized questions.
 
-Computational results remain native values with their native lifetime and fields.
+Computational results retain their native lifetime. Native program and source rows
+are retained only when requested by the corresponding output option.
 """
 
 from __future__ import annotations
@@ -585,7 +586,7 @@ class OutputSelection(_ResultRecord):
     """
 
     native: ngc.OutputOptions
-    """The native output flags."""
+    """The user's native output flags; internal report requests are not echoed."""
     cost_distribution: bool
     """Whether cost reports are exported."""
     details: bool = False

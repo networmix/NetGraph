@@ -719,6 +719,7 @@ resolved demand set is placed in full.
 - `max_bisect_iters` (int) = 32
 - `export_probe_rows` (bool) = False
 - `export_details` (bool) = False
+- `outputs` (ngc.OutputOptions)
 
 ### ngraph.MSDStatus
 
@@ -1794,6 +1795,7 @@ Workflow step: the maximum supported demand of a demand set.
 - `max_bracket_iters` (int) = 32
 - `max_bisect_iters` (int) = 32
 - `export_details` (bool) = False
+- `outputs` (OutputOptions)
 
 **Methods:**
 

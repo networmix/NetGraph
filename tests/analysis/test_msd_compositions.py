@@ -157,11 +157,13 @@ def test_a_lossless_pool_in_msd_is_unproved_and_drops_nothing():
 
 
 ARRAYS = ("edge_flows", "residual", "edge_reservations", "saturated_boundary_edges")
-WITH_ARRAYS = ngc.OutputOptions(
+WITH_DETAILS = ngc.OutputOptions(
     edge_flows=True,
     residual=True,
     edge_reservations=True,
     saturated_boundary_edges=True,
+    program=True,
+    by_source=True,
 )
 
 
@@ -277,20 +279,13 @@ def two_pools():
 def test_every_probe_starts_from_an_empty_ledger(
     monkeypatch, make, history, deliveries
 ):
-    # MSD asks no native arrays; here every probe asks the flows, residual capacity and
-    # reservations, so the retained rows can be compared with a fresh ledger's in full.
-    from ngraph.analysis import msd
-
-    apply = msd._apply_matrix
-    monkeypatch.setattr(
-        msd,
-        "_apply_matrix",
-        lambda ledger, owners, requests: apply(ledger, owners, requests, WITH_ARRAYS),
-    )
     prep = make()
     demands = prep.demand_sets["d"]
     result = maximum_supported_demand(
-        prep, MSDQuery(demands, alpha_tolerance=0.25, export_probe_rows=True)
+        prep,
+        MSDQuery(
+            demands, alpha_tolerance=0.25, export_probe_rows=True, outputs=WITH_DETAILS
+        ),
     )
     if history is not None:
         assert [(p.alpha.value, p.outcome) for p in result.history] == history
@@ -307,7 +302,7 @@ def test_every_probe_starts_from_an_empty_ledger(
                 alpha=alpha,
                 states=("converged",),
                 workers=1,
-                outputs=WITH_ARRAYS,
+                outputs=WITH_DETAILS,
             ),
         )
         assert all(

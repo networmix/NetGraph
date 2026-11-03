@@ -304,7 +304,7 @@ def test_step_parameters_print_output_options_by_fields_reproducibly():
     assert " object at 0x" not in texts[0]
     assert (
         "| OutputOptions(edge_flows=False, residual=False, edge_reservations=False, "
-        "saturated_boundary_edges=False, min_cut=False)"
+        "saturated_boundary_edges=False, min_cut=False, program=False, by_source=False)"
     ) in texts[0]
 
 
@@ -332,7 +332,9 @@ def test_step_parameters_print_the_given_output_options(tmp_path):
     lines = _inspect(tmp_path, text, "--detail")
     rows = [row[1] for row in _table_row(lines, "outputs", 2)]
     assert rows == [
-        "OutputOptions(" + ", ".join(f"{flag}={flag in on}" for flag in FLAGS) + ")"
+        "OutputOptions("
+        + ", ".join(f"{flag}={flag in on}" for flag in (*FLAGS, "program", "by_source"))
+        + ")"
         for on in sets
     ]
 

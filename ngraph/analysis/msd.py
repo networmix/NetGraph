@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -11,6 +11,7 @@ import netgraph_core as ngc
 
 from ngraph.analysis.demands import scaled_expansion
 from ngraph.analysis.metadata import analysis_metadata
+from ngraph.analysis.outputs import required_outputs
 from ngraph.analysis.placement import (
     _apply_matrix,
     policy_roster,
@@ -51,11 +52,16 @@ class MSDQuery:
     export_probe_rows: bool = False
 
     export_details: bool = False
+    outputs: ngc.OutputOptions = field(default_factory=ngc.OutputOptions)
 
     def __post_init__(self) -> None:
         if not isinstance(self.demands, ResolvedDemandSet):
             raise TypeError(
                 f"msd.demands: expected ResolvedDemandSet, got {self.demands!r}"
+            )
+        if not isinstance(self.outputs, ngc.OutputOptions):
+            raise TypeError(
+                f"msd.outputs: expected native OutputOptions, got {self.outputs!r}"
             )
         raw_growth = self.growth_factor
         raw_bounds = (self.alpha_min, self.alpha_start, self.alpha_max)
@@ -151,6 +157,7 @@ def maximum_supported_demand(
     best = None
     best_rows = best_accounting = None
     retained = {} if query.export_probe_rows else None
+    outputs = required_outputs(query.outputs, by_source=query.export_details)
     positive_parents = {
         p.base_id for p in demands.expansion_template if p.physical_volume > 0
     }
@@ -185,7 +192,7 @@ def maximum_supported_demand(
             history.append(MSDProbe(index, exact, "range", None, refusal))
             return "range"
         requests = tuple(amounts[demand.id] for demand in demands.demands)
-        results = _apply_matrix(ledger, owners, requests)
+        results = _apply_matrix(ledger, owners, requests, outputs)
         totals = placement_totals(
             zip(
                 (demand.id for demand in demands.demands),
@@ -346,7 +353,7 @@ def maximum_supported_demand(
         return MSDAnalysis(
             prepared,
             analysis_metadata(1),
-            OutputSelection(ngc.OutputOptions(), False, query.export_details),
+            OutputSelection(query.outputs, False, query.export_details),
             history[best].alpha if best is not None else None,
             best,
             proof != "unproved",

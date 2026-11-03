@@ -220,7 +220,9 @@ TINY = [("h0", "t", 1), ("h1", "t", 100)]
 
 def test_a_live_head_too_weak_for_one_unit_per_tunnel():
     prep = prepared(TINY, [spec("^h[01]$", "^t$", t2(16))])
-    exact, limit = ask(prep, (16,), 10, 10, up_to=3).rows
+    exact, limit = ask(
+        prep, (16,), 10, 10, up_to=3, outputs=ngc.OutputOptions(program=True)
+    ).rows
     p = exact.result.plan
     assert (p.insufficient_resolution, p.max_bandwidth_per_tunnel) == (True, 0)
     assert p.max_fractional_bandwidth_per_tunnel == Fraction(1, 16)
@@ -253,7 +255,9 @@ def test_a_dead_head_keeps_its_share_and_loses_it():
 
 
 def test_up_to_rows_choose_the_smallest_sufficient_count():
-    (row,) = ask(g1(6, True), (), 12, 12, up_to=6).rows
+    (row,) = ask(
+        g1(6, True), (), 12, 12, up_to=6, outputs=ngc.OutputOptions(program=True)
+    ).rows
     assert (row.result.plan.tunnels_per_head, row.result.plan.max_lossless_offer) == (
         6,
         49152,
@@ -262,7 +266,9 @@ def test_up_to_rows_choose_the_smallest_sufficient_count():
         [("h0", "t", 6), ("h1", "t", 3), ("h1", "t", 3)],
         [spec("^h[01]$", "^t$", t2(2, True))],
     )
-    (row,) = ask(common, (), 12, 12, up_to=2).rows
+    (row,) = ask(
+        common, (), 12, 12, up_to=2, outputs=ngc.OutputOptions(program=True)
+    ).rows
     assert row.result.plan.tunnels_per_head == 2
     assert len(row.result.program.tunnels) == 4
 
@@ -281,7 +287,7 @@ def test_a_pool_head_against_equal_physical_heads():
             ),
         ),
     )
-    equal, pool = ask(prep, (2,), 12, 12).rows
+    equal, pool = ask(prep, (2,), 12, 12, outputs=ngc.OutputOptions(program=True)).rows
     assert (
         len(equal.result.program.tunnels),
         equal.result.plan.max_bandwidth_per_tunnel,

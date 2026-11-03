@@ -42,18 +42,19 @@ class Baseline:
     admitted: Mapping[str, int]
 
     @classmethod
-    def of(cls, state: CaseState) -> Baseline:
+    def of(cls, state: CaseState, demands, policies) -> Baseline:
         if state.failure is not None:
             raise ValueError(
                 f"case baseline: {state.failure.message}; stale and repair need "
                 "the baseline programs"
             )
         programs, admitted = {}, {}
-        for row in state.rows:
-            if row.result.program is None:
-                raise RuntimeError(f"demand.{row.id}: the baseline has no program")
-            programs[row.id] = row.result.program
-            admitted[row.id] = row.result.admitted
+        for demand, policy, row in zip(demands, policies, state.rows, strict=True):
+            program = policy.program
+            if program is None:
+                raise RuntimeError(f"demand.{demand.id}: the baseline has no program")
+            programs[demand.id] = program
+            admitted[demand.id] = row.result.admitted
         return cls(programs, admitted)
 
 

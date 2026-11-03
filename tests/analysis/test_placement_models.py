@@ -46,7 +46,9 @@ class TestCombineModeOrigination:
     def test_hop_by_hop_splits_evenly_across_sources(
         self, unequal_sources, preset, expected
     ):
-        _, state = matrix(unequal_sources, (demand("^S", "^T$", 110, preset),))
+        _, state = matrix(
+            unequal_sources, (demand("^S", "^T$", 110, preset),), by_source=True
+        )
         (row,) = state.rows
         # Integer RR21 is11/10. RR22 would put11 on the ten-unit source.
         assert row.reference_request_units == 110
@@ -68,7 +70,9 @@ class TestCombineModeOrigination:
             (unequal_sources, 110, [100, 10]),
             (far_source, 150, [100, 50]),
         ):
-            _, state = matrix(network, (demand("^S", "^T$", volume, TE),))
+            _, state = matrix(
+                network, (demand("^S", "^T$", volume, TE),), by_source=True
+            )
             assert state.totals.delivered_units == volume
             assert [
                 source.delivered for source in state.rows[0].result.by_source
@@ -127,6 +131,7 @@ class TestCombineModeOrigination:
                 (demand("^S", "^T$", 110, preset),),
                 excluded_links=("S2|T|0",),
                 details=True,
+                by_source=True,
             )
             assert state.totals.delivered_units == 100
             assert [source.delivered for source in state.rows[0].result.by_source] == [
@@ -143,6 +148,7 @@ class TestCombineModeOrigination:
                 unequal_sources,
                 (demand("^S", "^T$", 110, preset),),
                 excluded_links=("S1|T|0", "S2|T|0"),
+                by_source=True,
             )
             assert state.totals.delivered_units == 0 and not state.totals.feasible
             assert [source.delivered for source in state.rows[0].result.by_source] == [
@@ -164,7 +170,9 @@ class TestCombineModeOrigination:
         assert state.totals.delivered_units == 55 and not state.totals.feasible
 
     def test_msd_uses_one_prepared_source_roster(self, unequal_sources):
-        prepared, _ = matrix(unequal_sources, (demand("^S", "^T$", 110),))
+        prepared, _ = matrix(
+            unequal_sources, (demand("^S", "^T$", 110),), by_source=True
+        )
         value = maximum_supported_demand(
             prepared,
             MSDQuery(
@@ -173,6 +181,7 @@ class TestCombineModeOrigination:
                 growth_factor=10,
                 max_bracket_iters=2,
                 max_bisect_iters=1,
+                outputs=ngc.OutputOptions(by_source=True),
             ),
         )
         assert [probe.alpha.value for probe in value.history[:2]] == [1, 0.1]
@@ -444,7 +453,7 @@ def test_a_reachable_zero_capacity_source_keeps_its_equal_share(dead, expected):
     # dead, 1 already fails (0); with B dead, 1 succeeds and 2 fails (1). Leaving the dead
     # source out of the roster would deliver 2 in both orders.
     network = network_of(tuple((s, "T", 0 if s == dead else 10, 1) for s in ("A", "B")))
-    _, state = matrix(network, (demand("^[AB]$", "^T$", 2),))
+    _, state = matrix(network, (demand("^[AB]$", "^T$", 2),), by_source=True)
     (row,) = state.rows
     assert row.result.delivered == expected
     assert [source.delivered for source in row.result.by_source] == (

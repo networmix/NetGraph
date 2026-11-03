@@ -15,6 +15,7 @@ import netgraph_core as ngc
 
 from ngraph.analysis.failures import Workers, checked_workers, resolve_workers
 from ngraph.analysis.metadata import analysis_metadata
+from ngraph.analysis.outputs import required_outputs
 from ngraph.analysis.placement import _endpoints
 from ngraph.analysis.units import quantize
 from ngraph.results import (
@@ -194,12 +195,13 @@ def tunnel_counts(
     workers = resolve_workers(query.workers)
     specs = query.specs
     results: dict[tuple[int, int, bool], ngc.PlacementResult] = {}
+    outputs = required_outputs(query.outputs, by_source=query.export_details)
     for count, up_to in specs:
         for indices in groups.values():
             options = ngc.EvaluationOptions(
                 _counted(models[indices[0]], count, up_to),
                 eligibility=mask,
-                outputs=query.outputs,
+                outputs=outputs,
                 offer=offer,
                 design_demand=design,
             )

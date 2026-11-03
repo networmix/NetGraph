@@ -343,8 +343,9 @@ _DETAIL_NATIVE_KEYS = frozenset(
 
 
 def read_native_details(value: ngc.PlacementResult) -> None:
-    # Direct native access is available even when its wire projection is compact.
-    sources: tuple[ngc.SourceFlow, ...] = value.by_source
+    # Native field presence is independent of the JSON detail selector.
+    sources = value.by_source
+    assert sources is not None
     tunnels: tuple[ngc.TunnelFlow, ...] = value.by_tunnel
     plan: ngc.TunnelPlan | None = value.plan
     assert all(isinstance(row.delivered, int) for row in sources)
@@ -797,7 +798,7 @@ def example() -> tuple[RunResult, PlacementAnalysis, MSDAnalysis, str]:
         PlacementQuery(
             resolved,
             workers=1,
-            outputs=ngc.OutputOptions(edge_flows=True),
+            outputs=ngc.OutputOptions(edge_flows=True, by_source=True),
             export_cost_distribution=True,
         ),
     )
@@ -813,7 +814,9 @@ def example() -> tuple[RunResult, PlacementAnalysis, MSDAnalysis, str]:
     check_wire_rows(
         detailed_placement, details=True
     )  # details do not imply costs/arrays
-    supported = maximum_supported_demand(prepared, MSDQuery(resolved))
+    supported = maximum_supported_demand(
+        prepared, MSDQuery(resolved, outputs=ngc.OutputOptions(program=True))
+    )
     read_msd(supported)
     check_wire_rows(supported, details=False)
     detailed_msd = maximum_supported_demand(
@@ -834,7 +837,13 @@ def example() -> tuple[RunResult, PlacementAnalysis, MSDAnalysis, str]:
     )
     sensitivity = edge_sensitivity(
         prepared,
-        SensitivityQuery(Selector("^A$"), Selector("^T$"), config, workers=1),
+        SensitivityQuery(
+            Selector("^A$"),
+            Selector("^T$"),
+            config,
+            workers=1,
+            outputs=ngc.OutputOptions(by_source=True),
+        ),
     )
     assert read_sensitivity(sensitivity) == 20
     check_wire_rows(sensitivity, details=False)

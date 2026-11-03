@@ -26,7 +26,9 @@ def test_shortest_sources_have_distinct_exact_cost_bins():
         topology.graph,
         [topology.node_id_by_name["a"], topology.node_id_by_name["b"]],
         destinations,
-        ngc.EvaluationOptions(config, offer=8),
+        ngc.EvaluationOptions(
+            config, offer=8, outputs=ngc.OutputOptions(by_source=True)
+        ),
     )
     report, unavailable = cost_distribution(
         topology, config, result, destinations, topology.disabled
@@ -41,7 +43,12 @@ def test_shortest_sources_have_distinct_exact_cost_bins():
         routing=ngc.ShortestPaths(), admission=ngc.Admission.LOSSY
     )
     result = ngc.evaluate_demand(
-        topology.graph, [0, 1], destinations, ngc.EvaluationOptions(lossy, offer=8)
+        topology.graph,
+        [0, 1],
+        destinations,
+        ngc.EvaluationOptions(
+            lossy, offer=8, outputs=ngc.OutputOptions(by_source=True)
+        ),
     )
     report, unavailable = cost_distribution(
         topology, lossy, result, destinations, topology.disabled

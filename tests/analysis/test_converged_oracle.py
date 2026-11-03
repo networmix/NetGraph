@@ -62,7 +62,7 @@ def test_each_case_uses_its_own_mask_and_native_support_with_minimum_cost(
         demands,
         failures=FailureRequest(policy, 24, seed=17),
         workers=2,
-        outputs=ngc.OutputOptions(edge_flows=True, min_cut=True),
+        outputs=ngc.OutputOptions(edge_flows=True, min_cut=True, by_source=True),
         export_cost_distribution=True,
     )
     analysis = place(prepared, query)

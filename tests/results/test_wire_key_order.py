@@ -90,6 +90,8 @@ def test_exported_keys_keep_their_hand_written_order():
         "edge_reservations",
         "saturated_boundary_edges",
         "min_cut",
+        "program",
+        "by_source",
     ]
     rows = analysis["cases"][0]["states"]["converged"]["rows"]
     assert [list(row) for row in rows if row["kind"] == "self"] == [

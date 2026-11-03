@@ -183,7 +183,7 @@ def test_sensitivity_keeps_signed_improvements_and_one_native_baseline(monkeypat
             Selector("^t$"),
             config,
             workers=2,
-            outputs=ngc.OutputOptions(edge_flows=True),
+            outputs=ngc.OutputOptions(edge_flows=True, by_source=True),
         ),
     )
     assert len(calls) == 1

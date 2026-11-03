@@ -1,6 +1,8 @@
 """Report the largest tested feasible physical multiplier and its probe history."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+import netgraph_core as ngc
 
 from ngraph.analysis.msd import MSDQuery, maximum_supported_demand
 from ngraph.analysis.preparation import StepNeeds
@@ -24,6 +26,7 @@ class MaximumSupportedDemand(WorkflowStep):
     max_bracket_iters: int = 32
     max_bisect_iters: int = 32
     export_details: bool = False
+    outputs: ngc.OutputOptions = field(default_factory=ngc.OutputOptions)
 
     def __post_init__(self):
         super().__post_init__()
@@ -47,6 +50,7 @@ class MaximumSupportedDemand(WorkflowStep):
             "max_bracket_iters",
             "max_bisect_iters",
             "export_details",
+            "outputs",
         ):
             object.__setattr__(self, name, getattr(query, name))
 
@@ -61,6 +65,7 @@ class MaximumSupportedDemand(WorkflowStep):
             self.max_bracket_iters,
             self.max_bisect_iters,
             export_details=self.export_details,
+            outputs=self.outputs,
         )
 
     @classmethod

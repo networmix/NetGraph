@@ -20,6 +20,7 @@ from ngraph.analysis.failures import (
     schedule_cases,
 )
 from ngraph.analysis.metadata import analysis_metadata
+from ngraph.analysis.outputs import required_outputs
 from ngraph.analysis.states import (
     Baseline,
     forwarding_failure,
@@ -252,8 +253,10 @@ def _forward_simultaneous(
     return tuple(members), tuple(listed)
 
 
-def _place_state(prepared, query, case, state, entries, tables, shared):
-    """One state of one case on its own ledger; records and reports for published converged.
+def _place_state(
+    prepared, query, case, state, entries, tables, shared, capture_baseline
+):
+    """One state on its own ledger; reports and replay snapshots read live policies.
 
     ``entries`` give each demand its (config, eligibility, request); a
     simultaneous state forwards their LOSSY copies in one list. Its live
@@ -288,10 +291,23 @@ def _place_state(prepared, query, case, state, entries, tables, shared):
     owners = tuple(roster[k] for k in sorted(range(len(order)), key=order.__getitem__))
     held = list(owners)
     try:
+        observed = state == "converged" and state in query.states
+        outputs = required_outputs(
+            query.outputs,
+            by_source=query.export_details
+            or (
+                observed
+                and query.export_cost_distribution
+                and any(
+                    isinstance(config.routing, ngc.ShortestPaths)
+                    for config, _, _ in entries
+                )
+            ),
+        )
         try:
             if ordered:
                 requests = tuple(r for _, _, r in entries)
-                results = replace_matrix(ledger, owners, requests, query.outputs)
+                results = replace_matrix(ledger, owners, requests, outputs)
             else:
                 owners, results = _forward_simultaneous(
                     topology,
@@ -301,28 +317,20 @@ def _place_state(prepared, query, case, state, entries, tables, shared):
                     entries,
                     roles,
                     held,
-                    query.outputs,
+                    outputs,
                 )
         except ValueError as exc:
             failure = forwarding_failure(exc)
             if failure is None:
                 raise
-            return CaseState((), None, failure)
-        observed = state == "converged" and state in query.states
-        records = (
-            tuple(
-                tuple(policy.records())
-                if isinstance(policy.config.routing, ngc.ShortestPaths)
-                else ()
-                for policy in owners
-            )
-            if observed and query.export_cost_distribution
-            else ((),) * len(owners)
-        )
+            failed = CaseState((), None, failure)
+            if capture_baseline:
+                Baseline.of(failed, demands.demands, owners)
+            return failed, None
         costs = shared.costs if observed else None
         rows = []
-        for demand, policy, result, snapshots in zip(
-            demands.demands, owners, results, records, strict=True
+        for demand, policy, result in zip(
+            demands.demands, owners, results, strict=True
         ):
             distribution, unavailable = None, MappingProxyType({})
             if costs is not None:
@@ -336,7 +344,7 @@ def _place_state(prepared, query, case, state, entries, tables, shared):
                     ],
                     case.eligibility,
                     pool=demand.pool,
-                    records=snapshots,
+                    program=policy.program,
                     programmed=demand.id in shared.programmed,
                 )
             rows.append(
@@ -354,7 +362,11 @@ def _place_state(prepared, query, case, state, entries, tables, shared):
         totals = placement_totals(
             (row.id, row.reference_request_units, row.result) for row in rows
         )
-        return CaseState(tuple(rows), totals)
+        value = CaseState(tuple(rows), totals)
+        baseline = (
+            Baseline.of(value, demands.demands, owners) if capture_baseline else None
+        )
+        return value, baseline
     finally:
         remove_policies(held)
 
@@ -398,8 +410,6 @@ def _place_case(prepared, query, case, shared, baseline):
     group = demands.controller is not None and setup.scope == "group"
     states: dict[StateName, CaseState] = {}
     for state in computed:
-        if state != "converged" and baseline is None:
-            baseline = Baseline.of(states["converged"])
         tables = None
         if (
             case.kind == "failure"
@@ -424,7 +434,16 @@ def _place_case(prepared, query, case, shared, baseline):
             baseline,
             tables,
         )
-        value = _place_state(prepared, query, case, state, entries, tables, shared)
+        capture = (
+            baseline is None
+            and state == "converged"
+            and bool({"stale", "repair"} & set(query.states))
+        )
+        value, captured = _place_state(
+            prepared, query, case, state, entries, tables, shared, capture
+        )
+        if captured is not None:
+            baseline = captured
         if group and state != "stale":
             dead = tuple(c for t in (tables or {}).values() for c in t.dead_caps)
             value = replace(value, dead_caps=dead)

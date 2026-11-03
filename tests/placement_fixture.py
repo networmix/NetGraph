@@ -26,7 +26,17 @@ def demand(
     return DemandSpec(Selector(source), Selector(target), volume, policy, **kwargs)
 
 
-def matrix(network, specs, *, q=1, excluded_nodes=(), excluded_links=(), details=False):
+def matrix(
+    network,
+    specs,
+    *,
+    q=1,
+    excluded_nodes=(),
+    excluded_links=(),
+    details=False,
+    by_source=False,
+    program=False,
+):
     prepared = prepare(
         Scenario(
             network,
@@ -55,7 +65,9 @@ def matrix(network, specs, *, q=1, excluded_nodes=(), excluded_links=(), details
             prepared.demand_sets["load"],
             failures=failures,
             workers=1,
-            outputs=ngc.OutputOptions(edge_flows=details),
+            outputs=ngc.OutputOptions(
+                edge_flows=details, by_source=by_source, program=program
+            ),
             export_cost_distribution=details,
         ),
     )

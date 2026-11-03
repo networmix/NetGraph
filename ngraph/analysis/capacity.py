@@ -19,6 +19,7 @@ from ngraph.analysis.failures import (
     schedule_cases,
 )
 from ngraph.analysis.metadata import analysis_metadata
+from ngraph.analysis.outputs import required_outputs
 from ngraph.analysis.units import quantize
 from ngraph.analysis.validation import validate_model
 from ngraph.model.selectors import Selector
@@ -235,15 +236,28 @@ def evaluate(topology, query: CapacityQuery, native_pairs, options, workers: int
 def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalysis:
     """Answer a capacity question on a prepared scenario, in each failure case."""
     cost_distribution = None
+    report_program = False
     if query.export_cost_distribution:
         # Cost reports load only when asked for.
-        from ngraph.analysis.costs import cost_distribution
+        from ngraph.analysis.costs import cost_distribution, uses_marginal_curve
+
+        model = query.config.routing
+        report_program = not isinstance(
+            model, ngc.ShortestPaths
+        ) and not uses_marginal_curve(model)
 
     topology = prepared.topology
     endpoints, jobs, native_pairs, pools = question_pairs(prepared, query, "capacity")
     workers = resolve_workers(query.workers)
     cases = failure_cases(prepared, query.failures)
     completed = []
+    model = query.config.routing
+    outputs = required_outputs(
+        query.outputs,
+        by_source=query.export_details
+        or (query.export_cost_distribution and isinstance(model, ngc.ShortestPaths)),
+        program=report_program,
+    )
     for case in cases:
         active = _active_case(case, topology)
         options = evaluation_options(
@@ -252,7 +266,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
             query.offer,
             query.design_demand,
             active.eligibility,
-            query.outputs,
+            outputs,
         )
         results = evaluate(topology, query, native_pairs, options, workers)
         indexed = {
@@ -288,6 +302,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
                     [topology.node_id_by_name[name] for name in pair.destinations],
                     active.eligibility,
                     pool=pools.get(index),
+                    program=result.program,
                     shortest_costs=shortest_costs,
                 )
             rows.append(

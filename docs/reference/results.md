@@ -507,6 +507,8 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | `edge_reservations` | boolean | Request each row's per-link tunnel holds. |
 | `saturated_boundary_edges` | boolean | Request each row's saturated boundary links. |
 | `min_cut` | boolean | Request the minimum cut where it is defined. |
+| `program` | boolean | Request each completed result's forwarding program in Python. |
+| `by_source` | boolean | Request each completed result's source rows in Python. |
 
 ## NativePlacementJSON
 
@@ -578,7 +580,7 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `native` | [NativeOutputsJSON](#nativeoutputsjson) | The native output flags. |
+| `native` | [NativeOutputsJSON](#nativeoutputsjson) | The user's native output flags; internal report requests are not echoed. |
 | `cost_distribution` | boolean | Whether cost reports are exported. |
 | `details` | boolean | Whether native per-source, per-tunnel, plan and call fields are exported. |
 

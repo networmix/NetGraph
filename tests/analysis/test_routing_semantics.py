@@ -197,7 +197,7 @@ class TestLimitedTunnels:
         config = ngc.FlowPolicyConfig(routing=routing)
         network = _parallel(capacities, tuple(range(1, len(capacities) + 1)))
         prepared, state = matrix(
-            network, [demand("^S$", "^T$", offer, config)], details=True
+            network, [demand("^S$", "^T$", offer, config)], details=True, program=True
         )
         result = state.rows[0].result
         assert result.plan.max_bandwidth_per_tunnel == uniform

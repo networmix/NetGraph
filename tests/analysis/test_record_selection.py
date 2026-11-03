@@ -1,4 +1,4 @@
-"""Native records are materialized only for report readers that need them."""
+"""Cost reports read selected source rows and live programs without native records."""
 
 import netgraph_core as ngc
 import pytest
@@ -102,7 +102,11 @@ def test_report_record_selection_has_numerical_and_getter_controls(
     (row,) = result.cases[0].states["converged"].rows
     assert row.result.delivered == row.reference_request_units == 4
     assert row.result.source_drops == 0 and not row.result.edge_drops
-    assert len(calls) == int(costs and kind in ("split", "residual", "optimized_spf"))
+    assert calls == []
+    assert (row.result.by_source is not None) == (
+        costs and kind in ("split", "residual", "optimized_spf")
+    )
+    assert row.result.program is None
     report = row.cost_distribution
     if not costs:
         assert report is None and not row.unavailable_outputs

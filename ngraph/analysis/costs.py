@@ -18,6 +18,16 @@ from ngraph.results import (
 )
 
 
+def uses_marginal_curve(model) -> bool:
+    """An unrestricted optimized controller reports marginal costs, not tunnels."""
+    return (
+        isinstance(model, ngc.CentralizedTE)
+        and model.tunnel_count is None
+        and model.support is None
+        and model.source_allocation == ngc.SourceAllocation.OPTIMIZED
+    )
+
+
 def cost_distribution(
     topology: PreparedTopology,
     config: ngc.FlowPolicyConfig,
@@ -26,7 +36,7 @@ def cost_distribution(
     mask: ngc.Eligibility,
     *,
     pool=None,
-    records=None,
+    program=None,
     shortest_costs=None,
     programmed=False,
 ) -> tuple[
@@ -43,12 +53,7 @@ def cost_distribution(
     domain: Literal["analysis_graph", "physical_network"] = (
         "analysis_graph" if pool is not None else "physical_network"
     )
-    if (
-        isinstance(model, ngc.CentralizedTE)
-        and model.tunnel_count is None
-        and model.support is None
-        and model.source_allocation == ngc.SourceAllocation.OPTIMIZED
-    ):
+    if uses_marginal_curve(model):
         curve = result.marginal_cost_curve
         if curve is None and result.delivered:
             raise ValueError(
@@ -60,39 +65,31 @@ def cost_distribution(
         ), MappingProxyType({})
     bins = defaultdict(int)
     if isinstance(model, ngc.ShortestPaths):
-        if records is not None:
-            for record in records:
-                delivered = record.delivered
-                if delivered:
-                    cost = record.min_route_cost
-                    if cost is None:
-                        raise ValueError(
-                            "cost_distribution: positive shortest-path delivery has no route cost"
-                        )
-                    bins[cost] += delivered
-        else:
-            # Native cost-only SPF supplies the cost, without placing traffic again.
-            costs = shortest_costs
-            if costs is None:
-                search = ngc.spf(
-                    topology.graph,
-                    destinations,
-                    ngc.SpfOptions(ngc.Direction.REVERSE, eligibility=mask),
-                )
-                costs = search.costs
-            assert costs is not None
-            sources = result.by_source
-            for source in sources:
-                delivered = source.delivered
-                if delivered:
-                    cost = int(costs[source.source])
-                    if cost == ngc.UNREACHABLE:
-                        raise ValueError(
-                            "cost_distribution: positive source delivery has no route cost"
-                        )
-                    bins[cost] += delivered
+        # Native cost-only SPF supplies the cost, without placing traffic again.
+        costs = shortest_costs
+        if costs is None:
+            search = ngc.spf(
+                topology.graph,
+                destinations,
+                ngc.SpfOptions(ngc.Direction.REVERSE, eligibility=mask),
+            )
+            costs = search.costs
+        assert costs is not None
+        sources = result.by_source
+        if sources is None:
+            raise ValueError(
+                "cost_distribution: shortest-path source rows were not requested"
+            )
+        for source in sources:
+            delivered = source.delivered
+            if delivered:
+                cost = int(costs[source.source])
+                if cost == ngc.UNREACHABLE:
+                    raise ValueError(
+                        "cost_distribution: positive source delivery has no route cost"
+                    )
+                bins[cost] += delivered
     else:
-        program = result.program
         tunnels = program.tunnels if program is not None else ()
         costs = {tunnel.entry_id: tunnel.path_cost for tunnel in tunnels}
         flows = result.by_tunnel

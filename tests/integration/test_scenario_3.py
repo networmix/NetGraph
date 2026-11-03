@@ -1,5 +1,7 @@
 """Nested Clos expansion, physical rules and native shortest-path capacity."""
 
+from dataclasses import replace
+
 import netgraph_core as ngc
 import pytest
 
@@ -21,7 +23,16 @@ class TestScenario3:
     @pytest.fixture(scope="class")
     @classmethod
     def scenario_3_executed(cls, scenario_3):
-        return run(prepare(scenario_3))
+        selected = replace(
+            scenario_3,
+            workflow=[
+                replace(step, outputs=ngc.OutputOptions(by_source=True))
+                if hasattr(step, "outputs")
+                else step
+                for step in scenario_3.workflow
+            ],
+        )
+        return run(prepare(selected))
 
     @pytest.fixture(scope="class")
     @classmethod

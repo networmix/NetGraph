@@ -31,7 +31,9 @@ def evaluate(
             ngc.FlowPolicyConfig(routing=model, admission=admission),
             design_demand=design,
             offer=offer,
-            outputs=ngc.OutputOptions(edge_flows=True, edge_reservations=True),
+            outputs=ngc.OutputOptions(
+                program=True, edge_flows=True, edge_reservations=True
+            ),
         ),
     )
 

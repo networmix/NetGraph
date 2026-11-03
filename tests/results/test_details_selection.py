@@ -167,7 +167,9 @@ def test_compact_and_detailed_rows_keep_native_values_and_pool_cost_domain(
         snapshot = value.best_rows[0].result
     else:
         snapshot = value.cases[0].states["converged"].rows[0].result
-    assert snapshot.by_source[0].delivered == native["delivered_units"]
+    assert (snapshot.by_source is not None) is details
+    if details:
+        assert snapshot.by_source[0].delivered == native["delivered_units"]
     assert snapshot.plan is not None if kind == "pool" else snapshot.plan is None
 
 
@@ -207,6 +209,9 @@ def test_msd_details_do_not_change_probe_retention(details, retained):
 
 def test_compact_projection_reads_only_required_native_fields(monkeypatch):
     value, _, _, _ = observed("placement", False)
+    value = place(
+        value.prepared, replace(value.query, outputs=ngc.OutputOptions(by_source=True))
+    )
     getter = ngc.PlacementResult.edge_drops
     calls = []
 

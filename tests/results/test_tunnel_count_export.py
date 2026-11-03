@@ -241,6 +241,8 @@ def test_rows_project_every_field_once(details, edge_flows):
             "edge_reservations": False,
             "saturated_boundary_edges": False,
             "min_cut": False,
+            "program": False,
+            "by_source": False,
         },
         "cost_distribution": False,
         "details": details,

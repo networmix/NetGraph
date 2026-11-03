@@ -176,7 +176,10 @@ def test_two_t1_tunnels_report_one_bin_per_tunnel_path_cost(
         result = place(
             context,
             PlacementQuery(
-                context.demand_sets["load"], workers=1, export_cost_distribution=True
+                context.demand_sets["load"],
+                workers=1,
+                export_cost_distribution=True,
+                outputs=ngc.OutputOptions(program=True),
             ),
         )
     else:
