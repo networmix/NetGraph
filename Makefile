@@ -7,7 +7,7 @@
 # --------------------------------------------------------------------------
 # Python interpreter detection
 # --------------------------------------------------------------------------
-VENV_BIN := $(PWD)/venv/bin
+VENV_BIN := $(CURDIR)/venv/bin
 
 # PY_BEST: newest of python3.14..python3.11 on PATH, else python3 or python;
 # used to create venvs (requires-python >=3.11)
