@@ -1,6 +1,6 @@
 # NetGraph 0.24.1 against 0.26.0: speed and memory
 
-This directory records a measured comparison of NetGraph 0.24.1 on NetGraph-Core 0.11.0 (before the 0.25 rebuild) with NetGraph 0.26.0 on Core 0.12.0, made in October 2026. It is internal documentation for maintainers, excluded from the site. It says how the two releases were made to compute the same thing, what was measured, where 0.26.0 spends its time and memory on the large data-centre workload, which changes could remove it, and how to rerun the DC-BB timings and diagnostic controls. The later landed-implementation section measures the unreleased implementation separately from the historical release rows.
+This directory records a measured comparison of NetGraph 0.24.1 on NetGraph-Core 0.11.0 (before the 0.25 rebuild) with NetGraph 0.26.0 on Core 0.12.0, made in October 2026. It is internal documentation for maintainers, excluded from the site. It says how the two releases were made to compute the same thing, what was measured, where 0.26.0 spends its time and memory on the large data-centre workload, which changes could remove it, and how to rerun the DC-BB timings and diagnostic controls. The section "Landed implementation against the reference" measures NetGraph `4f8cd6a` with Core `3e919ec`, separately from the historical release rows.
 
 The 0.26.0 changelog's "15 to 30 times faster" compares 0.26.0 with 0.25.0. Against 0.24.1, 0.26.0 is slower on the large workload below.
 
@@ -382,9 +382,9 @@ RUN=1
 
 To reproduce the direct previous-head comparison, build another environment from Core `b16163de6f11bcfb9005459c82b72cfbc819d833` and the same NetGraph commit, pins, compiler and flags. Use that interpreter and the 0.26.0 input spelling in both A slots and in the two A/A controls; use the new build in B. Retain the same seven triples, startup controls, phase boundary and qualification rules.
 
-The loading rows were not rerun for the plan-building change. To reproduce their original scope, use the previous-head environment (Core `b16163d`) in B. For isolated loading, run the reference twice with the following minimal script and its corresponding input for the loading row's A/A control, then use the same seven A/B/A triples with each environment's Python and input spelling. Imports and file decompression precede the timer; do not execute the workflow:
+The loading rows were not rerun for the plan-building change. To reproduce their original scope, use the previous-head environment (Core `b16163d`) in B. For isolated loading, run the reference twice with the following minimal script and its corresponding input for the loading row's A/A control, then use the same seven A/B/A triples with each environment's Python and input spelling. The script takes the gzipped scenario as its only argument. Imports and file decompression precede the timer; do not execute the workflow:
 
-```python
+```text
 import gzip
 import sys
 import time

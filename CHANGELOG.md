@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Results**: **BREAKING** completed native analysis results have `program=None` and `by_source=None` by default; request them through a query's `outputs=OutputOptions(program=True, by_source=True)`. JSON details and cost reports request what they read automatically, `MSDQuery` accepts native `outputs`, and the exported `outputs.native` gains `program` and `by_source`.
-- Loading: scenarios with many narrow link rules and repeated node paths load faster, preserving rule order and parallel-link updates.
+- **Performance**: with netgraph-core 0.13, shortest-path `combine` demands (ECMP and WCMP presets) are computed once per demand instead of once per source, and completed failure cases keep neither forwarding programs nor masks. On the DC-BB workloads of `docs/design/perf-0.24-vs-0.26/`, prepare, run and export take about 3 s and 18 s instead of 36 s and 454 s with 0.26.0, and peak memory falls from about 22 GiB to about 0.5 GiB. Results are unchanged.
+- **Results**: **BREAKING** completed native analysis results have `program=None` and `by_source=None` by default; request them through a query's `outputs=ngc.OutputOptions(program=True, by_source=True)`. JSON details and cost reports request what they read automatically, `MSDQuery` accepts native `outputs`, and the exported `outputs.native` gains `program` and `by_source`.
+- **Loading**: scenarios with many narrow link rules and repeated node-selector paths load faster; the loaded network is unchanged.
 - **Results**: **BREAKING** removed `FailureCase.eligibility`; failure analyses keep eligibility masks only while solving. To rebuild a case's mask, use the preparation that produced it, as the API guide's "Failure cases" section shows.
 
 ## [0.26.0] - 2026-10-29
