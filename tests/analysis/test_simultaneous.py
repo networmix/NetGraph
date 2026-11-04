@@ -783,9 +783,15 @@ def test_a_loss_iteration_outcome_belongs_to_its_case_and_state(
         placement._place_state,
     )
 
-    def tracking(prepared, query, case, state, *rest):
-        current.update(kind=case.kind, state=state)
-        return real_state(prepared, query, case, state, *rest)
+    real_case = placement._place_case
+
+    def tracking_case(prepared, query, case, *rest):
+        current["kind"] = case.kind
+        return real_case(prepared, query, case, *rest)
+
+    def tracking(prepared, query, mask, state, *rest):
+        current["state"] = state
+        return real_state(prepared, query, mask, state, *rest)
 
     def recording(*args):
         created.append(real(*args))
@@ -796,6 +802,7 @@ def test_a_loss_iteration_outcome_belongs_to_its_case_and_state(
             raise ValueError(ROUND_LIMIT)
         return real_apply(ledger, actions, mode=mode, outputs=outputs)
 
+    monkeypatch.setattr(placement, "_place_case", tracking_case)
     monkeypatch.setattr(placement, "_place_state", tracking)
     monkeypatch.setattr(ngc, "FlowPolicy", recording)
     monkeypatch.setattr(ngc, "apply_actions", apply)

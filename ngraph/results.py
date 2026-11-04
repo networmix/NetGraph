@@ -386,37 +386,13 @@ class FailureTrace(_ResultRecord):
 
 @_record
 class FailureCase(_ResultRecord):
-    """One failure case: the baseline or one distinct failure pattern, how many draws
-    produced it, and its eligibility (the engine's mask of what the case can use).
-
-    Cases that an analysis or `failure_cases` returns build their mask when it is
-    first read, and keep it; repr, equality, hashing and dataclasses.replace read it
-    too. Until then a case holds the prepared topology. The mask allows the same
-    nodes and edges as the one the analysis used, but may be a different object with
-    a different uid.
-    """
+    """The baseline or one distinct failure pattern and how many draws produced it."""
 
     id: str
     kind: Literal["baseline", "failure"]
     pattern: FailurePattern
     occurrences: int
-    eligibility: ngc.Eligibility
-    """The engine's native mask; the class description says when it is built."""
     trace: FailureTrace | None
-
-    def __getattr__(self, name):
-        if name == "eligibility":
-            pending = vars(self).get("_eligibility")
-            if pending is not None:
-                mask = pending.get()
-                object.__setattr__(self, "eligibility", mask)
-                return mask
-        raise AttributeError(
-            f"'{type(self).__name__}' object has no attribute '{name}'"
-        )
-
-    def __dir__(self):
-        return sorted({*super().__dir__(), "eligibility"})
 
 
 @_record

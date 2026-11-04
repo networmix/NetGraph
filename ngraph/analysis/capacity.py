@@ -12,7 +12,6 @@ from ngraph.analysis.demands import controlled, pooled, selected_pairs
 from ngraph.analysis.failures import (
     FailureRequest,
     Workers,
-    _active_case,
     checked_workers,
     failure_cases,
     resolve_workers,
@@ -20,6 +19,7 @@ from ngraph.analysis.failures import (
 )
 from ngraph.analysis.metadata import analysis_metadata
 from ngraph.analysis.outputs import required_outputs
+from ngraph.analysis.topology import eligibility
 from ngraph.analysis.units import quantize
 from ngraph.analysis.validation import validate_model
 from ngraph.model.selectors import Selector
@@ -259,13 +259,15 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
         program=report_program,
     )
     for case in cases:
-        active = _active_case(case, topology)
+        mask = eligibility(
+            topology, case.pattern.excluded_nodes, case.pattern.excluded_links
+        )
         options = evaluation_options(
             topology,
             query.config,
             query.offer,
             query.design_demand,
-            active.eligibility,
+            mask,
             outputs,
         )
         results = evaluate(topology, query, native_pairs, options, workers)
@@ -289,9 +291,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
                         search = ngc.spf(
                             topology.graph,
                             [topology.node_id_by_name[name] for name in key],
-                            ngc.SpfOptions(
-                                ngc.Direction.REVERSE, eligibility=active.eligibility
-                            ),
+                            ngc.SpfOptions(ngc.Direction.REVERSE, eligibility=mask),
                         )
                         report_costs[key] = search.costs
                     shortest_costs = report_costs[key]
@@ -300,7 +300,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
                     query.config,
                     result,
                     [topology.node_id_by_name[name] for name in pair.destinations],
-                    active.eligibility,
+                    mask,
                     pool=pools.get(index),
                     program=result.program,
                     shortest_costs=shortest_costs,
@@ -315,7 +315,7 @@ def capacity(prepared: PreparedScenario, query: CapacityQuery) -> CapacityAnalys
                 case, MappingProxyType({"converged": CaseState(tuple(rows), None)})
             )
         )
-        del options, active
+        del options, mask
     question, source = question_kind(query.config, query.offer, query.design_demand)
     return CapacityAnalysis(
         prepared,

@@ -13,7 +13,6 @@ from ngraph.analysis.demands import controlled, scaled_expansion
 from ngraph.analysis.failures import (
     FailureRequest,
     Workers,
-    _active_case,
     checked_workers,
     failure_cases,
     resolve_workers,
@@ -27,7 +26,7 @@ from ngraph.analysis.states import (
     participants,
     simultaneous_role,
 )
-from ngraph.analysis.topology import PreparedTopology
+from ngraph.analysis.topology import PreparedTopology, eligibility
 from ngraph.analysis.totals import placement_totals
 from ngraph.results import (
     STATE_ORDER,
@@ -254,7 +253,7 @@ def _forward_simultaneous(
 
 
 def _place_state(
-    prepared, query, case, state, entries, tables, shared, capture_baseline
+    prepared, query, mask, state, entries, tables, shared, capture_baseline
 ):
     """One state on its own ledger; reports and replay snapshots read live policies.
 
@@ -285,7 +284,7 @@ def _place_state(
     ledger, roster = policy_roster(
         topology,
         [demands.demands[i] for i in order],
-        case.eligibility,
+        mask,
         [entries[i] for i in order],
     )
     owners = tuple(roster[k] for k in sorted(range(len(order)), key=order.__getitem__))
@@ -342,7 +341,7 @@ def _place_state(
                         topology.node_id_by_name[name]
                         for name in demand.endpoints.destinations
                     ],
-                    case.eligibility,
+                    mask,
                     pool=demand.pool,
                     program=policy.program,
                     programmed=demand.id in shared.programmed,
@@ -395,7 +394,7 @@ def _programmed(demands):
     return frozenset(d.id for d in demands.demands if d.base_id in parents)
 
 
-def _place_case(prepared, query, case, shared, baseline):
+def _place_case(prepared, query, case, mask, shared, baseline):
     """A case's requested states, in canonical order.
 
     ``baseline`` holds the baseline programs; for the baseline case itself it
@@ -419,7 +418,7 @@ def _place_case(prepared, query, case, shared, baseline):
             tables = setup.case_tables(
                 prepared.topology,
                 demands,
-                case.eligibility,
+                mask,
                 repair=state == "repair",
                 context=f"case {case.id} state {state}",
             )
@@ -428,7 +427,7 @@ def _place_case(prepared, query, case, shared, baseline):
             setup,
             demands,
             shared.programmed,
-            case,
+            mask,
             state,
             shared.amounts,
             baseline,
@@ -440,7 +439,7 @@ def _place_case(prepared, query, case, shared, baseline):
             and bool({"stale", "repair"} & set(query.states))
         )
         value, captured = _place_state(
-            prepared, query, case, state, entries, tables, shared, capture
+            prepared, query, mask, state, entries, tables, shared, capture
         )
         if captured is not None:
             baseline = captured
@@ -497,9 +496,10 @@ def place(prepared: PreparedScenario, query: PlacementQuery) -> PlacementAnalysi
     )
 
     def solve(case, baseline=None):
-        active = _active_case(case, topology)
-        result, next_baseline = _place_case(prepared, query, active, shared, baseline)
-        return replace(result, case=case), next_baseline
+        mask = eligibility(
+            topology, case.pattern.excluded_nodes, case.pattern.excluded_links
+        )
+        return _place_case(prepared, query, case, mask, shared, baseline)
 
     if {"stale", "repair"} & set(query.states):
         # Stale and repair replay the baseline programs: the baseline goes first.

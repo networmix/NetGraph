@@ -685,15 +685,15 @@ def test_workers_give_the_same_states_and_the_lowest_failing_case(monkeypatch):
         PlacementQuery(prep.demand_sets["d"], failures=request, workers=4, states=ALL),
     )
     assert len(one.cases) >= 4 and table(one) == table(four)
-    original = placement.participants
+    original = placement._place_case
 
     def failing(*args):
-        case = args[4]
+        case = args[2]
         if case.id in ("failure-000002", "failure-000003"):
             raise ValueError(f"planted in {case.id}")
         return original(*args)
 
-    monkeypatch.setattr(placement, "participants", failing)
+    monkeypatch.setattr(placement, "_place_case", failing)
     with pytest.raises(ValueError, match="planted in failure-000002"):
         place(
             prep,

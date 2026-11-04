@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 import netgraph_core as ngc
 
-from ngraph.results import CaseState, FailureCase, ForwardingFailure
+from ngraph.results import CaseState, ForwardingFailure
 
 # Native lossy forwarding refuses with one of these texts when its iteration cycles or
 # does not settle; a failure case can report either as its outcome.
@@ -82,7 +82,7 @@ def participants(
     setup,
     demands,
     controlled,
-    case: FailureCase,
+    mask: ngc.Eligibility,
     state,
     requests,
     baseline,
@@ -98,25 +98,21 @@ def participants(
     for demand in demands.demands:
         request = requests[demand.id]
         if state == "stale":
-            program = ngc.Pinned(
-                baseline.programs[demand.id], black_holes=case.eligibility
-            )
+            program = ngc.Pinned(baseline.programs[demand.id], black_holes=mask)
             config = ngc.FlowPolicyConfig(
                 routing=program, admission=ngc.Admission.LOSSY
             )
             entries.append((config, topology.disabled, baseline.admitted[demand.id]))
         elif tables is not None and demand.id in controlled:
             table = tables[demand.endpoints.destinations[0]]
-            config = setup.leaf_config(
-                topology, table, demand.endpoints, case.eligibility
-            )
+            config = setup.leaf_config(topology, table, demand.endpoints, mask)
             entries.append((config, topology.disabled, request))
         elif state == "repair":
             config = ngc.FlowPolicyConfig(
                 routing=ngc.Pinned(baseline.programs[demand.id]),
                 admission=demand.config.admission,
             )
-            entries.append((config, case.eligibility, request))
+            entries.append((config, mask, request))
         else:
-            entries.append((demand.config, case.eligibility, request))
+            entries.append((demand.config, mask, request))
     return tuple(entries)

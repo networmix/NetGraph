@@ -10,6 +10,7 @@ from ngraph.analysis.failures import (
     sampling_metadata,
     schedule_cases,
 )
+from ngraph.analysis.topology import eligibility
 from ngraph.analysis.units import UnitsSettings
 from ngraph.model.failure import FailureMode, FailurePolicy, FailureRule
 from ngraph.model.network import Link, Network, Node
@@ -82,7 +83,9 @@ def test_bernoulli_oracle_uses_mode_draw_then_sorted_entities_per_draw_seed():
         assert case.trace.selections[0].scope == "node"
         assert case.trace.expanded_nodes == ()
         assert case.trace.expanded_links == ()
-        allowed = case.eligibility.node_allowed()
+        allowed = eligibility(
+            graph.topology, case.pattern.excluded_nodes, case.pattern.excluded_links
+        ).node_allowed()
         for name, node in graph.topology.node_id_by_name.items():
             assert bool(allowed[node]) == (name not in case.pattern.excluded_nodes)
     metadata = sampling_metadata(request)
@@ -121,9 +124,12 @@ def test_failed_physical_link_excludes_both_native_directions():
     assert failed.pattern.excluded_links == ("a|t|0",)
     assert failed.occurrences == 3 and baseline.occurrences == 0
     forward, reverse = graph.topology.edges_by_link["a|t|0"]
-    assert not failed.eligibility.edge_allowed()[forward]
-    assert not failed.eligibility.edge_allowed()[reverse]
-    assert baseline.eligibility.edge_allowed().all()
+    failed_mask = eligibility(
+        graph.topology, failed.pattern.excluded_nodes, failed.pattern.excluded_links
+    )
+    assert not failed_mask.edge_allowed()[forward]
+    assert not failed_mask.edge_allowed()[reverse]
+    assert eligibility(graph.topology).edge_allowed().all()
     assert schedule_cases(cases, lambda case: case.id, 1) == (
         "baseline",
         "failure-000001",

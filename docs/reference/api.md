@@ -100,7 +100,7 @@ assert (two.count, two.result.plan.tunnels_per_head, two.result.delivered) == (2
 assert two.lossless_at_design_units == 4
 ```
 
-[`tunnel_counts(prepared, TunnelCountQuery(demands, counts, design_demand, offer, up_to=None, eligibility=None, ...))`](api-full.md#ngraphtunnel_counts) evaluates each tunnelled centralized-TE demand once per count (and once up to `up_to`), each a fresh native evaluation lossy at `offer` and planned for `design_demand`, the same two amounts for every demand. Each [`TunnelCountRow`](api-full.md#ngraphtunnelcountrow) holds the native result (its `plan` is the tunnel layout), the row's `count` and `up_to`, `lossless_at_design_units` (min(design, the plan's largest lossless offer)) and `physical_tunnel_cost` (a pool row's tunnel cost without its one cost-1 ingress hop per tunnel). An `eligibility` (the engine's mask of usable nodes and edges, as [`FailureCase.eligibility`](api-full.md#ngraphfailurecase) holds) asks the question on a failed network. An offer above a TE ingress pool's prepared budget is refused: declare a `TunnelCountAnalysis` step with that offer and prepare again ([Tunnels and TE ingress pools](../concepts.md#tunnels-and-te-ingress-pools)).
+[`tunnel_counts(prepared, TunnelCountQuery(demands, counts, design_demand, offer, up_to=None, eligibility=None, ...))`](api-full.md#ngraphtunnel_counts) evaluates each tunnelled centralized-TE demand once per count (and once up to `up_to`), each a fresh native evaluation lossy at `offer` and planned for `design_demand`, the same two amounts for every demand. Each [`TunnelCountRow`](api-full.md#ngraphtunnelcountrow) holds the native result (its `plan` is the tunnel layout), the row's `count` and `up_to`, `lossless_at_design_units` (min(design, the plan's largest lossless offer)) and `physical_tunnel_cost` (a pool row's tunnel cost without its one cost-1 ingress hop per tunnel). An `eligibility` (the engine's mask of usable nodes and edges) asks the question on a failed network; [Failure cases](#failure-cases) shows how to build one from a case's pattern. An offer above a TE ingress pool's prepared budget is refused: declare a `TunnelCountAnalysis` step with that offer and prepare again ([Tunnels and TE ingress pools](../concepts.md#tunnels-and-te-ingress-pools)).
 
 ## Failure cases
 
@@ -119,6 +119,20 @@ assert sum(case.case.occurrences for case in degraded.cases) == 20
 ```
 
 [`failure_cases(prepared, request)`](api-full.md#ngraphfailure_cases) exposes the same typed cases to custom analyses ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states); seeds: [Seeds](dsl.md#seeds)). For capacity, placement and sensitivity, `workers="auto"` resolves to the CPU count; results and errors are the same for any number of workers. MSD runs serially. Explicit worker values must be positive integers.
+
+A [`FailureCase`](api-full.md#ngraphfailurecase) holds its pattern, draw count and optional trace, without an eligibility mask or a reference to the prepared topology. To build a native mask for another query, use the preparation that produced the case: exclude the case's failed nodes and both directions of its failed links, then intersect with the preparation's disabled elements:
+
+```python
+t = prepared.topology
+case = degraded.cases[1].case
+mask = ngc.Eligibility.intersect(
+    t.disabled,
+    t.graph.eligibility(
+        excluded_nodes=[t.node_id_by_name[n] for n in case.pattern.excluded_nodes],
+        excluded_edges=[e for link in case.pattern.excluded_links for e in t.edges_by_link[link]],
+    ),
+)
+```
 
 ## Paths and sensitivity
 
