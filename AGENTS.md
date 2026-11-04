@@ -14,3 +14,6 @@ Confirm suspected defects with source and a reproducer. Check API wording
 against implementation and bindings. Performance claims need correctness gates
 and repeated A/B/A measurements on the same quiet machine. Local tests do not
 replace CI; release notes should describe concise user-visible changes.
+
+Planned and deferred work lives in `docs/roadmap.md`; a change that delivers or changes an item updates its
+row in the same commit.

@@ -42,6 +42,7 @@ plugins:
   - search
 exclude_docs: |
   /design/
+  /roadmap.md
 strict: true
 validation:
   anchors: warn
