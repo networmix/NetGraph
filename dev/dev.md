@@ -33,15 +33,15 @@ under `build/core-integration/`.
 **Version**: Update `version = "x.y.z"` in `pyproject.toml` before publishing
 
 **Order with NetGraph-Core**: NetGraph installs `netgraph-core` from PyPI (CI does
-too), within the bound in `pyproject.toml` (`netgraph-core>=0.12.0,<0.13` for
-0.25). Publish the Core release first, then the NetGraph release that requires it.
+too), within the bound in `pyproject.toml` (`netgraph-core>=0.13.0,<0.14` for
+0.27). Publish the Core release first, then the NetGraph release that requires it.
 When an older NetGraph line is bounded below a new Core release (0.24.1 requires
 `netgraph-core>=0.10.0,<0.12`), publish that bound first and confirm that PyPI
 serves its metadata before the Core release it excludes.
 
 **Core links**: the documentation links sections of the Core's `docs/semantics.md` at
 the pinned tag. Before publishing, check that those sections exist in the tagged file:
-`git -C <NetGraph-Core> show v0.12.0:docs/semantics.md > /tmp/semantics.md`, then
+`git -C <NetGraph-Core> show v0.13.0:docs/semantics.md > /tmp/semantics.md`, then
 `NETGRAPH_CORE_SEMANTICS=/tmp/semantics.md python -m pytest tests/docs/test_core_links.py`.
 
 ## Key Development Files

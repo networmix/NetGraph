@@ -1,6 +1,6 @@
 # Installation
 
-The `ngraph` package depends on `netgraph-core`, the C++ engine; `pip install ngraph` installs both. NetGraph 0.25 requires `netgraph-core` 0.12 (`>=0.12.0,<0.13`).
+The `ngraph` package depends on `netgraph-core`, the C++ engine; `pip install ngraph` installs both. NetGraph 0.27 requires `netgraph-core` 0.13 (`>=0.13.0,<0.14`).
 
 ## Requirements
 
