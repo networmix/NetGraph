@@ -48,6 +48,13 @@ Not scheduled. One entry per item: what it is, and why it is not scheduled or wh
 - **Small-scenario loading**: profile loading on small Clos and single-router inputs and compare with the earlier
   release before optimizing; an earlier comparison found roughly 1.2 ms of extra work, but the current loader has
   changed and small inputs need a fresh user-visible cost witness.
+- **Large-scenario loading**: profile and reduce loading and model building on large inputs. On the 96-pod DC-BB
+  scenario of `docs/design/perf-0.24-vs-0.26/` (3,833 nodes) it takes 6.94 s of the 10.40 s default run at 8 workers
+  and 7.05 s of 18.37 s at one worker (one exploratory run each, NetGraph 0.27.0 on CPython 3.14 with NetGraph-Core
+  0.13.0, a 28-CPU Mac), spent in regular expressions, node selection and YAML parsing. It is the largest measured part
+  of a user's run on that workload and no NetGraph-Core change can remove it; unlike the fixed cost of
+  "Small-scenario loading", it grows with the scenario. A profile of the loader and a qualified command-line comparison
+  decide it.
 - **Offline NetGraph setup**: let `.superset/workspace.sh setup` prepare constrained dependency wheels so a worktree
   prepared once online can run its checks offline, including its required Core package; pursue this when preparing
   workers without network rather than relying on an incidental pip cache.
@@ -69,7 +76,10 @@ Not scheduled. One entry per item: what it is, and why it is not scheduled or wh
   current explicit refusal stays until a representation can satisfy all three constraints.
 - **Automatic placement worker count**: compare representative placement and capacity workloads at several worker counts
   before changing `workers: auto`, which currently uses every CPU; earlier measurements favored fewer workers for one
-  backbone workload, but the placement implementation has since changed.
+  backbone workload, but the placement implementation has since changed. On NetGraph 0.27.0 one exploratory run per
+  count gave: the 96-pod DC-BB placement 18.37 s at 1 worker and 10.40 s at 8; `scenarios/backbone_clos.yml` 0.42 /
+  0.34 / 0.34 s at 1 / 8 / 28, the last being `auto` on a 28-CPU Mac. Qualified comparisons at several counts are
+  still needed before choosing a default.
 - **Runtime errors identify their step**: attach the workflow step's name to exceptions raised while it runs, preserving
   the original exception type and cause; construction errors already carry locations, and this becomes worthwhile when
   several runtime steps of the same type cannot otherwise be distinguished.
@@ -103,3 +113,28 @@ Not scheduled. One entry per item: what it is, and why it is not scheduled or wh
 - **Default failure states**: decide whether placement without explicit failure states should report converged and stale
   results together instead of the current converged-only default; both phases already exist, but changing the default
   adds computation and result rows, so reconcile the intended default before changing behavior.
+- **Export cost of max-flow analyses**: reduce the per-pair object building when exporting capacity analyses. On
+  `scenarios/nsfnet.yaml` the export takes 1.01 s of the 1.87 s run at one worker (54 %), more than the analyses' own
+  run phase (0.69 s); NetGraph builds 393,244 integers, 87,696 floats and 175,392 lists, 51 MB in all, and reads Core
+  getters for 0.227 s over 1,227,789 getter events at one worker (excluding enum reads) or 0.289 s over 1,315,488
+  events including 87,699 enum reads in a run at eight workers: two exploratory bases, not one cost. Distinct from
+  "Bundled NSFNET output size", which is about what is requested; this is what each exported pair costs. A NetGraph
+  profile decides it; a columnar result form from NetGraph-Core would need that project's contract decision first.
+- **Python work under the interpreter lock**: measure whether the interpreter lock is the critical path of failure
+  analysis at eight workers, and compare a free-threaded CPython 3.14t build. On the 96-pod DC-BB scenario the case
+  threads' CPU outside NetGraph-Core calls, a proxy for lock-held Python work, is 1.68 s by one timer correction and
+  1.83-1.92 s by another, against a 2.72 s analysis; inside its calls NetGraph-Core holds the lock for 0.19 s of CPU and
+  releases it for 10.47 s, and latency added to its calls on the case threads reaches the analysis wall in full. Lock
+  waiting itself was not measured. Lock waits instrumented at their boundaries and a free-threaded build compared on
+  that scenario at 8 workers decide it.
+- **Adapter for NetGraph-Core's baseline route-program reuse**: if NetGraph-Core adopts its opt-in reuse of a workflow
+  step's baseline route programs, `ngraph/analysis/placement.py` must use it. The adapter it was measured with (+155/−5
+  lines, branch `prototype/baseline-reuse-adapter`) passes `preparation=`, captures the baseline policies before they
+  are removed, derives each case's hints, threads the shared preparation through the state and case functions, and
+  solves each step's baseline before its failure cases unless an earlier capture is reused, a scheduling change under
+  which `test_converged_only_builds_no_baseline_and_schedules_cases_alone` fails by design. It keeps per-run captures
+  for the life of the process in a module-level dictionary, is switched by `NETGRAPH_REUSE_LIFETIME`, and applies only
+  to ordered, converged lists of lossless equal-split shortest-path demands. A landing chooses the user-facing switch,
+  the capture's owner and lifetime, accepts or redesigns the scheduling change, and checks retained memory across
+  scenarios for persistent processes such as NetLab's worker pool. With that adapter the 96-pod DC-BB run was 18 %
+  faster at one worker (per-step capture) and 4.6 % at eight (per-run capture).
