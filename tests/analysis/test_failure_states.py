@@ -597,10 +597,10 @@ def test_every_policy_is_removed_when_a_state_fails_and_a_retry_matches(monkeypa
     )
     for k in range(1, 7):
 
-        def counting(*args, k=k):
+        def counting(*args, k=k, **kwargs):
             if len(created) + 1 == k:
                 raise MemoryError("planted")
-            policy = real(*args)
+            policy = real(*args, **kwargs)
             created.append(policy)
             return policy
 
@@ -611,8 +611,8 @@ def test_every_policy_is_removed_when_a_state_fails_and_a_retry_matches(monkeypa
             run(prep, links_failing("^A\\|M$"), states=ALL)
         assert {id(p) for p in created} <= {id(p) for p in removed}
 
-    def recording(*args):
-        policy = real(*args)
+    def recording(*args, **kwargs):
+        policy = real(*args, **kwargs)
         created.append(policy)
         return policy
 

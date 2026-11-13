@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
@@ -160,6 +161,7 @@ def policy_roster(
     demands: Sequence[ResolvedDemand],
     mask: ngc.Eligibility,
     entries=None,
+    preparations=None,
 ) -> tuple[ngc.FlowLedger, tuple[ngc.FlowPolicy, ...]]:
     """Create one private ledger and stable policy identities for a case or series.
 
@@ -171,10 +173,24 @@ def policy_roster(
     if entries is None:
         entries = [(demand.config, mask, None) for demand in demands]
     try:
-        for demand, (config, eligibility, _) in zip(demands, entries, strict=True):
+        for index, (demand, (config, eligibility, _)) in enumerate(
+            zip(demands, entries, strict=True)
+        ):
             sources, targets = _endpoints(topology, demand)
             try:
-                policy = ngc.FlowPolicy(ledger, sources, targets, config, eligibility)
+                if preparations is None or preparations[index] is None:
+                    policy = ngc.FlowPolicy(
+                        ledger, sources, targets, config, eligibility
+                    )
+                else:
+                    policy = ngc.FlowPolicy(
+                        ledger,
+                        sources,
+                        targets,
+                        config,
+                        eligibility,
+                        preparation=preparations[index],
+                    )
             except (ValueError, TypeError) as exc:
                 label = demand.yaml_label
                 if label is None:
@@ -253,7 +269,15 @@ def _forward_simultaneous(
 
 
 def _place_state(
-    prepared, query, mask, state, entries, tables, shared, capture_baseline
+    prepared,
+    query,
+    mask,
+    state,
+    entries,
+    tables,
+    shared,
+    capture_baseline,
+    is_baseline=False,
 ):
     """One state on its own ledger; reports and replay snapshots read live policies.
 
@@ -281,15 +305,24 @@ def _place_state(
             for role, (config, eligibility, request) in zip(roles, entries, strict=True)
         )
         order.sort(key=shared.live.__getitem__)
+    reuse = shared.reuse[0] if shared.reuse else None
+    hints = (
+        reuse.prepare(mask)
+        if reuse is not None and state == "converged" and not is_baseline
+        else None
+    )
     ledger, roster = policy_roster(
         topology,
         [demands.demands[i] for i in order],
         mask,
         [entries[i] for i in order],
+        preparations=hints,
     )
     owners = tuple(roster[k] for k in sorted(range(len(order)), key=order.__getitem__))
     held = list(owners)
     try:
+        if _REUSE_OBSERVER is not None and state == "converged":
+            _REUSE_OBSERVER("baseline" if is_baseline else "failure", owners, hints)
         observed = state == "converged" and state in query.states
         outputs = required_outputs(
             query.outputs,
@@ -326,6 +359,8 @@ def _place_state(
             if capture_baseline:
                 Baseline.of(failed, demands.demands, owners)
             return failed, None
+        if is_baseline and shared.reuse is not None and state == "converged":
+            shared.reuse[0] = _capture_reuse(topology, demands, owners, mask)
         costs = shared.costs if observed else None
         rows = []
         for demand, policy, result in zip(
@@ -382,6 +417,7 @@ class _Shared:
     costs: object
     programmed: frozenset[str]
     live: tuple[bool, ...]
+    reuse: list[ngc.ShortestPathsReuse | None] | None = None
 
 
 def _programmed(demands):
@@ -439,7 +475,15 @@ def _place_case(prepared, query, case, mask, shared, baseline):
             and bool({"stale", "repair"} & set(query.states))
         )
         value, captured = _place_state(
-            prepared, query, mask, state, entries, tables, shared, capture
+            prepared,
+            query,
+            mask,
+            state,
+            entries,
+            tables,
+            shared,
+            capture,
+            case.kind == "baseline",
         )
         if captured is not None:
             baseline = captured
@@ -449,6 +493,83 @@ def _place_case(prepared, query, case, mask, shared, baseline):
         states[state] = value
     published = MappingProxyType({s: states[s] for s in query.states})
     return CaseResult(case, published), baseline
+
+
+# One CLI run owns the optional run-wide capture; the launcher clears it at exit.
+_REUSE_MODE = os.environ.get("NETGRAPH_REUSE_LIFETIME", "step")
+_REUSE_RUN: dict[tuple, ngc.ShortestPathsReuse] = {}
+_REUSE_OBSERVER = None
+_REUSE_SCHEDULE_OBSERVER = None
+
+
+def _reuse_eligible(query):
+    if (
+        not query.demands.demands
+        or query.interaction != "ordered"
+        or "converged" not in query.states
+    ):
+        return False
+    for demand in query.demands.demands:
+        config = demand.config
+        sp = config.routing
+        if not (
+            isinstance(sp, ngc.ShortestPaths)
+            and config.admission == ngc.Admission.LOSSLESS
+            and sp.allocation == ngc.RouteAllocation.EQUAL
+            and sp.source_allocation in (None, ngc.SourceAllocation.EQUAL)
+            and sp.weight_basis is None
+            and sp.edge_weights is None
+            and sp.tie_break == ngc.RouteTieBreak.FEWER_HOPS
+            and sp.multipath
+            and sp.parallel_edges
+        ):
+            return False
+    return True
+
+
+def _reuse_key(topology, demands, mask):
+    specs = []
+    for demand in demands.demands:
+        sources, targets = _endpoints(topology, demand)
+        config = demand.config
+        sp = config.routing
+        source_allocation = (
+            ngc.SourceAllocation.EQUAL
+            if sp.source_allocation is None
+            else sp.source_allocation
+        )
+        specs.append(
+            (
+                tuple(sorted(set(sources))),
+                tuple(sorted(set(targets))),
+                config.admission,
+                sp.allocation,
+                source_allocation,
+                sp.weight_basis,
+                None if sp.edge_weights is None else tuple(sp.edge_weights),
+                sp.tie_break,
+                sp.multipath,
+                sp.parallel_edges,
+            )
+        )
+    return (
+        topology.graph.uid(),
+        tuple(mask.node_allowed().tolist()),
+        tuple(mask.edge_allowed().tolist()),
+        tuple(specs),
+    )
+
+
+def _capture_reuse(topology, demands, owners, mask):
+    key = _reuse_key(topology, demands, mask) if _REUSE_MODE == "run" else None
+    if key is not None and key in _REUSE_RUN:
+        return _REUSE_RUN[key]
+    captured = ngc.ShortestPathsReuse(owners)
+    if key is not None:
+        _REUSE_RUN[key] = captured
+    if _REUSE_OBSERVER is not None:
+        _REUSE_OBSERVER("capture", owners, None)
+    return captured
 
 
 def place(prepared: PreparedScenario, query: PlacementQuery) -> PlacementAnalysis:
@@ -495,13 +616,42 @@ def place(prepared: PreparedScenario, query: PlacementQuery) -> PlacementAnalysi
         ),
     )
 
+    reuse_enabled = _REUSE_MODE in {"step", "run", "schedule"} and _reuse_eligible(
+        query
+    )
+    if reuse_enabled and _REUSE_MODE != "schedule":
+        shared = replace(shared, reuse=[None])
+    cached_capture = None
+    if reuse_enabled and _REUSE_MODE == "run":
+        baseline_mask = eligibility(
+            topology, cases[0].pattern.excluded_nodes, cases[0].pattern.excluded_links
+        )
+        cached_capture = _REUSE_RUN.get(
+            _reuse_key(topology, query.demands, baseline_mask)
+        )
+        shared.reuse[0] = cached_capture
+    baseline_barrier = bool({"stale", "repair"} & set(query.states)) or (
+        reuse_enabled and cached_capture is None
+    )
+    if _REUSE_SCHEDULE_OBSERVER is not None:
+        _REUSE_SCHEDULE_OBSERVER(
+            dict(
+                mode=_REUSE_MODE,
+                workers=workers,
+                baseline_barrier=baseline_barrier,
+                cached_capture=cached_capture is not None,
+                scheduled_cases=len(cases) - int(baseline_barrier),
+                total_cases=len(cases),
+            )
+        )
+
     def solve(case, baseline=None):
         mask = eligibility(
             topology, case.pattern.excluded_nodes, case.pattern.excluded_links
         )
         return _place_case(prepared, query, case, mask, shared, baseline)
 
-    if {"stale", "repair"} & set(query.states):
+    if baseline_barrier:
         # Stale and repair replay the baseline programs: the baseline goes first.
         first = solve(cases[0])
         observed = (
